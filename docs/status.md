@@ -5,12 +5,44 @@
 > el git log).
 
 **Última actualización**: 2026-04-17
-**Última sesión**: 2026-04-17 — F1-001 bootstrap + F1-002 primera migración
+**Última sesión**: 2026-04-17 — F1-003 schema de dominio + RLS base
 **Fase activa**: **Fase 1 — Fundación**
 
 ---
 
 ## ✅ Completado
+
+- **F1-003** ✅ done — 2026-04-17 — commits
+  `c851643`/`04789fa` (app_users), `36b97b0`/`8958273` + `036c934` (Wave 1),
+  `cb08d1e`/`dbb324f` (Wave 2), `923e3d1`/`47f2bb2` (Wave 3),
+  `20e7f3a`/`cbf5a92` (fixes al hook).
+  - 17 tablas de dominio creadas con RLS enabled + forced. 4 policies
+    por tabla (select/insert/update/delete) salvo sync_state y
+    sync_errors (1 policy `for all` admin-only).
+  - Helper `public.current_app_role()` (SECURITY DEFINER) resuelve rol
+    desde `app_users` por `auth.uid()`. Divergencia explícita con
+    ADR-003 §5 que proponía claim JWT; documentada en commit
+    `04789fa`.
+  - 24 migraciones (13 de schema + 11 de RLS).
+  - 16 suites de tests RLS con 54 tests en total. `fileParallelism:
+false` en `vitest.config.ts` — los tests comparten estado en la
+    misma DB local y paralelizar causa race conditions en teardown.
+  - Tipos TS regenerados al final de cada Wave.
+  - Fixes colaterales del pre-commit hook:
+    - `TDD_RED=1` permite saltear el paso de tests para commits
+      `[RED]` intencionales (documentado en
+      `.claude/skills/tdd-workflow/SKILL.md`).
+    - Chequeo de "tipos regenerados" ahora acepta el caso de tipos
+      ya al día en HEAD sin re-stagear (útil para commits
+      secuenciales de migraciones en un batch); usa tempfile para
+      evitar que `command substitution` corra los trailing newlines
+      y rompa el diff.
+  - Harness de RLS en `tests/rls/helpers.ts` firma JWT HS256 con
+    `node:crypto` (sin dependencia externa).
+  - Desvío del plan: `shortlist_candidates` se creó en Wave 2 junto
+    con `shortlists` (el plan original lo listaba en Wave 3); el
+    split natural es por dependencia del grafo (ambas tablas
+    comparten FK a `app_users`).
 
 - **F1-002** ✅ done — 2026-04-17 — commit `be7d1f9`
   - `supabase init` + stack local arriba (Postgres 15, pgvector 0.7.4,
@@ -84,9 +116,9 @@ _(nada todavía)_
 
 ## ⏳ Próximo (top 3 del roadmap)
 
-1. **F1-003** — Schema de dominio + RLS base (13 migraciones + tests RLS).
-2. **F1-004** — Cliente Teamtailor con rate limit.
-3. **F1-005** — Primer syncer (stages + users).
+1. **F1-004** — Cliente Teamtailor con rate limit.
+2. **F1-005** — Primer syncer (stages + users).
+3. **F1-006** — Dashboard mínimo (UI layer, pre-ETL productivo).
 
 Ver `docs/roadmap.md` para el plan completo con prompts.
 
@@ -117,8 +149,9 @@ _(lista de inconsistencias encontradas y su plan de resolución)_
 
 - [x] `pnpm typecheck` — verde (2026-04-17)
 - [x] `pnpm lint` — verde (2026-04-17)
-- [ ] `pnpm test` — sin tests aún (vitest `passWithNoTests`)
-- [ ] Coverage global ≥ 80% — _(sin código de dominio aún)_
+- [x] `pnpm test` — 54/54 verde (2026-04-17), ~9s end-to-end
+- [ ] Coverage global ≥ 80% — _(sin código de aplicación todavía;
+      solo tests de policies SQL contra DB local)_
 
 ---
 
