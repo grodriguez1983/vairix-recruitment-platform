@@ -34,7 +34,42 @@ export type Database = {
   }
   public: {
     Tables: {
-      [_ in never]: never
+      app_users: {
+        Row: {
+          auth_user_id: string
+          created_at: string
+          deactivated_at: string | null
+          email: string
+          full_name: string | null
+          id: string
+          role: string
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          auth_user_id: string
+          created_at?: string
+          deactivated_at?: string | null
+          email: string
+          full_name?: string | null
+          id?: string
+          role: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          auth_user_id?: string
+          created_at?: string
+          deactivated_at?: string | null
+          email?: string
+          full_name?: string | null
+          id?: string
+          role?: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never
@@ -53,6 +88,10 @@ export type Database = {
             }
             Returns: unknown
           }
+      current_app_role: {
+        Args: Record<PropertyKey, never>
+        Returns: string
+      }
       gtrgm_compress: {
         Args: {
           "": unknown
