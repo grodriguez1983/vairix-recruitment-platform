@@ -13,6 +13,13 @@
 Checklist antes de ejecutar:
 
 - [ ] Secret `TEAMTAILOR_API_TOKEN` configurado en GitHub Actions.
+- [ ] **`TEAMTAILOR_API_TOKEN` es least-privilege**: clave con
+      alcance **Administrador + Leer** (sin Escribir). Ver
+      `docs/status.md` §Deuda de seguridad. Si la clave actual tiene
+      `Escribir`, rotar antes de continuar.
+- [ ] `TEAMTAILOR_BASE_URL` apunta al endpoint **regional correcto**
+      del tenant (EU: `api.teamtailor.com`, NA: `api.na.teamtailor.com`).
+      Ver la página "Claves API" del admin de Teamtailor.
 - [ ] Secret `SUPABASE_SECRET_KEY` configurado (prefijo
       `sb_secret_...`; ver ADR-003 §7).
 - [ ] Supabase local NO está apuntando al target (verificar URL).

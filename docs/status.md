@@ -64,8 +64,9 @@ Ver `docs/roadmap.md` para el plan completo con prompts.
 
 - ⏳ **Lista de custom fields de Teamtailor** (pendiente de acceso).
 - ⏳ **Tenant de staging en Teamtailor** (no existe, hay que crear).
-- ⏳ **Verificar `X-Api-Version` vigente** en docs oficiales antes
-  de codear F1-004.
+- ✅ **Verificar `X-Api-Version` vigente** — resuelto 2026-04-17:
+  la vigente es `20240904` (la API la revela con HTTP 406 si falta
+  el header). `.env.example` actualizado.
 
 ---
 
@@ -101,6 +102,37 @@ _(lista de inconsistencias encontradas y su plan de resolución)_
   `.claude/skills/rls-policies/SKILL.md`,
   `docs/runbooks/initial-backfill.md`. Seed Chronicle como memoria
   semantic (Core).
+
+---
+
+## 🔐 Deuda de seguridad (acotada, con plazo)
+
+- **🔄 Rotar `TEAMTAILOR_API_TOKEN` a least-privilege antes del
+  primer backfill real (F1-004)**.
+  - **Estado actual**: clave "Dev" con alcance **Administrador + Leer/Escribir**.
+  - **Objetivo**: clave nueva `recruitment-platform-etl-ro` con
+    alcance **Administrador + Leer** (sin Escribir). El ETL es
+    read-only por ADR-002.
+  - **Cuándo**: antes de habilitar `DRY_RUN=false` en el primer
+    sync contra tenant productivo (F1-004, pre-flight del runbook
+    `docs/runbooks/initial-backfill.md`).
+  - **Cómo**: Teamtailor admin → Integraciones → Claves API →
+    Nueva clave API → Alcance=Administrador, Leer=✓, Escribir=✗ →
+    actualizar `.env.local` + secrets de Supabase Edge + secrets de
+    GitHub Actions → smoke test → revocar la "Dev".
+
+- **🔄 Rotar `SUPABASE_SECRET_KEY` antes de Fase 2 / staging**.
+  - **Estado actual**: valor `sb_secret_0BfS...` compartido por
+    chat durante el setup del 2026-04-17.
+  - **Cuándo**: antes de cualquier ambiente no-dev. Ver ADR-003 §7
+    sobre el modelo nuevo de keys rotables.
+
+- **🔄 Rotar `OPENAI_API_KEY` antes de Fase 2 / staging**.
+  - **Estado actual**: key project-scoped `sk-proj-Zp1N...`
+    compartida por chat durante el setup del 2026-04-17.
+  - **Cuándo**: antes de cualquier ambiente no-dev. Al rotar, usar
+    el límite de gasto (usage limit) del proyecto de OpenAI para
+    acotar blast radius.
 
 ---
 

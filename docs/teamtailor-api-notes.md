@@ -12,15 +12,47 @@ Documentación oficial: https://docs.teamtailor.com/
 ## 1. Autenticación
 
 - API REST basada en el estándar **JSON:API**.
-- Autenticación por **API token** (se genera desde el admin de Teamtailor).
+- Autenticación por **API token** (se genera desde el admin de
+  Teamtailor → Integraciones → Claves API).
 - Headers requeridos en cada request:
   ```
   Authorization: Token token=YOUR_API_KEY
-  X-Api-Version: 20240404   # [VERIFICAR versión vigente]
-  Content-Type: application/vnd.api+json
+  X-Api-Version: 20240904
+  Accept: application/vnd.api+json
   ```
-- El header `X-Api-Version` **es obligatorio**. Sin él, la API puede
-  responder con errores o usar un default que cambia silenciosamente.
+- El header `X-Api-Version` **es obligatorio**. Sin él, la API
+  responde `406 Invalid/Missing API Version` y te dice la version
+  vigente en el body del error.
+- **Versión vigente verificada 2026-04-17**: `20240904`.
+
+### ⚠️ Base URL según región del tenant
+
+Teamtailor tiene endpoints regionales. **La URL correcta aparece
+en la página "Claves API" del admin** ("URL base para la api").
+
+| Región | Base URL |
+|---|---|
+| Global / EU | `https://api.teamtailor.com/v1` |
+| North America | `https://api.na.teamtailor.com/v1` |
+
+**Este tenant (VAIRIX) es NA** → `https://api.na.teamtailor.com/v1`.
+
+Gotcha: si usás la base URL equivocada, toda request devuelve `401`
+aunque el token sea correcto, porque el tenant no existe en el
+endpoint global. El 401 NO indica "región equivocada" — es
+indistinguible de un token inválido.
+
+### Scopes de la clave
+
+La UI de Teamtailor ofrece:
+- **Alcance**: Públicas / Internas / Administrador
+- **Permisos**: Leer / Escribir (checkboxes)
+
+Para el ETL del proyecto necesitamos **Administrador + Leer**
+(lectura de candidates, applications, jobs, stages, users, notes,
+files, incluso datos privados y no publicados). **No** necesitamos
+`Escribir` — el ETL es read-only (ADR-002). Principio de least
+privilege: emitir claves sin `Escribir`.
 
 ---
 
