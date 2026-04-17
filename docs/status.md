@@ -5,12 +5,25 @@
 > el git log).
 
 **Última actualización**: 2026-04-17
-**Última sesión**: 2026-04-17 — F1-001 bootstrap del repo
+**Última sesión**: 2026-04-17 — F1-001 bootstrap + F1-002 primera migración
 **Fase activa**: **Fase 1 — Fundación**
 
 ---
 
 ## ✅ Completado
+
+- **F1-002** ✅ done — 2026-04-17 — commit `be7d1f9`
+  - `supabase init` + stack local arriba (Postgres 15, pgvector 0.7.4,
+    Studio en :54323, DB en :54322)
+  - Migración `20260417201204_extensions_and_helpers.sql`:
+    `uuid-ossp`, `vector`, `pg_trgm` + función `set_updated_at()`
+  - `supabase db reset` aplica limpio; `supabase db diff` vacío
+  - `src/types/database.ts` regenerado (scaffolding, sin tablas de
+    dominio todavía)
+  - Fixes colaterales del pre-commit hook:
+    - Removida entrada `*.sql` de lint-staged (prettier sin parser SQL)
+    - Agregado `--no-warn-ignored` al eslint de `*.{ts,tsx}` para que
+      lint-staged no falle cuando toca archivos en `ignores`
 
 - **F1-001** ✅ done — 2026-04-17 — commits `078f6f2`, `71b78bb`
   - `tsconfig.json` con `strict` + `noUncheckedIndexedAccess` + alias `@/`
@@ -71,9 +84,9 @@ _(nada todavía)_
 
 ## ⏳ Próximo (top 3 del roadmap)
 
-1. **F1-002** — Supabase local + primera migración.
-2. **F1-003** — Schema de dominio + RLS base.
-3. **F1-004** — Primer syncer (stages + users) contra Teamtailor.
+1. **F1-003** — Schema de dominio + RLS base (13 migraciones + tests RLS).
+2. **F1-004** — Cliente Teamtailor con rate limit.
+3. **F1-005** — Primer syncer (stages + users).
 
 Ver `docs/roadmap.md` para el plan completo con prompts.
 
