@@ -89,6 +89,21 @@ _(lista de inconsistencias encontradas y su plan de resolución)_
 
 ---
 
+## 📘 Cambios recientes de docs/infra
+
+- **2026-04-17** — ADR-003 §7 agregado: nueva nomenclatura de API
+  keys de Supabase (modelo 2025+). Env vars renombrados:
+  `NEXT_PUBLIC_SUPABASE_ANON_KEY` → `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY`,
+  `SUPABASE_SERVICE_ROLE_KEY` → `SUPABASE_SECRET_KEY`. Actualizados:
+  `.env.example`, `scripts/bootstrap.sh`, `.claude/hooks/pre-commit.sh`
+  (+ guardrail sobre prefijo `sb_secret_`),
+  `.claude/agents/security-reviewer.md`,
+  `.claude/skills/rls-policies/SKILL.md`,
+  `docs/runbooks/initial-backfill.md`. Seed Chronicle como memoria
+  semantic (Core).
+
+---
+
 ## 🔗 Notas volátiles
 
 _(cosas que se van descubriendo y hay que validar — no arquitectura

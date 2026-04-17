@@ -120,6 +120,45 @@ El claim `role` se inyecta en el JWT desde una función
 - `admin` los ve y puede restaurar poniendo `deleted_at = null`.
 - No hay hard delete desde la UI en Fase 1. Solo por script manual.
 
+### 7. Terminología de API keys de Supabase (modelo 2025+)
+
+Supabase deprecó las JWT-based `anon` / `service_role` keys a fines
+de 2025. Proyectos creados desde ~Nov 2025 **ya no las exponen**;
+vienen con el modelo nuevo:
+
+| Nuevo nombre | Env var | Prefijo | Reemplaza a |
+|---|---|---|---|
+| Publishable key (única por proyecto) | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | `sb_publishable_` | `anon` key (legacy) |
+| Secret key (N por proyecto, rotables individualmente) | `SUPABASE_SECRET_KEY` | `sb_secret_` | `service_role` key (legacy) |
+
+Propiedades relevantes del modelo nuevo:
+
+- **Rotación y revocación por clave**: se pueden emitir múltiples
+  secret keys con nombre y revocar cada una sin afectar a las otras.
+  Cada evento queda en el audit log de la organización.
+- **Desacopladas del JWT secret**: rotar el JWT secret ya no
+  implica rotar las API keys.
+- **Drop-in compatible**: el supabase-js client acepta los valores
+  nuevos en el mismo slot donde antes iban anon/service_role.
+
+**Regla del repo**:
+
+- Proyecto creado como **greenfield** (sin código legacy): usar
+  **solo** los nombres nuevos. El repo no mantiene compat con los
+  nombres antiguos.
+- Las reglas de §5 RLS y de segregación de secret key (solo en
+  Edge Functions, CI backfill, scripts admin) **no cambian**:
+  la secret key sigue siendo la que bypasea RLS.
+- El hook de pre-commit escanea además el prefijo literal
+  `sb_secret_` como guardrail adicional anti-leak.
+- Escuchar el **audit log** de keys en la review mensual; si
+  alguna clave aparece inesperadamente o no sabemos quién la
+  creó, revocar.
+
+**Out of scope de este ADR**: decisión de rotar claves en un
+intervalo fijo. Se evalúa cuando el proyecto salga a producción
+(Fase 2+).
+
 ---
 
 ## Alternativas consideradas

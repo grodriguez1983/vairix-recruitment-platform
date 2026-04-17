@@ -22,8 +22,15 @@ if echo "$staged" | grep -qE '\.env($|\.)' | grep -v '\.env\.example'; then
   exit 1
 fi
 
-if echo "$staged" | xargs grep -lE '(SUPABASE_SERVICE_ROLE_KEY|OPENAI_API_KEY|TEAMTAILOR_API_TOKEN)\s*=\s*[^${]' 2>/dev/null | grep -v '\.env\.example'; then
+if echo "$staged" | xargs grep -lE '(SUPABASE_SECRET_KEY|SUPABASE_SERVICE_ROLE_KEY|OPENAI_API_KEY|TEAMTAILOR_API_TOKEN)\s*=\s*[^${]' 2>/dev/null | grep -v '\.env\.example'; then
   echo "❌ secret literal detectado en archivos staged. Reemplazar por env var."
+  exit 1
+fi
+
+# 2b. Detectar valores literales de claves Supabase por prefijo
+# (nuevo modelo: sb_secret_..., sb_publishable_...)
+if echo "$staged" | xargs grep -lE 'sb_secret_[A-Za-z0-9_-]{10,}' 2>/dev/null | grep -v '\.env\.example'; then
+  echo "❌ se detectó un valor literal sb_secret_... en archivos staged. NUNCA commitear secret keys."
   exit 1
 fi
 

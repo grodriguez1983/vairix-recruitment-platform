@@ -129,7 +129,7 @@ Helper en `tests/helpers/rls.ts`:
 ```typescript
 export async function asRole(role: 'recruiter' | 'admin' | null) {
   const token = role ? makeTestJwt({ role, sub: 'test-user' }) : null;
-  return createClient(SUPABASE_URL, SUPABASE_ANON_KEY, {
+  return createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY, {
     global: { headers: token ? { Authorization: `Bearer ${token}` } : {} },
   });
 }

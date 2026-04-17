@@ -83,8 +83,8 @@ echo "▶ Validando variables requeridas..."
 
 required_vars=(
   NEXT_PUBLIC_SUPABASE_URL
-  NEXT_PUBLIC_SUPABASE_ANON_KEY
-  SUPABASE_SERVICE_ROLE_KEY
+  NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
+  SUPABASE_SECRET_KEY
   TEAMTAILOR_API_TOKEN
   TEAMTAILOR_API_VERSION
   OPENAI_API_KEY
@@ -137,7 +137,7 @@ if $FULL; then
     edge_vars=(
       TEAMTAILOR_API_TOKEN TEAMTAILOR_API_VERSION
       OPENAI_API_KEY OPENAI_EMBEDDING_MODEL
-      SUPABASE_SERVICE_ROLE_KEY
+      SUPABASE_SECRET_KEY
     )
     for v in "${edge_vars[@]}"; do
       if ! grep -q "^$v$" <<< "$supa_secrets"; then
@@ -152,7 +152,7 @@ if $FULL; then
     # Vars que GitHub Actions necesita (backfill, CI)
     gh_vars=(
       TEAMTAILOR_API_TOKEN TEAMTAILOR_API_VERSION
-      SUPABASE_SERVICE_ROLE_KEY SUPABASE_PROJECT_REF
+      SUPABASE_SECRET_KEY SUPABASE_PROJECT_REF
       SUPABASE_ACCESS_TOKEN
     )
     for v in "${gh_vars[@]}"; do

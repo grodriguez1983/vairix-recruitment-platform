@@ -13,7 +13,8 @@
 Checklist antes de ejecutar:
 
 - [ ] Secret `TEAMTAILOR_API_TOKEN` configurado en GitHub Actions.
-- [ ] Secret `SUPABASE_SERVICE_ROLE_KEY` configurado.
+- [ ] Secret `SUPABASE_SECRET_KEY` configurado (prefijo
+      `sb_secret_...`; ver ADR-003 §7).
 - [ ] Supabase local NO está apuntando al target (verificar URL).
 - [ ] Migraciones aplicadas en Supabase target
       (`supabase db push --linked`).

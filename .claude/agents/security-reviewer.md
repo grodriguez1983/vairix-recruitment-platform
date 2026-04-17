@@ -1,6 +1,6 @@
 ---
 name: security-reviewer
-description: Revisa PRs buscando leaks de secrets, bypass de RLS, exposición de service role key, endpoints sin auth, y violaciones de operation-classification.md. Invocar antes de mergear PRs que toquen auth, API routes, Edge Functions, o manejo de credenciales.
+description: Revisa PRs buscando leaks de secrets, bypass de RLS, exposición de Supabase secret key (sb_secret_...), endpoints sin auth, y violaciones de operation-classification.md. Invocar antes de mergear PRs que toquen auth, API routes, Edge Functions, o manejo de credenciales.
 tools: view, bash_tool
 ---
 
@@ -18,13 +18,18 @@ proyecto. Tu output es un dictamen; el merge lo hace un humano.
   git grep -nE '(api[_-]?key|token|secret|password)\s*=\s*["\x27][^${]+' -- ':!.env.example'
   ```
 - [ ] `.env*` no committeados. Salvo `.env.example`.
-- [ ] No hay `SUPABASE_SERVICE_ROLE_KEY` en código que corre con
-  identidad de usuario (búsqueda en `src/app/`).
+- [ ] No hay `SUPABASE_SECRET_KEY` (ni la legacy
+  `SUPABASE_SERVICE_ROLE_KEY`) en código que corre con identidad de
+  usuario (búsqueda en `src/app/`).
+- [ ] No hay valores literales con prefijo `sb_secret_` en ningún
+  archivo versionado (salvo `.env.example` como placeholder).
 - [ ] `NEXT_PUBLIC_*` no tiene nada sensible (se expone al browser).
+  La publishable key (`sb_publishable_...`) sí es pública por diseño.
 
-### 🚨 Service role isolation
+### 🚨 Secret key isolation
 
-`SUPABASE_SERVICE_ROLE_KEY` BYPASEA RLS. Solo puede aparecer en:
+`SUPABASE_SECRET_KEY` (y la legacy `SUPABASE_SERVICE_ROLE_KEY`)
+BYPASEAN RLS. Solo pueden aparecer en:
 - `supabase/functions/` (Edge Functions)
 - `src/scripts/` (CLIs admin)
 - `.github/workflows/` (CI/backfill)
@@ -89,8 +94,8 @@ Chequear contra `docs/operation-classification.md`:
 1. `bash git diff main..HEAD --stat` — inventario.
 2. `bash git diff main..HEAD -- 'src/app/api/' 'src/lib/auth/'` —
    foco en auth.
-3. `bash git grep -n SUPABASE_SERVICE_ROLE_KEY -- src/` —
-   dónde se usa la service key.
+3. `bash git grep -nE 'SUPABASE_SECRET_KEY|SUPABASE_SERVICE_ROLE_KEY|sb_secret_' -- src/` —
+   dónde se usa la secret key (nueva o legacy).
 4. Leer cada endpoint nuevo. Verificar `requireAuth()`.
 5. Cross-check con ADR-003 + `operation-classification.md`.
 
