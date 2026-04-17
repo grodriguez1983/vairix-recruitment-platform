@@ -70,6 +70,55 @@ export type Database = {
         }
         Relationships: []
       }
+      candidate_tags: {
+        Row: {
+          candidate_id: string
+          confidence: number | null
+          created_at: string
+          created_by: string | null
+          source: string | null
+          tag_id: string
+        }
+        Insert: {
+          candidate_id: string
+          confidence?: number | null
+          created_at?: string
+          created_by?: string | null
+          source?: string | null
+          tag_id: string
+        }
+        Update: {
+          candidate_id?: string
+          confidence?: number | null
+          created_at?: string
+          created_by?: string | null
+          source?: string | null
+          tag_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "candidate_tags_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "candidate_tags_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "candidate_tags_tag_id_fkey"
+            columns: ["tag_id"]
+            isOneToOne: false
+            referencedRelation: "tags"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       candidates: {
         Row: {
           created_at: string
@@ -123,6 +172,121 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      embeddings: {
+        Row: {
+          candidate_id: string
+          content: string
+          content_hash: string
+          created_at: string
+          embedding: string | null
+          id: string
+          model: string
+          source_id: string | null
+          source_type: string
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          candidate_id: string
+          content: string
+          content_hash: string
+          created_at?: string
+          embedding?: string | null
+          id?: string
+          model?: string
+          source_id?: string | null
+          source_type: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          candidate_id?: string
+          content?: string
+          content_hash?: string
+          created_at?: string
+          embedding?: string | null
+          id?: string
+          model?: string
+          source_id?: string | null
+          source_type?: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "embeddings_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      files: {
+        Row: {
+          candidate_id: string
+          content_hash: string | null
+          created_at: string
+          deleted_at: string | null
+          file_size_bytes: number | null
+          file_type: string | null
+          id: string
+          parse_error: string | null
+          parsed_at: string | null
+          parsed_text: string | null
+          raw_data: Json | null
+          storage_path: string
+          synced_at: string
+          teamtailor_id: string | null
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          candidate_id: string
+          content_hash?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          file_size_bytes?: number | null
+          file_type?: string | null
+          id?: string
+          parse_error?: string | null
+          parsed_at?: string | null
+          parsed_text?: string | null
+          raw_data?: Json | null
+          storage_path: string
+          synced_at?: string
+          teamtailor_id?: string | null
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          candidate_id?: string
+          content_hash?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          file_size_bytes?: number | null
+          file_type?: string | null
+          id?: string
+          parse_error?: string | null
+          parsed_at?: string | null
+          parsed_text?: string | null
+          raw_data?: Json | null
+          storage_path?: string
+          synced_at?: string
+          teamtailor_id?: string | null
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "files_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       jobs: {
         Row: {
@@ -207,6 +371,156 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      shortlist_candidates: {
+        Row: {
+          added_at: string
+          added_by: string
+          candidate_id: string
+          note: string | null
+          shortlist_id: string
+        }
+        Insert: {
+          added_at?: string
+          added_by: string
+          candidate_id: string
+          note?: string | null
+          shortlist_id: string
+        }
+        Update: {
+          added_at?: string
+          added_by?: string
+          candidate_id?: string
+          note?: string | null
+          shortlist_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shortlist_candidates_added_by_fkey"
+            columns: ["added_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shortlist_candidates_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shortlist_candidates_shortlist_id_fkey"
+            columns: ["shortlist_id"]
+            isOneToOne: false
+            referencedRelation: "shortlists"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      shortlists: {
+        Row: {
+          archived_at: string | null
+          created_at: string
+          created_by: string
+          description: string | null
+          id: string
+          job_id: string | null
+          name: string
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          archived_at?: string | null
+          created_at?: string
+          created_by: string
+          description?: string | null
+          id?: string
+          job_id?: string | null
+          name: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          archived_at?: string | null
+          created_at?: string
+          created_by?: string
+          description?: string | null
+          id?: string
+          job_id?: string | null
+          name?: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "shortlists_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "shortlists_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      stages: {
+        Row: {
+          category: string | null
+          created_at: string
+          id: string
+          job_id: string | null
+          name: string
+          position: number | null
+          raw_data: Json | null
+          slug: string | null
+          synced_at: string
+          teamtailor_id: string
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          job_id?: string | null
+          name: string
+          position?: number | null
+          raw_data?: Json | null
+          slug?: string | null
+          synced_at?: string
+          teamtailor_id: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          job_id?: string | null
+          name?: string
+          position?: number | null
+          raw_data?: Json | null
+          slug?: string | null
+          synced_at?: string
+          teamtailor_id?: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "stages_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       sync_errors: {
         Row: {
