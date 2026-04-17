@@ -5,12 +5,46 @@
 > el git log).
 
 **Última actualización**: 2026-04-17
-**Última sesión**: 2026-04-17 — F1-003 schema de dominio + RLS base
+**Última sesión**: 2026-04-17 — F1-004 cliente Teamtailor (pure + MSW)
 **Fase activa**: **Fase 1 — Fundación**
 
 ---
 
 ## ✅ Completado
+
+- **F1-004** ✅ done — 2026-04-17 — commits
+  `a4097e1`/`0a72be6` (F1-004a: errors/types/rate-limit/retry/parse),
+  `0668b40`/`09b52a7` (F1-004b: client + paginate con MSW).
+  - Módulos en `src/lib/teamtailor/`:
+    - `errors.ts` — jerarquía `TeamtailorError` → `HttpError`,
+      `RateLimitError`, `ParseError` con `context` opcional.
+    - `types.ts` — tipos JSON:API (`TTJsonApiDocument`,
+      `TTJsonApiResource`, `TTJsonApiLinks`) y parsed
+      (`TTParsedDocument`, `TTParsedResource`). Attributes
+      normalizadas shallow kebab→camel.
+    - `rate-limit.ts` — `TokenBucket` con clock inyectable
+      (`pendingWaitMs()` + `take()`; caller hace el sleep).
+    - `retry.ts` — `defaultRetryPolicy()` (5 attempts, 1s→30s,
+      jitter 50–100 %), `parseRetryAfter()` (segundos numéricos
+      - RFC 7231), `shouldRetry()` y `computeBackoff()`.
+    - `parse.ts` — `parseDocument()`/`parseResource()` con
+      `ParseError` en shapes inválidas; coerce data single↔array.
+    - `paginate.ts` — async iterator genérico que consume
+      `links.next` y respeta break temprano del consumidor.
+    - `client.ts` — `TeamtailorClient` compone todo:
+      fetch (inyectable para MSW) + auth headers
+      (`Authorization: Token token=<key>` / `X-Api-Version` /
+      `Accept: application/vnd.api+json`) + bucket global +
+      retry (429/5xx/network, honra Retry-After). Expone
+      `get()` y `paginate()`.
+  - Tests (vitest + msw/node): 52 unit tests en 6 suites,
+    todos verdes en <1 s. Fixtures anonimizadas en
+    `tests/fixtures/teamtailor/candidates-page-{1,2,3}.json`.
+    Virtual clock (`now` + `sleep` inyectados) evita esperas
+    reales en tests de retry/rate-limit.
+  - Gotcha corregido: en el test de Retry-After el default
+    jitter (50–100 %) hacía la aserción flaky; se usa jitter
+    identidad en ese test para aserciones exactas.
 
 - **F1-003** ✅ done — 2026-04-17 — commits
   `c851643`/`04789fa` (app_users), `36b97b0`/`8958273` + `036c934` (Wave 1),
@@ -116,9 +150,10 @@ _(nada todavía)_
 
 ## ⏳ Próximo (top 3 del roadmap)
 
-1. **F1-004** — Cliente Teamtailor con rate limit.
-2. **F1-005** — Primer syncer (stages + users).
-3. **F1-006** — Dashboard mínimo (UI layer, pre-ETL productivo).
+1. **F1-005** — Skeleton de ETL + `sync_state` (primer syncer:
+   stages + users).
+2. **F1-006** — Dashboard mínimo (UI layer, pre-ETL productivo).
+3. **F1-007** — Syncer de jobs con cursor incremental.
 
 Ver `docs/roadmap.md` para el plan completo con prompts.
 
@@ -149,9 +184,11 @@ _(lista de inconsistencias encontradas y su plan de resolución)_
 
 - [x] `pnpm typecheck` — verde (2026-04-17)
 - [x] `pnpm lint` — verde (2026-04-17)
-- [x] `pnpm test` — 54/54 verde (2026-04-17), ~9s end-to-end
-- [ ] Coverage global ≥ 80% — _(sin código de aplicación todavía;
-      solo tests de policies SQL contra DB local)_
+- [x] `pnpm test` — 106/106 verde (2026-04-17), ~11s end-to-end
+      (54 RLS + 52 unit de `src/lib/teamtailor`)
+- [ ] Coverage global ≥ 80% — _(primera feature con cobertura real
+      ya existe: teamtailor/ tiene 52 tests sobre 7 módulos puros;
+      cobertura no medida formalmente todavía)_
 
 ---
 
