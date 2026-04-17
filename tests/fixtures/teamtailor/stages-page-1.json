@@ -1,0 +1,33 @@
+{
+  "data": [
+    {
+      "id": "9001",
+      "type": "stages",
+      "attributes": {
+        "name": "New application",
+        "slug": "new-application",
+        "position": 1,
+        "category": "applied",
+        "created-at": "2026-01-01T00:00:00Z",
+        "updated-at": "2026-01-02T00:00:00Z"
+      }
+    },
+    {
+      "id": "9002",
+      "type": "stages",
+      "attributes": {
+        "name": "Phone screen",
+        "slug": "phone-screen",
+        "position": 2,
+        "category": "in-process",
+        "created-at": "2026-01-01T00:00:00Z",
+        "updated-at": "2026-01-02T00:00:00Z"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://tt.test/v1/stages?page%5Bnumber%5D=1",
+    "next": "https://tt.test/v1/stages?page%5Bnumber%5D=2",
+    "last": "https://tt.test/v1/stages?page%5Bnumber%5D=2"
+  }
+}

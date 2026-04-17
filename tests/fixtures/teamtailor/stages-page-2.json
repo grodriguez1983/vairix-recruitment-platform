@@ -1,0 +1,20 @@
+{
+  "data": [
+    {
+      "id": "9003",
+      "type": "stages",
+      "attributes": {
+        "name": "Offer",
+        "slug": "offer",
+        "position": 3,
+        "category": "offer",
+        "created-at": "2026-01-01T00:00:00Z",
+        "updated-at": "2026-01-02T00:00:00Z"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://tt.test/v1/stages?page%5Bnumber%5D=2",
+    "prev": "https://tt.test/v1/stages?page%5Bnumber%5D=1"
+  }
+}

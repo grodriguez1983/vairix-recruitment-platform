@@ -1,0 +1,37 @@
+{
+  "data": [
+    {
+      "id": "9001",
+      "type": "stages",
+      "attributes": {
+        "name": "New application",
+        "slug": "new-application",
+        "position": 1,
+        "category": "applied",
+        "updated-at": "2026-01-02T00:00:00Z"
+      }
+    },
+    {
+      "id": "9002",
+      "type": "stages",
+      "attributes": {
+        "slug": "missing-name",
+        "position": 2
+      }
+    },
+    {
+      "id": "9003",
+      "type": "stages",
+      "attributes": {
+        "name": "Offer",
+        "slug": "offer",
+        "position": 3,
+        "category": "offer",
+        "updated-at": "2026-01-02T00:00:00Z"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://tt.test/v1/stages?page%5Bnumber%5D=1"
+  }
+}
