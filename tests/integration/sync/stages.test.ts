@@ -57,7 +57,15 @@ function makeTeamtailorClient(): TeamtailorClient {
 }
 
 const server = setupServer();
-beforeAll(() => server.listen({ onUnhandledRequest: 'error' }));
+beforeAll(() =>
+  server.listen({
+    // Only block unhandled requests to Teamtailor; let Supabase HTTP
+    // calls pass through to the local stack.
+    onUnhandledRequest: (req, print) => {
+      if (req.url.startsWith(BASE_URL)) print.error();
+    },
+  }),
+);
 afterEach(() => server.resetHandlers());
 afterAll(() => server.close());
 
