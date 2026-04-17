@@ -70,6 +70,88 @@ export type Database = {
         }
         Relationships: []
       }
+      applications: {
+        Row: {
+          candidate_id: string
+          cover_letter: string | null
+          created_at: string
+          deleted_at: string | null
+          hired_at: string | null
+          id: string
+          job_id: string | null
+          raw_data: Json | null
+          rejected_at: string | null
+          source: string | null
+          stage_id: string | null
+          stage_name: string | null
+          status: string | null
+          synced_at: string
+          teamtailor_id: string
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          candidate_id: string
+          cover_letter?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          hired_at?: string | null
+          id?: string
+          job_id?: string | null
+          raw_data?: Json | null
+          rejected_at?: string | null
+          source?: string | null
+          stage_id?: string | null
+          stage_name?: string | null
+          status?: string | null
+          synced_at?: string
+          teamtailor_id: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          candidate_id?: string
+          cover_letter?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          hired_at?: string | null
+          id?: string
+          job_id?: string | null
+          raw_data?: Json | null
+          rejected_at?: string | null
+          source?: string | null
+          stage_id?: string | null
+          stage_name?: string | null
+          status?: string | null
+          synced_at?: string
+          teamtailor_id?: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "applications_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "applications_job_id_fkey"
+            columns: ["job_id"]
+            isOneToOne: false
+            referencedRelation: "jobs"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "applications_stage_id_fkey"
+            columns: ["stage_id"]
+            isOneToOne: false
+            referencedRelation: "stages"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       candidate_tags: {
         Row: {
           candidate_id: string
@@ -223,6 +305,101 @@ export type Database = {
           },
         ]
       }
+      evaluations: {
+        Row: {
+          application_id: string | null
+          candidate_id: string
+          created_at: string
+          decision: string | null
+          deleted_at: string | null
+          evaluator_name: string | null
+          id: string
+          needs_review: boolean | null
+          normalization_attempted_at: string | null
+          notes: string | null
+          raw_data: Json | null
+          rejection_category_id: string | null
+          rejection_reason: string | null
+          score: number | null
+          synced_at: string
+          teamtailor_id: string | null
+          tenant_id: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          application_id?: string | null
+          candidate_id: string
+          created_at?: string
+          decision?: string | null
+          deleted_at?: string | null
+          evaluator_name?: string | null
+          id?: string
+          needs_review?: boolean | null
+          normalization_attempted_at?: string | null
+          notes?: string | null
+          raw_data?: Json | null
+          rejection_category_id?: string | null
+          rejection_reason?: string | null
+          score?: number | null
+          synced_at?: string
+          teamtailor_id?: string | null
+          tenant_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          application_id?: string | null
+          candidate_id?: string
+          created_at?: string
+          decision?: string | null
+          deleted_at?: string | null
+          evaluator_name?: string | null
+          id?: string
+          needs_review?: boolean | null
+          normalization_attempted_at?: string | null
+          notes?: string | null
+          raw_data?: Json | null
+          rejection_category_id?: string | null
+          rejection_reason?: string | null
+          score?: number | null
+          synced_at?: string
+          teamtailor_id?: string | null
+          tenant_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "evaluations_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evaluations_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evaluations_rejection_category_id_fkey"
+            columns: ["rejection_category_id"]
+            isOneToOne: false
+            referencedRelation: "rejection_categories"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "evaluations_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       files: {
         Row: {
           candidate_id: string
@@ -338,6 +515,76 @@ export type Database = {
           updated_at?: string
         }
         Relationships: []
+      }
+      notes: {
+        Row: {
+          application_id: string | null
+          author_name: string | null
+          body: string
+          candidate_id: string
+          created_at: string
+          deleted_at: string | null
+          id: string
+          raw_data: Json | null
+          synced_at: string
+          teamtailor_id: string | null
+          tenant_id: string | null
+          updated_at: string
+          user_id: string | null
+        }
+        Insert: {
+          application_id?: string | null
+          author_name?: string | null
+          body: string
+          candidate_id: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          raw_data?: Json | null
+          synced_at?: string
+          teamtailor_id?: string | null
+          tenant_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Update: {
+          application_id?: string | null
+          author_name?: string | null
+          body?: string
+          candidate_id?: string
+          created_at?: string
+          deleted_at?: string | null
+          id?: string
+          raw_data?: Json | null
+          synced_at?: string
+          teamtailor_id?: string | null
+          tenant_id?: string | null
+          updated_at?: string
+          user_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "notes_application_id_fkey"
+            columns: ["application_id"]
+            isOneToOne: false
+            referencedRelation: "applications"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notes_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "notes_user_id_fkey"
+            columns: ["user_id"]
+            isOneToOne: false
+            referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
       }
       rejection_categories: {
         Row: {
