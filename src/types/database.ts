@@ -70,6 +70,288 @@ export type Database = {
         }
         Relationships: []
       }
+      candidates: {
+        Row: {
+          created_at: string
+          deleted_at: string | null
+          email: string | null
+          first_name: string | null
+          id: string
+          last_name: string | null
+          linkedin_url: string | null
+          phone: string | null
+          pitch: string | null
+          raw_data: Json | null
+          sourced: boolean | null
+          synced_at: string
+          teamtailor_id: string
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          created_at?: string
+          deleted_at?: string | null
+          email?: string | null
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          linkedin_url?: string | null
+          phone?: string | null
+          pitch?: string | null
+          raw_data?: Json | null
+          sourced?: boolean | null
+          synced_at?: string
+          teamtailor_id: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          created_at?: string
+          deleted_at?: string | null
+          email?: string | null
+          first_name?: string | null
+          id?: string
+          last_name?: string | null
+          linkedin_url?: string | null
+          phone?: string | null
+          pitch?: string | null
+          raw_data?: Json | null
+          sourced?: boolean | null
+          synced_at?: string
+          teamtailor_id?: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      jobs: {
+        Row: {
+          body: string | null
+          created_at: string
+          deleted_at: string | null
+          department: string | null
+          id: string
+          location: string | null
+          pitch: string | null
+          raw_data: Json | null
+          status: string | null
+          synced_at: string
+          teamtailor_id: string
+          tenant_id: string | null
+          title: string
+          updated_at: string
+        }
+        Insert: {
+          body?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          department?: string | null
+          id?: string
+          location?: string | null
+          pitch?: string | null
+          raw_data?: Json | null
+          status?: string | null
+          synced_at?: string
+          teamtailor_id: string
+          tenant_id?: string | null
+          title: string
+          updated_at?: string
+        }
+        Update: {
+          body?: string | null
+          created_at?: string
+          deleted_at?: string | null
+          department?: string | null
+          id?: string
+          location?: string | null
+          pitch?: string | null
+          raw_data?: Json | null
+          status?: string | null
+          synced_at?: string
+          teamtailor_id?: string
+          tenant_id?: string | null
+          title?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      rejection_categories: {
+        Row: {
+          code: string
+          created_at: string
+          deprecated_at: string | null
+          description: string | null
+          display_name: string
+          id: string
+          sort_order: number | null
+          updated_at: string
+        }
+        Insert: {
+          code: string
+          created_at?: string
+          deprecated_at?: string | null
+          description?: string | null
+          display_name: string
+          id?: string
+          sort_order?: number | null
+          updated_at?: string
+        }
+        Update: {
+          code?: string
+          created_at?: string
+          deprecated_at?: string | null
+          description?: string | null
+          display_name?: string
+          id?: string
+          sort_order?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      sync_errors: {
+        Row: {
+          created_at: string
+          entity: string
+          error_code: string | null
+          error_message: string | null
+          id: string
+          payload: Json | null
+          resolved_at: string | null
+          run_started_at: string
+          teamtailor_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          entity: string
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          payload?: Json | null
+          resolved_at?: string | null
+          run_started_at: string
+          teamtailor_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          entity?: string
+          error_code?: string | null
+          error_message?: string | null
+          id?: string
+          payload?: Json | null
+          resolved_at?: string | null
+          run_started_at?: string
+          teamtailor_id?: string | null
+        }
+        Relationships: []
+      }
+      sync_state: {
+        Row: {
+          entity: string
+          id: string
+          last_cursor: string | null
+          last_run_error: string | null
+          last_run_finished: string | null
+          last_run_started: string | null
+          last_run_status: string | null
+          last_synced_at: string | null
+          records_synced: number | null
+          stale_timeout_minutes: number | null
+          updated_at: string
+        }
+        Insert: {
+          entity: string
+          id?: string
+          last_cursor?: string | null
+          last_run_error?: string | null
+          last_run_finished?: string | null
+          last_run_started?: string | null
+          last_run_status?: string | null
+          last_synced_at?: string | null
+          records_synced?: number | null
+          stale_timeout_minutes?: number | null
+          updated_at?: string
+        }
+        Update: {
+          entity?: string
+          id?: string
+          last_cursor?: string | null
+          last_run_error?: string | null
+          last_run_finished?: string | null
+          last_run_started?: string | null
+          last_run_status?: string | null
+          last_synced_at?: string | null
+          records_synced?: number | null
+          stale_timeout_minutes?: number | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      tags: {
+        Row: {
+          category: string | null
+          created_at: string
+          id: string
+          name: string
+          tenant_id: string | null
+        }
+        Insert: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          name: string
+          tenant_id?: string | null
+        }
+        Update: {
+          category?: string | null
+          created_at?: string
+          id?: string
+          name?: string
+          tenant_id?: string | null
+        }
+        Relationships: []
+      }
+      users: {
+        Row: {
+          active: boolean | null
+          created_at: string
+          email: string | null
+          full_name: string | null
+          id: string
+          raw_data: Json | null
+          role: string | null
+          synced_at: string
+          teamtailor_id: string
+          tenant_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          active?: boolean | null
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          raw_data?: Json | null
+          role?: string | null
+          synced_at?: string
+          teamtailor_id: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          active?: boolean | null
+          created_at?: string
+          email?: string | null
+          full_name?: string | null
+          id?: string
+          raw_data?: Json | null
+          role?: string | null
+          synced_at?: string
+          teamtailor_id?: string
+          tenant_id?: string | null
+          updated_at?: string
+        }
+        Relationships: []
+      }
     }
     Views: {
       [_ in never]: never

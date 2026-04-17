@@ -16,11 +16,11 @@ export default defineConfig({
     include: ['src/**/*.test.ts', 'tests/**/*.test.ts'],
     testTimeout: 15_000,
     hookTimeout: 30_000,
-    // RLS tests hit a shared local Supabase; run serialized to avoid
-    // cross-test bleed. Unit tests in src/ can parallelize.
-    pool: 'threads',
-    poolOptions: {
-      threads: { singleThread: false },
-    },
+    // RLS tests hit a shared local Supabase; running in parallel causes
+    // cross-test state bleed (one test's teardown races with another's
+    // setup on the same table). Disable file-level parallelism.
+    // If unit tests ever become slow enough that serialization matters,
+    // split them into a separate vitest workspace/project.
+    fileParallelism: false,
   },
 });
