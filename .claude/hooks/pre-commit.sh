@@ -44,10 +44,19 @@ if command -v pnpm >/dev/null 2>&1; then
   pnpm typecheck
 
   # 5. Tests de los archivos que se tocaron (si existen test relacionados)
-  echo "   ▸ tests (changed)..."
-  if ! pnpm exec vitest run --changed --passWithNoTests 2>&1; then
-    echo "❌ tests fallaron. Arreglar antes de commitear."
-    exit 1
+  # TDD_RED=1 bypasea la gate para commits test: [RED] (ver
+  # .claude/skills/tdd-workflow/SKILL.md). El hook commit-msg sigue
+  # exigiendo que todo feat/fix [GREEN] tenga un [RED] previo, asi
+  # que este escape no relaja la disciplina TDD.
+  if [[ "${TDD_RED:-0}" == "1" ]]; then
+    echo "   ▸ tests (changed)... SKIPPED (TDD_RED=1)"
+  else
+    echo "   ▸ tests (changed)..."
+    if ! pnpm exec vitest run --changed --passWithNoTests 2>&1; then
+      echo "❌ tests fallaron. Arreglar antes de commitear."
+      echo "   Si es un commit TDD [RED] intencional, usa TDD_RED=1 git commit ..."
+      exit 1
+    fi
   fi
 else
   echo "⚠️  pnpm no disponible; skip checks automáticos."

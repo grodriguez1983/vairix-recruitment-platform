@@ -50,6 +50,17 @@ Output:
 commit-msg lo rechaza. El output pegado es evidencia de que el
 test realmente falla.
 
+**Cómo commitear con tests fallando**: el `pre-commit` corre los
+tests y bloquea commits con tests rojos. Para un `[RED]` legítimo,
+invocá:
+
+```bash
+TDD_RED=1 git commit -m 'test(scope): [RED] ...'
+```
+
+Esto bypasea SOLO la corrida de tests en pre-commit, no la gate de
+`[GREEN]` en commit-msg.
+
 ### Paso 2 — GREEN
 
 1. Escribir la implementación **mínima** que hace pasar el test.
