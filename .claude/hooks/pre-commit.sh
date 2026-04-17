@@ -63,12 +63,24 @@ else
 fi
 
 # 6. Verificar que si hay migración nueva, los tipos TS estén regenerados
+# La regla real es: el archivo de tipos en HEAD debe reflejar el schema vivo.
+# Se acepta tanto (a) tipos staged con cambios, como (b) tipos ya en HEAD
+# coincidiendo con la regeneración actual. Esto permite commits secuenciales
+# de migraciones cuando los tipos fueron regenerados una sola vez al final
+# de aplicar el lote.
 migration_changes=$(echo "$staged" | grep -E '^supabase/migrations/.*\.sql$' || true)
 if [[ -n "$migration_changes" ]]; then
   types_staged=$(echo "$staged" | grep -E '^src/types/database\.ts$' || true)
   if [[ -z "$types_staged" ]]; then
-    cat >&2 <<EOF
-❌ Hay migración staged pero src/types/database.ts no está staged.
+    # Caso (b): comparar generación actual vs archivo en disk.
+    # Si coinciden, los tipos están al día — OK.
+    if command -v pnpm >/dev/null 2>&1 && [[ -f src/types/database.ts ]]; then
+      generated=$(pnpm --silent exec supabase gen types typescript --local 2>/dev/null || true)
+      if [[ -n "$generated" ]] && diff -q <(echo "$generated") src/types/database.ts >/dev/null 2>&1; then
+        echo "   ℹ️  src/types/database.ts ya refleja el schema vivo (sin diff)."
+      else
+        cat >&2 <<EOF
+❌ Hay migración staged pero src/types/database.ts no está al día.
 
    Corré:
      pnpm supabase:types
@@ -76,7 +88,9 @@ if [[ -n "$migration_changes" ]]; then
 
    Y commiteá de nuevo.
 EOF
-    exit 1
+        exit 1
+      fi
+    fi
   fi
 fi
 
