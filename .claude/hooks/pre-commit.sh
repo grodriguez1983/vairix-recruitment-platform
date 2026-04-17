@@ -45,7 +45,7 @@ if command -v pnpm >/dev/null 2>&1; then
 
   # 5. Tests de los archivos que se tocaron (si existen test relacionados)
   echo "   ▸ tests (changed)..."
-  if ! pnpm test --run --changed --passWithNoTests 2>&1; then
+  if ! pnpm exec vitest run --changed --passWithNoTests 2>&1; then
     echo "❌ tests fallaron. Arreglar antes de commitear."
     exit 1
   fi

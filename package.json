@@ -2,6 +2,7 @@
   "name": "recruitment-platform",
   "version": "0.1.0",
   "private": true,
+  "type": "module",
   "description": "Internal talent intelligence platform over Teamtailor data",
   "packageManager": "pnpm@9.0.0",
   "engines": {
@@ -73,10 +74,16 @@
       "eslint --fix --max-warnings 0",
       "prettier --write"
     ],
-    "*.{md,json,yml,yaml}": ["prettier --write"],
-    "*.sql": ["prettier --write"]
+    "*.{md,json,yml,yaml}": [
+      "prettier --write"
+    ],
+    "*.sql": [
+      "prettier --write"
+    ]
   },
   "commitlint": {
-    "extends": ["@commitlint/config-conventional"]
+    "extends": [
+      "@commitlint/config-conventional"
+    ]
   }
 }
