@@ -1,0 +1,43 @@
+{
+  "data": [
+    {
+      "id": "5001",
+      "type": "users",
+      "attributes": {
+        "name": "María García",
+        "email": "maria@example.test",
+        "role": "hiring_manager",
+        "visible": true,
+        "created-at": "2026-01-05T10:00:00Z",
+        "updated-at": "2026-02-10T10:00:00Z"
+      }
+    },
+    {
+      "id": "5002",
+      "type": "users",
+      "attributes": {
+        "name": "João Silva",
+        "email": "joao@example.test",
+        "role": "recruiter",
+        "visible": true,
+        "created-at": "2026-01-06T10:00:00Z",
+        "updated-at": "2026-02-11T10:00:00Z"
+      }
+    },
+    {
+      "id": "5003",
+      "type": "users",
+      "attributes": {
+        "name": "Deleted User",
+        "email": null,
+        "role": null,
+        "visible": false,
+        "created-at": "2025-06-01T10:00:00Z",
+        "updated-at": "2025-12-01T10:00:00Z"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://tt.test/v1/users?page%5Bnumber%5D=1"
+  }
+}
