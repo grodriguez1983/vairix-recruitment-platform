@@ -36,6 +36,7 @@ claude.ai del proyecto `Recruitment Data Platform`.
 ## Estado de decisiones
 
 ### Resueltas (con ADR)
+
 - ✅ Stack de datos → ADR-001
 - ✅ Estrategia de sync → ADR-002
 - ✅ Auth, roles y RLS → ADR-003
@@ -45,6 +46,7 @@ claude.ai del proyecto `Recruitment Data Platform`.
 - ✅ Normalización de rejection reasons → ADR-007
 
 ### Pendientes (backlog de ADRs)
+
 - ⏳ Data retention / PII (no urgente, uso interno sin GDPR formal)
 - ⏳ Multilingüismo y full-text search avanzado
 - ⏳ Observabilidad y métricas (Fase 2)
@@ -53,5 +55,6 @@ claude.ai del proyecto `Recruitment Data Platform`.
 - ⏳ Upgrade de rejection normalization a LLM (criterio en ADR-007)
 
 ### Bloqueos externos
+
 - ⏳ Lista de custom fields de Teamtailor (pendiente de acceso)
 - ⏳ Creación de tenant de staging en Teamtailor (no existe, crear)

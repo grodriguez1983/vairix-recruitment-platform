@@ -59,12 +59,14 @@ como estrategia primaria de ingesta para Fase 1.
 ## Alternativas consideradas
 
 ### A) Full sync en cada corrida
+
 - **Pros**: simple, sin estado.
 - **Contras**: inviable por rate limits a volumen real; desperdicia
   cuota; lento.
 - **Descartada**.
 
 ### B) Webhooks desde el inicio
+
 - **Pros**: near-real-time.
 - **Contras**: requiere endpoint público autenticado, reintentos,
   deduplicación, y **aún así** hace falta sync incremental como
@@ -73,12 +75,14 @@ como estrategia primaria de ingesta para Fase 1.
   sync incremental, no como reemplazo.
 
 ### C) Cursor opaco provisto por Teamtailor
+
 - **Pros**: sin drift de paginación.
 - **Contras**: soporte parcial según endpoint; menos universal que
   `updated-at`.
 - **Aceptada como optimización** donde el endpoint lo soporte.
 
 ### D) CDC (Change Data Capture)
+
 - Teamtailor no expone CDC nativo. N/A.
 
 ---
@@ -86,12 +90,14 @@ como estrategia primaria de ingesta para Fase 1.
 ## Consecuencias
 
 ### Positivas
+
 - Baja complejidad operativa en POC.
 - Robusto frente a rate limits.
 - Estado persistido → observabilidad y retomabilidad.
 - Compatible con futuro agregado de webhooks (coexisten).
 
 ### Negativas
+
 - Latencia de propagación = intervalo de cron (ej: 15 min).
 - Depende de que `updated-at` sea confiable en Teamtailor. **Riesgo a
   verificar** en las primeras corridas contra el tenant real.
@@ -104,6 +110,7 @@ como estrategia primaria de ingesta para Fase 1.
 ## Criterios de reevaluación
 
 Migrar a webhooks + sync como safety net si:
+
 - Se necesita latencia < 5 minutos para algún caso de uso.
 - El volumen de cambios por intervalo satura la cuota de API.
 - Aparece un caso de negocio que requiera reaccionar a eventos

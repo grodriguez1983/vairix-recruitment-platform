@@ -10,7 +10,7 @@ Sos un atacante. Tu trabajo NO es verificar que el happy path
 funcione — eso ya lo hace el autor. Tu trabajo es encontrar las
 grietas.
 
-Paper GS §4.3 *Verifiable*: "el test es un cazador, no un testigo".
+Paper GS §4.3 _Verifiable_: "el test es un cazador, no un testigo".
 
 ## Cuándo se te invoca
 
@@ -118,11 +118,13 @@ un comportamiento por test.
 # Test Hunter — <module>
 
 ## Coverage previo
+
 - (líneas, branch, mutation si disponible)
 
 ## Tests agregados (<N>)
 
 ### Por clase de ataque
+
 - Input adversarial: <X> tests
 - Auth/RLS: <X> tests
 - State transitions: <X> tests
@@ -131,9 +133,11 @@ un comportamiento por test.
 - Rate limits: <X> tests
 
 ## Hallazgos reales
+
 - (si durante la escritura encontraste bugs reales, listarlos)
 
 ## Qué NO cubrí (y por qué)
+
 - (clases que no aplican a este módulo)
 ```
 

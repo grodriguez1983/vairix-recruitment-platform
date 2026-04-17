@@ -76,12 +76,12 @@ cambiamos de modelo en el futuro.
 
 ### Fuentes a embeber
 
-| `source_type` | Contenido | Cuándo se regenera |
-|---|---|---|
-| `cv` | `files.parsed_text` del CV más reciente del candidate | Al cambiar `parsed_text` |
-| `evaluation` | `evaluations.notes` cuando existen | Al cambiar `notes` |
-| `notes` | Concatenación de `notes.body` del candidate | Al agregarse o editarse una note |
-| `profile` | Texto sintético: "Nombre, headline, tags, sumario del CV" | Cuando cambia cualquier input |
+| `source_type` | Contenido                                                 | Cuándo se regenera               |
+| ------------- | --------------------------------------------------------- | -------------------------------- |
+| `cv`          | `files.parsed_text` del CV más reciente del candidate     | Al cambiar `parsed_text`         |
+| `evaluation`  | `evaluations.notes` cuando existen                        | Al cambiar `notes`               |
+| `notes`       | Concatenación de `notes.body` del candidate               | Al agregarse o editarse una note |
+| `profile`     | Texto sintético: "Nombre, headline, tags, sumario del CV" | Cuando cambia cualquier input    |
 
 ### Chunking
 
@@ -126,6 +126,7 @@ SQL primero (índices B-tree) y pasar el subset a la query vectorial.
 ## Alternativas consideradas
 
 ### A) Voyage AI (`voyage-3` o `voyage-3-lite`)
+
 - **Pros**: benchmarks superiores en retrieval, multilingüe fuerte.
 - **Contras**: proveedor menos maduro, menos librerías, costo
   similar a OpenAI pero sin ventaja marcada para este caso.
@@ -133,22 +134,26 @@ SQL primero (índices B-tree) y pasar el subset a la query vectorial.
   español flojea.
 
 ### B) Cohere `embed-multilingual-v3`
+
 - **Pros**: multilingüe nativo, 1024 dim (más eficiente).
 - **Contras**: menor adopción, menos tooling.
 - **Descartada**.
 
 ### C) Modelo local (`bge-m3`, `e5-mistral`)
+
 - **Pros**: sin costo por token, sin vendor lock-in.
 - **Contras**: infraestructura GPU, setup complejo, latencia.
   No justifica con 5k candidates.
 - **Descartada**.
 
 ### D) Embeddings en el ETL (inline)
+
 - **Contras**: mezcla responsabilidades, hace el sync más lento y
   frágil, dificulta re-embebidos masivos.
 - **Descartada** explícitamente (violaría principio del spec).
 
 ### E) Sin content_hash, usar `updated_at` de la fuente
+
 - **Pros**: más simple.
 - **Contras**: `updated_at` cambia por metadata irrelevante; regenera
   embeddings innecesariamente (costo + tiempo).
@@ -159,6 +164,7 @@ SQL primero (índices B-tree) y pasar el subset a la query vectorial.
 ## Consecuencias
 
 ### Positivas
+
 - Costo prácticamente nulo en Fase 1.
 - Pipeline claro y desacoplado del ETL.
 - Cambio de modelo en el futuro solo requiere cambiar una constante
@@ -167,6 +173,7 @@ SQL primero (índices B-tree) y pasar el subset a la query vectorial.
   hubiera que migrar (se puede truncar, no al revés).
 
 ### Negativas
+
 - Vendor lock-in a OpenAI a nivel de API. Mitigación: envolver el
   cliente en `src/lib/embeddings/provider.ts` con interfaz genérica.
 - Búsqueda semántica requiere una llamada a OpenAI por query de

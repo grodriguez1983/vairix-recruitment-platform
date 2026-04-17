@@ -2,6 +2,7 @@
 
 > Paso 5 del initialization cascade (paper §6.2). Cada use case es
 > simultáneamente:
+>
 > - una descripción de comportamiento para humanos,
 > - la especificación de un test E2E,
 > - un contrato de interfaces entre capas.
@@ -23,8 +24,8 @@ nueva, incluyendo los que fueron rechazados hace años.
 ### Flujo principal
 
 1. El reclutador abre la barra de búsqueda.
-2. Escribe: *"backend senior Node.js rechazado hace más de 1 año por
-   nivel técnico"*.
+2. Escribe: _"backend senior Node.js rechazado hace más de 1 año por
+   nivel técnico"_.
 3. Opcionalmente activa filtros (rango de fecha, rechazo, skills).
 4. Recibe lista ordenada de candidates con score de similitud.
 5. Click en uno → abre perfil consolidado (UC-04).
@@ -81,8 +82,8 @@ sequenceDiagram
 
 ### Flujo
 
-1. Reclutador escribe: *"alguien prolijo, bueno en system design,
-   floja comunicación en inglés"*.
+1. Reclutador escribe: _"alguien prolijo, bueno en system design,
+   floja comunicación en inglés"_.
 2. Sistema busca sobre embeddings de evaluations + CVs sin
    filtros estructurales.
 3. Ranking puro por similitud coseno.
@@ -307,6 +308,6 @@ flowchart TD
   punta. Si no, el use case no está implementado.
 - Todo state machine tiene test que intenta transiciones inválidas
   y **debe** devolver error (test adversarial, paper §4.3
-  *Verifiable*).
+  _Verifiable_).
 - Los `test_*` nombrados arriba son el contrato — un reviewer puede
   buscarlos por grep y verificar presencia.

@@ -74,12 +74,12 @@ Al re-sincronizar el mismo `file`:
 
 Librerías por tipo:
 
-| Tipo | Librería | Notas |
-|---|---|---|
-| PDF | `pdf-parse` (Node) | Rápido, funciona para PDFs nativos. |
-| DOCX | `mammoth` | Extrae texto plano ignorando formato. |
-| DOC (legacy) | intentar conversión, fallback a error | Marginal. |
-| TXT / RTF | `fs.readFile` + `striptags` si RTF | Trivial. |
+| Tipo         | Librería                              | Notas                                 |
+| ------------ | ------------------------------------- | ------------------------------------- |
+| PDF          | `pdf-parse` (Node)                    | Rápido, funciona para PDFs nativos.   |
+| DOCX         | `mammoth`                             | Extrae texto plano ignorando formato. |
+| DOC (legacy) | intentar conversión, fallback a error | Marginal.                             |
+| TXT / RTF    | `fs.readFile` + `striptags` si RTF    | Trivial.                              |
 
 Pipeline de parsing (en función independiente, disparada post-upload):
 
@@ -106,6 +106,7 @@ Admin tiene un botón "re-parse" y una columna en el panel de sync
 que muestra CVs con parse_error para revisar volumen.
 
 Fase 2 evalúa:
+
 - Tesseract local para ES + EN.
 - Google Document AI / AWS Textract para mayor calidad.
 - Ser selectivos: OCR solo si el candidate es relevante
@@ -138,30 +139,35 @@ Si en el futuro necesitamos stemming por idioma:
 ## Alternativas consideradas
 
 ### A) Bucket público con URLs directas
+
 - **Pros**: simple, cacheable por CDN.
 - **Contras**: datos personales expuestos a cualquiera con la URL.
   Inaceptable aun sin compliance formal.
 - **Descartada**.
 
 ### B) Guardar las URLs de Teamtailor sin re-descargar
+
 - **Pros**: ahorra storage.
 - **Contras**: URLs expiran; cuando expiran, el archivo se pierde
   para nosotros. Inviable.
 - **Descartada**.
 
 ### C) S3 / R2 externo
+
 - **Pros**: barato, conocido.
 - **Contras**: otro servicio, otro set de credenciales, no se
   integra con RLS de Supabase. Sin ventaja clara.
 - **Descartada**.
 
 ### D) OCR desde día uno
+
 - **Pros**: cobertura 100%.
 - **Contras**: latencia en parsing, costo (Textract ~$1.50/1000
   páginas), complejidad.
 - **Postergada** hasta confirmar volumen real de CVs escaneados.
 
 ### E) LLM para "parsing estructurado" desde día uno
+
 - Se plantea en spec §6 como "fase avanzada". No se introduce en
   Fase 1 por costo y complejidad. Fase 2+.
 
@@ -170,12 +176,14 @@ Si en el futuro necesitamos stemming por idioma:
 ## Consecuencias
 
 ### Positivas
+
 - Cero dependencia de URLs externas presignadas después del sync.
 - Modelo de acceso claro y auditable.
 - Parsing simple y probado; `pdf-parse` y `mammoth` son estándar.
 - Re-parsing idempotente gracias al `content_hash` del binario.
 
 ### Negativas
+
 - Duplicamos el storage (Teamtailor + Supabase). Aceptable: los CVs
   son propiedad del candidate, no de Teamtailor; ser dueños del
   binario es un feature.

@@ -1,8 +1,8 @@
 # 🧪 Test Architecture
 
 > La estrategia de tests es **parte de la spec**, no un detalle de
-> implementación. Este documento es gate de la propiedad *Verifiable*
-> (paper §4.3) y de la propiedad *Executable*.
+> implementación. Este documento es gate de la propiedad _Verifiable_
+> (paper §4.3) y de la propiedad _Executable_.
 >
 > **Regla**: un feature no existe hasta que los tests pasan contra
 > un runtime real. "Compila" no es "funciona".
@@ -32,11 +32,13 @@ rejection categories, hash de content, validators de input,
 utilidades.
 
 **Qué NO**:
+
 - Tests que mockean el cliente Supabase. Eso va a integration.
 - Tests que mockean `fetch`. Usar MSW en integration.
 - Tests de componentes UI con lógica compleja — eso va a E2E.
 
 **Convenciones**:
+
 - Archivo: `<source>.test.ts` al lado del source o en
   `__tests__/<source>.test.ts`.
 - Naming: `test_<behavior>_<condition>`. Ejemplos:
@@ -55,12 +57,14 @@ utilidades.
 ### Against DB (Supabase local)
 
 Setup: `supabase start` arranca una instancia local.
+
 - Migraciones corren antes de la suite (`supabase db reset`).
 - Cada test runs en una transacción que se rollbackea (fixture
   `withTx`).
 - Auth se simula con JWTs generados vía helper `makeTestJwt({role})`.
 
 **Ejemplos obligatorios**:
+
 - Policies RLS — un test por policy, usando JWT de role distinto.
 - Queries de `src/lib/db/*` — cubren el happy path y al menos un
   error path.
@@ -92,18 +96,20 @@ Setup: `supabase start` arranca una instancia local.
 Playwright contra `next dev` + Supabase local.
 
 **Cobertura mínima** (derivada de `use-cases.md`):
+
 - UC-01 Re-descubrimiento — búsqueda híbrida completa.
 - UC-04 Perfil consolidado — abrir candidate, ver CV firmado.
 - UC-03 Shortlist — create, add, archive.
 
 **Reglas**:
+
 - Seeds fixtos, idempotentes. Cada run parte del mismo estado.
 - Un user por role: `recruiter@test.local`, `admin@test.local`.
 - Screenshots de fallos guardados como artifacts en CI.
 
 ---
 
-## 5. Tests adversariales (paper §4.3 *Verifiable*)
+## 5. Tests adversariales (paper §4.3 _Verifiable_)
 
 **El test es un cazador, no un testigo.** Para CADA use case debe
 existir al menos un test que intente:
@@ -129,6 +135,7 @@ Cada policy en `supabase/migrations/*_rls_*.sql` tiene su test
 correspondiente en `tests/rls/<table>.test.ts`.
 
 Matriz mínima por tabla:
+
 - `recruiter` puede leer lo permitido.
 - `recruiter` NO puede leer soft-deleted.
 - `recruiter` NO puede insertar en tablas admin-only.
@@ -150,6 +157,7 @@ Fixture: `tests/helpers/rls.ts` expone `asUser(role)`, `asAdmin()`,
 paper §6.5). NO en cada PR — es caro.
 
 **Targets**:
+
 - `src/lib/normalization/` — score mínimo 90% (lógica crítica).
 - `src/lib/teamtailor/` — score mínimo 80%.
 - `src/lib/auth/` — score mínimo 95%.
@@ -161,13 +169,13 @@ Mutantes sobrevivientes son **gaps de tests**, no riesgos a absorber.
 
 ## 8. Coverage
 
-| Scope | Mínimo | Gate |
-|---|---|---|
-| Global | 80% | CI fail si < 80% |
-| `src/lib/` | 90% | CI fail si < 90% |
-| `src/lib/auth/` | 95% | CI fail si < 95% |
-| `src/app/api/` | 85% | CI fail |
-| RLS policies | 100% (todas con test) | revisión manual |
+| Scope           | Mínimo                | Gate             |
+| --------------- | --------------------- | ---------------- |
+| Global          | 80%                   | CI fail si < 80% |
+| `src/lib/`      | 90%                   | CI fail si < 90% |
+| `src/lib/auth/` | 95%                   | CI fail si < 95% |
+| `src/app/api/`  | 85%                   | CI fail          |
+| RLS policies    | 100% (todas con test) | revisión manual  |
 
 Cobertura se mide con c8/v8. Reportes en CI artifacts.
 

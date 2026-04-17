@@ -30,27 +30,27 @@ description: Cómo construir componentes UI respetando el kit de marca VAIRIX, l
 
 ```tsx
 // Colores
-"bg-bg"                // fondo de page
-"bg-surface"           // cards, panels
-"border-border"        // divisores
-"text-text-primary"    // texto principal
-"text-text-muted"      // secundario
-"bg-accent"            // CTA primary, success
-"bg-accent-secondary"  // tags, highlights
-"bg-danger"            // destructive
-"bg-warning"           // alertas leves
-"bg-info"              // neutro informativo
+'bg-bg'; // fondo de page
+'bg-surface'; // cards, panels
+'border-border'; // divisores
+'text-text-primary'; // texto principal
+'text-text-muted'; // secundario
+'bg-accent'; // CTA primary, success
+'bg-accent-secondary'; // tags, highlights
+'bg-danger'; // destructive
+'bg-warning'; // alertas leves
+'bg-info'; // neutro informativo
 
 // Radios
-"rounded-sm"           // 6px  — inputs, chips
-"rounded-md"           // 12px — botones
-"rounded-lg"           // 20px — cards
-"rounded-xl"           // 32px — hero, modal
+'rounded-sm'; // 6px  — inputs, chips
+'rounded-md'; // 12px — botones
+'rounded-lg'; // 20px — cards
+'rounded-xl'; // 32px — hero, modal
 
 // Tipografía
-"font-display"         // DM Sans — títulos
-"font-sans"            // Inter  — body
-"font-mono"            // JetBrains Mono — ids, hashes
+'font-display'; // DM Sans — títulos
+'font-sans'; // Inter  — body
+'font-mono'; // JetBrains Mono — ids, hashes
 ```
 
 ## Patrón de card de candidate (el más usado)
@@ -65,9 +65,7 @@ type Props = {
   onClick?: () => void;
 };
 
-export const CandidateCard: FC<Props> = ({
-  candidate, isShortlisted = false, onClick,
-}) => (
+export const CandidateCard: FC<Props> = ({ candidate, isShortlisted = false, onClick }) => (
   <article
     onClick={onClick}
     className={cn(
@@ -76,9 +74,7 @@ export const CandidateCard: FC<Props> = ({
       'hover:border-accent hover:-translate-y-0.5',
       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
       // Corner asimétrico solo si está shortlisted
-      isShortlisted
-        ? 'rounded-[20px_20px_20px_64px]'
-        : 'rounded-lg',
+      isShortlisted ? 'rounded-[20px_20px_20px_64px]' : 'rounded-lg',
     )}
     role="button"
     tabIndex={0}
@@ -87,9 +83,7 @@ export const CandidateCard: FC<Props> = ({
     <h3 className="font-display text-[1.375rem] leading-tight tracking-tighter mt-3">
       {candidate.fullName}
     </h3>
-    <p className="text-text-muted text-sm mt-1">
-      {candidate.headline}
-    </p>
+    <p className="text-text-muted text-sm mt-1">{candidate.headline}</p>
     <TagList tags={candidate.tags} className="mt-3" />
     <div className="text-xs text-text-muted mt-4 flex gap-3">
       <span>{candidate.lastActivity}</span>
@@ -101,6 +95,7 @@ export const CandidateCard: FC<Props> = ({
 ```
 
 Reglas del corner asimétrico (derivadas de `ui-style-guide.md` §7):
+
 - Solo UN corner exagerado por elemento.
 - Mismo corner exagerado en elementos del mismo tipo.
 - Solo en elementos **destacados**, no en toda la UI.
@@ -158,8 +153,8 @@ Implementación base (extendiendo shadcn/ui):
 ```tsx
 const variants = cva(
   'inline-flex items-center gap-2 rounded-md font-medium transition ' +
-  'focus-visible:outline-none focus-visible:ring-2 ' +
-  'disabled:opacity-50 disabled:cursor-not-allowed',
+    'focus-visible:outline-none focus-visible:ring-2 ' +
+    'disabled:opacity-50 disabled:cursor-not-allowed',
   {
     variants: {
       variant: {

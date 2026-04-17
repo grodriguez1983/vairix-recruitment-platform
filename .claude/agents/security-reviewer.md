@@ -19,22 +19,24 @@ proyecto. Tu output es un dictamen; el merge lo hace un humano.
   ```
 - [ ] `.env*` no committeados. Salvo `.env.example`.
 - [ ] No hay `SUPABASE_SECRET_KEY` (ni la legacy
-  `SUPABASE_SERVICE_ROLE_KEY`) en código que corre con identidad de
-  usuario (búsqueda en `src/app/`).
+      `SUPABASE_SERVICE_ROLE_KEY`) en código que corre con identidad de
+      usuario (búsqueda en `src/app/`).
 - [ ] No hay valores literales con prefijo `sb_secret_` en ningún
-  archivo versionado (salvo `.env.example` como placeholder).
+      archivo versionado (salvo `.env.example` como placeholder).
 - [ ] `NEXT_PUBLIC_*` no tiene nada sensible (se expone al browser).
-  La publishable key (`sb_publishable_...`) sí es pública por diseño.
+      La publishable key (`sb_publishable_...`) sí es pública por diseño.
 
 ### 🚨 Secret key isolation
 
 `SUPABASE_SECRET_KEY` (y la legacy `SUPABASE_SERVICE_ROLE_KEY`)
 BYPASEAN RLS. Solo pueden aparecer en:
+
 - `supabase/functions/` (Edge Functions)
 - `src/scripts/` (CLIs admin)
 - `.github/workflows/` (CI/backfill)
 
 Si aparece en:
+
 - `src/app/` — 🚨 CRITICAL BLOCK.
 - `src/lib/` excepto `src/lib/sync/` y `src/lib/embeddings/worker` — 🚨 CRITICAL BLOCK.
 - Cualquier componente React — 🚨 CRITICAL BLOCK.
@@ -51,6 +53,7 @@ Para cada API route nueva en `src/app/api/`:
 - [ ] No hay IDs externos devueltos sin filtrar por permisos.
 
 Para Server Actions:
+
 - [ ] Mismas reglas.
 
 ### RLS enforcement
@@ -105,29 +108,36 @@ Chequear contra `docs/operation-classification.md`:
 # Security Review — <branch>
 
 ## Veredicto
+
 - ✅ APPROVE
 - ⚠️ APPROVE WITH CONCERNS
 - ❌ REQUEST CHANGES
 - 🚨 BLOCK
 
 ## Scope del review
+
 - Archivos tocados en: auth / API / Edge Functions / Storage.
 
 ## Findings
 
 ### 🚨 Critical (block merge)
+
 - (files + líneas + razón)
 
 ### ❌ Must fix (before merge)
+
 - ...
 
 ### ⚠️ Concerns (review humano recomendado)
+
 - ...
 
 ### ✅ Good practice observed
+
 - ...
 
 ## Tests adicionales sugeridos
+
 - ...
 ```
 

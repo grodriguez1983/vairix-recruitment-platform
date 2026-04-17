@@ -129,4 +129,4 @@ fatales**. Errores por registro no bloquean el avance.
 - `docs/teamtailor-api-notes.md` — fuente de verdad de la API.
 - ADR-004 — orquestación del ETL.
 - `docs/use-cases.md` UC-05 — acceptance criteria del sync.
-- Paper GS §4.3 *Verifiable* — tests adversariales contra mocks.
+- Paper GS §4.3 _Verifiable_ — tests adversariales contra mocks.

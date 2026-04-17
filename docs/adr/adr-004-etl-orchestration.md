@@ -31,11 +31,11 @@ Variables del contexto:
 
 ### Runtime híbrido
 
-| Caso | Runtime | Justificación |
-|---|---|---|
-| Sync incremental (< 5 min) | **Supabase Edge Functions** | Cerca de la DB, 150s timeout, sin cold start pesado, cron nativo. |
+| Caso                              | Runtime                             | Justificación                                                                                                  |
+| --------------------------------- | ----------------------------------- | -------------------------------------------------------------------------------------------------------------- |
+| Sync incremental (< 5 min)        | **Supabase Edge Functions**         | Cerca de la DB, 150s timeout, sin cold start pesado, cron nativo.                                              |
 | Backfill inicial / reindex masivo | **GitHub Actions scheduled/manual** | Sin límite práctico de tiempo, matrix jobs para paralelizar entidades, logs persistidos, fácil de re-disparar. |
-| Webhook receivers (Fase 2+) | **Vercel API routes** | Latencia baja, integra con la app Next.js. |
+| Webhook receivers (Fase 2+)       | **Vercel API routes**               | Latencia baja, integra con la app Next.js.                                                                     |
 
 **No usar** Vercel Cron para el ETL: el límite de tiempo y la falta de
 persistencia de estado entre invocaciones lo hacen frágil para syncs
@@ -129,12 +129,14 @@ Dado que no existe tenant de staging y hay que crearlo todo:
 ## Alternativas consideradas
 
 ### A) Todo en Vercel Cron + API routes
+
 - **Contras**: 300s de timeout no alcanza para backfill. Romperlo
   en chunks con estado en DB es factible pero reinventa una cola.
 - **Descartada para el backfill**; viable para el incremental si
   se prefiere un solo runtime.
 
 ### B) Worker dedicado (Railway, Fly, AWS ECS)
+
 - **Pros**: sin límites, control total.
 - **Contras**: otro deploy target, otro runtime, otra cosa a
   monitorear. Overkill para 5k candidates.
@@ -142,6 +144,7 @@ Dado que no existe tenant de staging y hay que crearlo todo:
   o agregamos workflows complejos.
 
 ### C) Job queue (BullMQ, Inngest, Trigger.dev)
+
 - **Pros**: retry, observabilidad, scheduling.
 - **Contras**: dependencia adicional, costo, curva de aprendizaje
   para el equipo.
@@ -149,6 +152,7 @@ Dado que no existe tenant de staging y hay que crearlo todo:
   insostenible, adoptar Inngest (el más liviano del grupo).
 
 ### D) Corridas full en lugar de incrementales
+
 - Ya descartada en ADR-002.
 
 ---
@@ -156,12 +160,14 @@ Dado que no existe tenant de staging y hay que crearlo todo:
 ## Consecuencias
 
 ### Positivas
+
 - Cada runtime se usa para lo que hace mejor.
 - El backfill largo no bloquea la app ni gasta cuota de Vercel.
 - Edge Functions cerca de la DB reducen latencia de upsert masivo.
 - GitHub Actions da logs gratuitos y re-ejecución trivial.
 
 ### Negativas
+
 - Tres runtimes a mantener (Vercel, Supabase Edge, GitHub Actions).
 - Setear variables de entorno y secrets en tres lugares.
   Mitigación: script de bootstrap que valida paridad.

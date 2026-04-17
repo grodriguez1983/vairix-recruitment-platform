@@ -31,19 +31,19 @@ Datos:
 Tabla `rejection_categories` con ~10 categorías iniciales, editables
 solo por admin:
 
-| Código | Nombre humano |
-|---|---|
-| `technical_skills` | Nivel técnico insuficiente |
-| `experience_level` | Seniority no encaja |
-| `communication` | Comunicación |
-| `culture_fit` | Cultural fit |
-| `salary_expectations` | Expectativas salariales |
-| `availability` | Disponibilidad horaria |
-| `location` | Ubicación / time zone |
-| `no_show` | No se presentó |
-| `ghosting` | Dejó de responder |
-| `position_filled` | Posición cubierta por otro |
-| `other` | Otro (fallback) |
+| Código                | Nombre humano              |
+| --------------------- | -------------------------- |
+| `technical_skills`    | Nivel técnico insuficiente |
+| `experience_level`    | Seniority no encaja        |
+| `communication`       | Comunicación               |
+| `culture_fit`         | Cultural fit               |
+| `salary_expectations` | Expectativas salariales    |
+| `availability`        | Disponibilidad horaria     |
+| `location`            | Ubicación / time zone      |
+| `no_show`             | No se presentó             |
+| `ghosting`            | Dejó de responder          |
+| `position_filled`     | Posición cubierta por otro |
+| `other`               | Otro (fallback)            |
 
 - El código es estable (no cambia).
 - El nombre humano es editable.
@@ -128,29 +128,34 @@ Este upgrade se documenta en ADR nuevo cuando se active.
 ## Alternativas consideradas
 
 ### A) Solo texto libre, sin normalización
+
 - **Pros**: cero trabajo.
 - **Contras**: rompe el caso de uso de insights del spec §2.5.
 - **Descartada**.
 
 ### B) Catálogo 100% rígido (enum en DB)
+
 - **Pros**: integridad fuerte.
 - **Contras**: agregar categoría requiere migración. En producto
   interno iterativo, demasiado rígido.
 - **Descartada** a favor de tabla editable.
 
 ### C) LLM desde día uno
+
 - **Pros**: mejor precisión, menos mantenimiento de keywords.
 - **Contras**: costo, latencia, dependencia de proveedor LLM en el
   ETL. Para 5k evaluations, keyword matching alcanza.
 - **Postergada** a Fase 2+.
 
 ### D) Pedirle al reclutador que elija la categoría cuando rechaza
+
 - **Pros**: datos limpios en origen.
 - **Contras**: no tenemos control sobre la UX de Teamtailor. La
   data viene como venga. No aplica.
 - **Descartada por contexto**.
 
 ### E) Crowdsource: sugerir categoría en la UI y dejar al reclutador confirmar
+
 - **Pros**: data se mejora con el tiempo.
 - **Contras**: Fase 2+ feature.
 - **Postergada**.
@@ -160,12 +165,14 @@ Este upgrade se documenta en ADR nuevo cuando se active.
 ## Consecuencias
 
 ### Positivas
+
 - Insights de §2.5 viables desde Fase 1.
 - Costo nulo de operación (sin LLM calls).
 - Iterable: agregar una categoría o keyword es un PR chico.
 - Transparente: las reglas están en código, versionadas y testeables.
 
 ### Negativas
+
 - Precisión de keyword matching es limitada. Esperable 60-75% de
   precisión inicial, mejorando con curation.
 - Mantener las reglas es trabajo humano recurrente.

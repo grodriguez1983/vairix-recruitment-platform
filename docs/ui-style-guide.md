@@ -41,38 +41,38 @@ VAIRIX define ambos modos. Este producto:
 
 ### Dark mode (default)
 
-| Rol | Nombre | Hex | Uso |
-|---|---|---|---|
-| `bg` | Ink Black | `#071013` | Fondo principal |
-| `surface` | — | `#0F1A1F` | Cards, panels (derivado del bg) |
-| `border` | Blue Slate | `#5E6472` | Bordes, dividers |
-| `text-primary` | Platinum | `#EBEBEB` | Texto principal |
-| `text-muted` | — | `#9AA0A6` | Texto secundario, meta |
-| `accent-primary` | Turquoise | `#73D4B0` | Acciones primarias, success |
-| `accent-secondary` | Periwinkle | `#D8C7FA` | Highlights, tags, hover |
+| Rol                | Nombre     | Hex       | Uso                             |
+| ------------------ | ---------- | --------- | ------------------------------- |
+| `bg`               | Ink Black  | `#071013` | Fondo principal                 |
+| `surface`          | —          | `#0F1A1F` | Cards, panels (derivado del bg) |
+| `border`           | Blue Slate | `#5E6472` | Bordes, dividers                |
+| `text-primary`     | Platinum   | `#EBEBEB` | Texto principal                 |
+| `text-muted`       | —          | `#9AA0A6` | Texto secundario, meta          |
+| `accent-primary`   | Turquoise  | `#73D4B0` | Acciones primarias, success     |
+| `accent-secondary` | Periwinkle | `#D8C7FA` | Highlights, tags, hover         |
 
 ### Light mode
 
-| Rol | Nombre | Hex | Uso |
-|---|---|---|---|
-| `bg` | Bright Snow | `#F8F7F9` | Fondo principal |
-| `surface` | — | `#FFFFFF` | Cards, panels |
-| `border` | Dim Gray | `#6E6A6F` | Bordes, dividers |
-| `text-primary` | Ink Black | `#071013` | Texto principal |
-| `text-muted` | — | `#6E6A6F` | Texto secundario, meta |
-| `accent-primary` | Mint Leaf | `#39B98A` | Acciones primarias, success |
-| `accent-secondary` | Soft Periwinkle | `#AF8BF5` | Highlights, tags, hover |
+| Rol                | Nombre          | Hex       | Uso                         |
+| ------------------ | --------------- | --------- | --------------------------- |
+| `bg`               | Bright Snow     | `#F8F7F9` | Fondo principal             |
+| `surface`          | —               | `#FFFFFF` | Cards, panels               |
+| `border`           | Dim Gray        | `#6E6A6F` | Bordes, dividers            |
+| `text-primary`     | Ink Black       | `#071013` | Texto principal             |
+| `text-muted`       | —               | `#6E6A6F` | Texto secundario, meta      |
+| `accent-primary`   | Mint Leaf       | `#39B98A` | Acciones primarias, success |
+| `accent-secondary` | Soft Periwinkle | `#AF8BF5` | Highlights, tags, hover     |
 
 ### Colores semánticos (extensión propia del producto)
 
 VAIRIX no define estados de error/warning/info. Los agregamos
 manteniendo armonía con la paleta:
 
-| Rol | Dark | Light | Uso |
-|---|---|---|---|
-| `danger` | `#F28B82` | `#D93025` | Rechazo, destructive actions |
+| Rol       | Dark      | Light     | Uso                           |
+| --------- | --------- | --------- | ----------------------------- |
+| `danger`  | `#F28B82` | `#D93025` | Rechazo, destructive actions  |
 | `warning` | `#FBBC04` | `#B06000` | Sync en riesgo, alertas leves |
-| `info` | `#8AB4F8` | `#1967D2` | Informativo, neutro |
+| `info`    | `#8AB4F8` | `#1967D2` | Informativo, neutro           |
 
 > ⚠️ Los semánticos **no** son parte de la marca VAIRIX y solo deben
 > usarse para estados funcionales (no para decoración).
@@ -85,11 +85,12 @@ Heredadas del kit de marca VAIRIX:
 
 ✅ **Usar paletas mixtas** (base + acento, nunca solo acento).
 ✅ **Fondos neutros** (negro, blanco, grises). Nunca fondo acento en
-   grandes extensiones.
+grandes extensiones.
 ✅ **Paleta según fondo**: fondo claro → Light palette; fondo oscuro
-   → Dark palette.
+→ Dark palette.
 
 ❌ **Nunca**:
+
 - Acento sobre acento (turquesa sobre lila, o viceversa)
 - Acento como fondo pleno en layouts grandes
 - Mezclar mint leaf (light) con periwinkle (dark) en el mismo
@@ -111,6 +112,7 @@ Solo en títulos hero, fondos decorativos y estados especiales (onboarding).
   Si hace falta combinar, mediar con un color neutro.
 
 Uso recomendado en este producto:
+
 - Título del dashboard principal.
 - Header del perfil de candidate.
 - Estado vacío inicial del talent pool.
@@ -137,18 +139,18 @@ Heredada directamente de VAIRIX.
 
 Aplicando la regla de los 2 pasos:
 
-| Rol | Font | Size | Weight | Line height | Letter spacing |
-|---|---|---|---|---|---|
-| Display | DM Sans | 48px / 3rem | 600 | 100% | -0.05em |
-| H1 | DM Sans | 36px / 2.25rem | 600 | 100% | -0.05em |
-| H2 | DM Sans | 28px / 1.75rem | 500 | 100% | -0.05em |
-| H3 | DM Sans | 22px / 1.375rem | 500 | 110% | -0.03em |
-| Body L | Inter | 16px / 1rem | 400 | 150% | 0 |
-| Body | Inter | 14px / 0.875rem | 400 | 150% | 0 |
-| Caption | Inter | 12px / 0.75rem | 400 | 140% | 0 |
-| Mono | JetBrains Mono* | 13px | 400 | 140% | 0 |
+| Rol     | Font             | Size            | Weight | Line height | Letter spacing |
+| ------- | ---------------- | --------------- | ------ | ----------- | -------------- |
+| Display | DM Sans          | 48px / 3rem     | 600    | 100%        | -0.05em        |
+| H1      | DM Sans          | 36px / 2.25rem  | 600    | 100%        | -0.05em        |
+| H2      | DM Sans          | 28px / 1.75rem  | 500    | 100%        | -0.05em        |
+| H3      | DM Sans          | 22px / 1.375rem | 500    | 110%        | -0.03em        |
+| Body L  | Inter            | 16px / 1rem     | 400    | 150%        | 0              |
+| Body    | Inter            | 14px / 0.875rem | 400    | 150%        | 0              |
+| Caption | Inter            | 12px / 0.75rem  | 400    | 140%        | 0              |
+| Mono    | JetBrains Mono\* | 13px            | 400    | 140%        | 0              |
 
-*Mono solo para IDs, hashes, snippets de código. No es parte del
+\*Mono solo para IDs, hashes, snippets de código. No es parte del
 kit de marca pero es funcional para una app de datos. Aceptado como
 extensión.
 
@@ -165,17 +167,17 @@ No usar Bold (700) ni Black (900) — rompen la jerarquía propuesta.
 
 Del kit de marca:
 
-> *"Buscamos agregar redondez a los elementos, siempre destacando
-> solo una de las esquinas más que el resto."*
+> _"Buscamos agregar redondez a los elementos, siempre destacando
+> solo una de las esquinas más que el resto."_
 
 ### Radios de borde
 
-| Token | Valor | Uso |
-|---|---|---|
-| `radius-sm` | 6px | Inputs, chips, tags |
-| `radius-md` | 12px | Botones, badges |
-| `radius-lg` | 20px | Cards estándar |
-| `radius-xl` | 32px | Hero cards, modals grandes |
+| Token         | Valor      | Uso                             |
+| ------------- | ---------- | ------------------------------- |
+| `radius-sm`   | 6px        | Inputs, chips, tags             |
+| `radius-md`   | 12px       | Botones, badges                 |
+| `radius-lg`   | 20px       | Cards estándar                  |
+| `radius-xl`   | 32px       | Hero cards, modals grandes      |
 | `radius-hero` | asimétrico | Uno de los 4 corners más grande |
 
 ### Corner asimétrico (patrón de marca)
@@ -185,11 +187,13 @@ principales**: uno de los 4 corners significativamente más grande
 que los otros tres.
 
 Ejemplo para una card de candidate destacado:
+
 ```css
 border-radius: 20px 20px 20px 64px;
 ```
 
 **Reglas**:
+
 - Solo un corner exagerado por elemento.
 - Mantener consistencia: mismo corner exagerado en elementos del
   mismo tipo dentro de una vista.
@@ -202,12 +206,14 @@ El isotipo de VAIRIX tiene un elemento de flecha que el kit de marca
 invita a reutilizar para dinamismo. En este producto:
 
 ✅ **Usos apropiados**:
+
 - Botón "Next" en wizards multi-step.
 - Indicador de dirección en breadcrumbs.
 - Decoración en empty states ("empezá una búsqueda →").
 - Marker en timelines del historial de candidate.
 
 ❌ **No usar** como:
+
 - Bullet point genérico.
 - Separador en navs densos.
 - Decoración arbitraria sin función.
@@ -218,12 +224,12 @@ invita a reutilizar para dinamismo. En este producto:
 
 ### Botones
 
-| Variante | Cuándo | Estilo |
-|---|---|---|
-| Primary | Acción principal por pantalla (máx 1) | Fondo acento primario, texto base |
-| Secondary | Acciones secundarias | Outline con border en acento |
-| Ghost | Acciones terciarias | Solo texto, sin fondo |
-| Destructive | Eliminar, rechazar | Fondo `danger`, texto claro |
+| Variante    | Cuándo                                | Estilo                            |
+| ----------- | ------------------------------------- | --------------------------------- |
+| Primary     | Acción principal por pantalla (máx 1) | Fondo acento primario, texto base |
+| Secondary   | Acciones secundarias                  | Outline con border en acento      |
+| Ghost       | Acciones terciarias                   | Solo texto, sin fondo             |
+| Destructive | Eliminar, rechazar                    | Fondo `danger`, texto claro       |
 
 - Radio: `radius-md` (12px).
 - Padding: 10px 20px (sm), 12px 24px (md), 16px 32px (lg).
@@ -303,6 +309,7 @@ Tokens Tailwind: `1, 2, 3, 4, 6, 8, 12, 16, 24`.
 
 Este es un producto **data-dense**. Preferir densidad media-alta sobre
 aire excesivo:
+
 - Padding en cards: 20px (no 32px).
 - Row height en tablas: 48px (no 64px).
 - Gap entre elementos en listas: 8px–12px.
@@ -338,30 +345,30 @@ aire excesivo:
   --font-mono: 'JetBrains Mono', ui-monospace, monospace;
 }
 
-[data-theme="dark"] {
+[data-theme='dark'] {
   --color-bg: #071013;
-  --color-surface: #0F1A1F;
-  --color-border: #5E6472;
-  --color-text-primary: #EBEBEB;
-  --color-text-muted: #9AA0A6;
-  --color-accent-primary: #73D4B0;
-  --color-accent-secondary: #D8C7FA;
-  --color-danger: #F28B82;
-  --color-warning: #FBBC04;
-  --color-info: #8AB4F8;
+  --color-surface: #0f1a1f;
+  --color-border: #5e6472;
+  --color-text-primary: #ebebeb;
+  --color-text-muted: #9aa0a6;
+  --color-accent-primary: #73d4b0;
+  --color-accent-secondary: #d8c7fa;
+  --color-danger: #f28b82;
+  --color-warning: #fbbc04;
+  --color-info: #8ab4f8;
 }
 
-[data-theme="light"] {
-  --color-bg: #F8F7F9;
-  --color-surface: #FFFFFF;
-  --color-border: #6E6A6F;
+[data-theme='light'] {
+  --color-bg: #f8f7f9;
+  --color-surface: #ffffff;
+  --color-border: #6e6a6f;
   --color-text-primary: #071013;
-  --color-text-muted: #6E6A6F;
-  --color-accent-primary: #39B98A;
-  --color-accent-secondary: #AF8BF5;
-  --color-danger: #D93025;
-  --color-warning: #B06000;
-  --color-info: #1967D2;
+  --color-text-muted: #6e6a6f;
+  --color-accent-primary: #39b98a;
+  --color-accent-secondary: #af8bf5;
+  --color-danger: #d93025;
+  --color-warning: #b06000;
+  --color-info: #1967d2;
 }
 ```
 
@@ -442,28 +449,33 @@ Requisitos no negociables:
 ## 13. Aplicación por tipo de vista
 
 ### Login / Auth
+
 - Modo light por default (primera impresión, más institucional).
 - Isotipo VAIRIX en el top-left, nombre del producto como título.
 - Botón primary con accent (mint leaf en light).
 
 ### Dashboard / Home
+
 - Modo dark por default.
 - Hero con título en gradiente (base → accent-primary).
 - Cards de KPIs con radio asimétrico.
 - Actividad reciente como timeline con markers de flecha.
 
 ### Búsqueda (vista principal)
+
 - Barra de búsqueda prominente, tipo Google.
 - Filtros laterales (drawer o sidebar colapsable).
 - Resultados en grid de cards de candidate.
 - Altura mínima de card: 140px.
 
 ### Perfil de candidate
+
 - Drawer lateral o página full con corner asimétrico en header.
 - Tabs para: CV, Applications, Evaluations, Tags, Notes.
 - Tags visibles arriba, editables inline.
 
 ### Admin / Sync / Logs
+
 - Modo dark siempre.
 - Tablas densas, mono para IDs y timestamps.
 - Estados con colores semánticos (success/warning/danger).

@@ -12,8 +12,8 @@
 ## Contexto
 
 El scaffolding existente (`CLAUDE.md`, ADRs, skills, hooks, runbooks)
-resuelve el problema del *stateless reader* del paper *Generative
-Specification* en el **nivel estructural**: toda decisión
+resuelve el problema del _stateless reader_ del paper _Generative
+Specification_ en el **nivel estructural**: toda decisión
 arquitectónica o regla inviolable está escrita, versionada, y es
 legible por un agente sin contexto previo.
 
@@ -33,7 +33,7 @@ Lo que **no** está cubierto por ese scaffolding:
    `docs/operation-classification.md`.
 5. **Session recovery**: si Claude Code crashea o el usuario cierra
    la sesión, no hay forma de recuperar contexto más allá de `git
-   log` + `status.md`.
+log` + `status.md`.
 
 Documentar cada gotcha como ADR es **granularidad incorrecta** — los
 ADRs están para decisiones estables. Documentarlos a mano en un wiki
@@ -65,19 +65,19 @@ reemplazo) al scaffolding existente.
 
 ### 3. Política de triaje — qué va a Chronicle y qué no
 
-| Tipo de conocimiento | Destino |
-|---|---|
-| Decisión arquitectónica estructural | ADR |
-| Término de dominio | `docs/domain-glossary.md` |
-| Caso de uso / feature | `docs/spec.md` |
-| Gotcha de runtime (lib, TT, OS) | Chronicle (Semantic) |
-| Preferencia de código/tooling | Chronicle (Preference) |
-| Procedimiento conocido (comandos) | Chronicle (Procedural) |
-| "Cómo hicimos X" (histórico) | Chronicle (Episodic) |
+| Tipo de conocimiento                | Destino                   |
+| ----------------------------------- | ------------------------- |
+| Decisión arquitectónica estructural | ADR                       |
+| Término de dominio                  | `docs/domain-glossary.md` |
+| Caso de uso / feature               | `docs/spec.md`            |
+| Gotcha de runtime (lib, TT, OS)     | Chronicle (Semantic)      |
+| Preferencia de código/tooling       | Chronicle (Preference)    |
+| Procedimiento conocido (comandos)   | Chronicle (Procedural)    |
+| "Cómo hicimos X" (histórico)        | Chronicle (Episodic)      |
 
 **Regla de promoción**: si un item de Chronicle se consulta
 repetidamente y cruza el umbral "esto debería ser regla formal",
-se abre ADR. Chronicle funciona de facto como *inbox* de futuros
+se abre ADR. Chronicle funciona de facto como _inbox_ de futuros
 ADRs.
 
 ### 4. Seeds iniciales
@@ -115,6 +115,7 @@ Review mensual del tier Core de Chronicle. Para cada item:
 ## Alternativas consideradas
 
 ### A) Todo en ADRs
+
 - **Pros**: un único lugar, versionado, searchable con grep.
 - **Contras**: granularidad incorrecta; los ADRs son decisiones
   estables, los gotchas de runtime cambian con el ecosistema.
@@ -122,6 +123,7 @@ Review mensual del tier Core de Chronicle. Para cada item:
 - **Descartada**.
 
 ### B) Status quo — sin memoria persistente
+
 - **Pros**: cero dependencias nuevas.
 - **Contras**: cada sesión de Claude Code re-descubre los mismos
   quirks. Especialmente costoso en Fase 1 mientras se levanta el
@@ -130,12 +132,14 @@ Review mensual del tier Core de Chronicle. Para cada item:
 - **Descartada**.
 
 ### C) Wiki externo (Notion, Confluence, etc.)
+
 - **Pros**: UI humana, búsqueda rica.
 - **Contras**: el agente no accede automáticamente, no hay
   `session_start`, no hay triggers. Alta fricción de escritura.
 - **Descartada**.
 
 ### D) ForgeCraft + CodeSeeker (mismo autor del paper)
+
 - **Pros**: del mismo ecosistema conceptual del paper.
 - **Contras**: ForgeCraft es redundante con el scaffolding
   artesanal existente; CodeSeeker es menos útil en greenfield.
@@ -197,4 +201,4 @@ Review mensual del tier Core de Chronicle. Para cada item:
 Ver runbook operativo completo en
 `docs/runbooks/install-chronicle-mcp.md`. Incluye setup paso a paso,
 plantillas de seeds, comandos de validación, y sección de
-*Lecciones aprendidas* que se actualiza con cada ejecución.
+_Lecciones aprendidas_ que se actualiza con cada ejecución.

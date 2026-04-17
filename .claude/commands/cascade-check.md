@@ -39,6 +39,7 @@ consistente.
 # Cascade check — <date>
 
 ## Resumen
+
 - 🚨 N major gaps
 - ⚠️ N minor drifts
 - 🧹 N housekeeping items
@@ -46,15 +47,19 @@ consistente.
 ## Acciones propuestas
 
 ### Ahora (bloquea release)
+
 1. ...
 
 ### Esta semana
+
 1. ...
 
 ### Housekeeping (PR chico aparte)
+
 1. ...
 
 ## Roadmap items nuevos sugeridos
+
 - F2-00X — ...
 ```
 

@@ -30,9 +30,9 @@ Documentación oficial: https://docs.teamtailor.com/
 Teamtailor tiene endpoints regionales. **La URL correcta aparece
 en la página "Claves API" del admin** ("URL base para la api").
 
-| Región | Base URL |
-|---|---|
-| Global / EU | `https://api.teamtailor.com/v1` |
+| Región        | Base URL                           |
+| ------------- | ---------------------------------- |
+| Global / EU   | `https://api.teamtailor.com/v1`    |
 | North America | `https://api.na.teamtailor.com/v1` |
 
 **Este tenant (VAIRIX) es NA** → `https://api.na.teamtailor.com/v1`.
@@ -45,6 +45,7 @@ indistinguible de un token inválido.
 ### Scopes de la clave
 
 La UI de Teamtailor ofrece:
+
 - **Alcance**: Públicas / Internas / Administrador
 - **Permisos**: Leer / Escribir (checkboxes)
 
@@ -67,6 +68,7 @@ privilege: emitir claves sin `Escribir`.
   - `X-Rate-Limit-Reset`
 
 ### Estrategia recomendada
+
 - Cliente con **token bucket** limitado a ~4 req/s con burst de 10.
 - **Backoff exponencial** ante 429 (ej: 1s, 2s, 4s, 8s).
 - **Jitter** aleatorio para evitar thundering herd en retries.
@@ -102,6 +104,7 @@ Todas las respuestas siguen el estándar JSON:API:
 ```
 
 ### Implicaciones
+
 - Los IDs son **strings**, no integers.
 - Para obtener relaciones en el mismo request: `?include=job,user`.
 - El payload real vive en `attributes`, no en la raíz del objeto.
@@ -115,13 +118,16 @@ Teamtailor soporta dos modos de paginación. **[VERIFICAR]** cuál aplica
 para cada endpoint antes de implementar.
 
 ### Offset (más común)
+
 ```
 GET /v1/candidates?page[number]=1&page[size]=30
 ```
+
 - `page[size]` máximo suele ser **30**.
 - Para sync incremental, ordenar por `updated-at` desc.
 
 ### Cursor (si está disponible)
+
 Preferir cursor para sync grandes porque no sufre drift.
 
 ---
@@ -131,11 +137,13 @@ Preferir cursor para sync grandes porque no sufre drift.
 ### 5.1 `GET /v1/candidates`
 
 Lista de candidatos. Filtros útiles:
+
 - `filter[updated-at][from]=2026-01-01` — sync incremental
 - `filter[email]=...`
 - `include=job-applications,activities`
 
 Campos en `attributes` (no exhaustivo, **[VERIFICAR]**):
+
 - `first-name`, `last-name`
 - `email`, `phone`
 - `linkedin-url`, `facebook-url`
@@ -151,11 +159,13 @@ Campos en `attributes` (no exhaustivo, **[VERIFICAR]**):
 Relación candidate ↔ job.
 
 Campos en `attributes`:
+
 - `cover-letter`
 - `created-at`, `updated-at`
 - `rejected-at`, `sourced`
 
 Relaciones clave (en `relationships`):
+
 - `candidate`
 - `job`
 - `stage`
@@ -163,6 +173,7 @@ Relaciones clave (en `relationships`):
 ### 5.3 `GET /v1/jobs`
 
 Campos en `attributes`:
+
 - `title`, `pitch`, `body`
 - `status` (`open`, `draft`, `archived`, `unlisted`)
 - `created-at`, `updated-at`
@@ -201,6 +212,7 @@ Vienen en `attributes.custom-fields` o similar.
 ## 6. Webhooks (futuro)
 
 Teamtailor soporta webhooks para eventos de:
+
 - `candidate.created`, `candidate.updated`
 - `job-application.created`, `job-application.updated`, `job-application.moved`
 - `job.published`, `job.archived`

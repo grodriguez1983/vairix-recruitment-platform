@@ -3,11 +3,7 @@
   "mcpServers": {
     "supabase": {
       "command": "npx",
-      "args": [
-        "-y",
-        "@supabase/mcp-server-supabase",
-        "--project-ref=${SUPABASE_PROJECT_REF}"
-      ],
+      "args": ["-y", "@supabase/mcp-server-supabase", "--project-ref=${SUPABASE_PROJECT_REF}"],
       "env": {
         "SUPABASE_ACCESS_TOKEN": "${SUPABASE_ACCESS_TOKEN}"
       },
@@ -24,29 +20,17 @@
     },
     "filesystem": {
       "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-filesystem",
-        "${workspaceFolder}"
-      ],
+      "args": ["-y", "@modelcontextprotocol/server-filesystem", "${workspaceFolder}"],
       "description": "Filesystem del repo. Scope limitado al workspace actual."
     },
     "git": {
       "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-git",
-        "--repository",
-        "${workspaceFolder}"
-      ],
+      "args": ["-y", "@modelcontextprotocol/server-git", "--repository", "${workspaceFolder}"],
       "description": "Git operations read-only: log, blame, diff. Claude Code usa este MCP para auditar historia antes de cambios estructurales."
     },
     "github": {
       "command": "npx",
-      "args": [
-        "-y",
-        "@modelcontextprotocol/server-github"
-      ],
+      "args": ["-y", "@modelcontextprotocol/server-github"],
       "env": {
         "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
       },
@@ -65,7 +49,11 @@
     "_comment": "Este bloque es documentación para humanos, no config. Recuerda a Claude Code (y a lectores) qué es y qué no es legítimo hacer con cada MCP.",
     "supabase": {
       "allowed": ["db diff", "db push", "gen types", "migration new", "status"],
-      "forbidden": ["db reset contra non-localhost", "secrets set sin confirmación", "project-api-keys sin supervisión"]
+      "forbidden": [
+        "db reset contra non-localhost",
+        "secrets set sin confirmación",
+        "project-api-keys sin supervisión"
+      ]
     },
     "postgres-local": {
       "allowed": ["SELECT queries", "\\d table descriptions", "EXPLAIN"],
@@ -80,8 +68,22 @@
       "forbidden": ["merge de PRs", "borrar branches", "cambiar branch protection"]
     },
     "chronicle": {
-      "allowed": ["remember", "recall", "session_start", "session_end", "set_trigger", "check_triggers", "set_preference", "get_preferences", "stats"],
-      "forbidden": ["activar sync a Railway sin ADR dedicado (PII cross-boundary)", "seed de secretos o tokens como memorias", "forget masivo sin confirmación"]
+      "allowed": [
+        "remember",
+        "recall",
+        "session_start",
+        "session_end",
+        "set_trigger",
+        "check_triggers",
+        "set_preference",
+        "get_preferences",
+        "stats"
+      ],
+      "forbidden": [
+        "activar sync a Railway sin ADR dedicado (PII cross-boundary)",
+        "seed de secretos o tokens como memorias",
+        "forget masivo sin confirmación"
+      ]
     }
   },
   "notes_for_humans": [

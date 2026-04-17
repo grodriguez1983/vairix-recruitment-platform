@@ -61,34 +61,34 @@ pnpm test:e2e:smoke     # smoke E2E
 Todo lo que un humano o un agente necesita para entender y
 extender el sistema vive acá:
 
-| Archivo | Propósito |
-|---|---|
-| `CLAUDE.md` | **Sentinel** — reglas inviolables, primero que lee cualquier agente. |
-| `docs/spec.md` | Spec funcional canónica del producto. |
-| `docs/architecture.md` | C4 + container diagrams, flujos principales. |
-| `docs/data-model.md` | Schema completo con índices, triggers, RLS. |
-| `docs/domain-glossary.md` | Glosario; usar estos términos consistentemente. |
-| `docs/use-cases.md` | UCs con sequence + state diagrams. Contratos de comportamiento. |
-| `docs/test-architecture.md` | Estrategia de tests (pirámide, adversariales, coverage, mutation). |
+| Archivo                            | Propósito                                                                             |
+| ---------------------------------- | ------------------------------------------------------------------------------------- |
+| `CLAUDE.md`                        | **Sentinel** — reglas inviolables, primero que lee cualquier agente.                  |
+| `docs/spec.md`                     | Spec funcional canónica del producto.                                                 |
+| `docs/architecture.md`             | C4 + container diagrams, flujos principales.                                          |
+| `docs/data-model.md`               | Schema completo con índices, triggers, RLS.                                           |
+| `docs/domain-glossary.md`          | Glosario; usar estos términos consistentemente.                                       |
+| `docs/use-cases.md`                | UCs con sequence + state diagrams. Contratos de comportamiento.                       |
+| `docs/test-architecture.md`        | Estrategia de tests (pirámide, adversariales, coverage, mutation).                    |
 | `docs/operation-classification.md` | Tiers de operaciones por reversibilidad. **Leer antes de ejecutar algo destructivo.** |
-| `docs/roadmap.md` | Plan ejecutable con prompt pre-generado por item. |
-| `docs/status.md` | Estado actual — actualizar al final de cada sesión. |
-| `docs/teamtailor-api-notes.md` | Integración con Teamtailor. |
-| `docs/ui-style-guide.md` | Kit de marca VAIRIX aplicado al producto. |
-| `docs/adr/` | Architecture Decision Records. |
-| `docs/runbooks/` | Procedimientos operativos (backfill, rollback, etc.). |
+| `docs/roadmap.md`                  | Plan ejecutable con prompt pre-generado por item.                                     |
+| `docs/status.md`                   | Estado actual — actualizar al final de cada sesión.                                   |
+| `docs/teamtailor-api-notes.md`     | Integración con Teamtailor.                                                           |
+| `docs/ui-style-guide.md`           | Kit de marca VAIRIX aplicado al producto.                                             |
+| `docs/adr/`                        | Architecture Decision Records.                                                        |
+| `docs/runbooks/`                   | Procedimientos operativos (backfill, rollback, etc.).                                 |
 
 ### ADRs
 
-| ADR | Tema |
-|---|---|
-| ADR-001 | Supabase + pgvector |
+| ADR     | Tema                                              |
+| ------- | ------------------------------------------------- |
+| ADR-001 | Supabase + pgvector                               |
 | ADR-002 | Estrategia de sync (incremental por `updated_at`) |
-| ADR-003 | Auth, roles y RLS |
-| ADR-004 | Orquestación del ETL (runtime híbrido) |
-| ADR-005 | Pipeline de embeddings |
-| ADR-006 | Storage y parsing de CVs |
-| ADR-007 | Normalización de rejection reasons |
+| ADR-003 | Auth, roles y RLS                                 |
+| ADR-004 | Orquestación del ETL (runtime híbrido)            |
+| ADR-005 | Pipeline de embeddings                            |
+| ADR-006 | Storage y parsing de CVs                          |
+| ADR-007 | Normalización de rejection reasons                |
 
 Nuevas decisiones → `/new-adr` (slash command).
 
@@ -232,8 +232,8 @@ Ver ADRs para justificación de cada decisión.
 
 ## 📖 Para más contexto
 
-- Paper de la metodología: *Generative Specification: A Pragmatic
-  Programming Paradigm for the Stateless Reader* (Ghiringhelli, 2026).
+- Paper de la metodología: _Generative Specification: A Pragmatic
+  Programming Paradigm for the Stateless Reader_ (Ghiringhelli, 2026).
 - Kit de marca VAIRIX: `docs/brand/` (pendiente de subir).
 - `docs/README.md`: estado de decisiones y backlog de ADRs.
 

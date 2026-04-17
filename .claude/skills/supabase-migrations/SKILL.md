@@ -16,7 +16,7 @@ description: Cómo crear, aplicar y revertir migraciones de Supabase siguiendo l
 ## Principios no negociables
 
 1. **Una migración = un cambio lógico.** No mezclar tabla nueva
-   + refactor de otra + seed en un solo archivo.
+   - refactor de otra + seed en un solo archivo.
 2. **Todas las migraciones son idempotentes.** Usar
    `CREATE TABLE IF NOT EXISTS`, `CREATE INDEX IF NOT EXISTS`,
    `INSERT ... ON CONFLICT DO NOTHING`.
@@ -67,6 +67,7 @@ Verbos estándar: `add`, `alter`, `drop` (rara vez), `seed`,
 `rls`, `fn` (función), `trigger`.
 
 Ejemplos:
+
 - `20260501120000_add_candidates.sql`
 - `20260501120100_rls_candidates.sql`
 - `20260501120200_seed_rejection_categories.sql`

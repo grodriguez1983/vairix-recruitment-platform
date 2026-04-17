@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
     inputs:
       entity:
-        description: "Entidad a sincronizar"
+        description: 'Entidad a sincronizar'
         required: true
         type: choice
         options:
@@ -28,7 +28,7 @@ on:
           - files
           - all
       dry_run:
-        description: "Dry run (no escribe en DB)"
+        description: 'Dry run (no escribe en DB)'
         required: false
         type: boolean
         default: false
@@ -44,7 +44,7 @@ jobs:
   backfill:
     name: Backfill — ${{ inputs.entity }}
     runs-on: ubuntu-latest
-    timeout-minutes: 360  # 6 h máximo
+    timeout-minutes: 360 # 6 h máximo
 
     steps:
       - name: Gate de confirmación

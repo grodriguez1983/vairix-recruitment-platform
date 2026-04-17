@@ -221,16 +221,16 @@ Conventional Commits estricto:
 
 Antes de editar código, Claude Code lee (como mínimo):
 
-| Toca... | Lee... |
-|---|---|
-| Schema DB / migración | `docs/spec.md` §4, `data-model.md`, ADR relevante |
-| Teamtailor API | `teamtailor-api-notes.md`, ADR-004 |
-| ETL | `spec.md` §5, ADR-002, ADR-004, `docs/runbooks/initial-backfill.md` |
-| Embeddings | ADR-005, `.claude/skills/embeddings-pipeline/SKILL.md` |
-| CV parsing | ADR-006, `.claude/skills/cv-parsing/SKILL.md` |
-| UI | `ui-style-guide.md`, `.claude/skills/ui-components/SKILL.md` |
-| RLS | ADR-003, `.claude/skills/rls-policies/SKILL.md` |
-| Cualquier test | `docs/test-architecture.md` |
+| Toca...               | Lee...                                                              |
+| --------------------- | ------------------------------------------------------------------- |
+| Schema DB / migración | `docs/spec.md` §4, `data-model.md`, ADR relevante                   |
+| Teamtailor API        | `teamtailor-api-notes.md`, ADR-004                                  |
+| ETL                   | `spec.md` §5, ADR-002, ADR-004, `docs/runbooks/initial-backfill.md` |
+| Embeddings            | ADR-005, `.claude/skills/embeddings-pipeline/SKILL.md`              |
+| CV parsing            | ADR-006, `.claude/skills/cv-parsing/SKILL.md`                       |
+| UI                    | `ui-style-guide.md`, `.claude/skills/ui-components/SKILL.md`        |
+| RLS                   | ADR-003, `.claude/skills/rls-policies/SKILL.md`                     |
+| Cualquier test        | `docs/test-architecture.md`                                         |
 
 ---
 

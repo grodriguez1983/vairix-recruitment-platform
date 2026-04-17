@@ -18,11 +18,13 @@ Creá una migración nueva siguiendo el skill
 2. Generá el timestamp con `date -u +%Y%m%d%H%M%S`.
 
 3. Creá:
+
    ```
    supabase/migrations/<timestamp>_<verb>_<scope>.sql
    ```
 
 4. Template base del archivo:
+
    ```sql
    -- Migration: <verb> <scope>
    -- Author: Claude Code (generated via /new-migration)
@@ -35,10 +37,13 @@ Creá una migración nueva siguiendo el skill
    ```
 
 5. Si el usuario pidió RLS adjunta, crear también:
+
    ```
    supabase/migrations/<timestamp+1s>_rls_<scope>.sql
    ```
+
    con template:
+
    ```sql
    -- RLS policies for <scope>
    -- Rollback: drop policy ...; alter table <scope> disable row level security;
@@ -71,6 +76,7 @@ Creá una migración nueva siguiendo el skill
    ```
 
 6. **NO aplicar todavía.** Recordale al usuario:
+
    ```bash
    supabase db reset        # local
    pnpm supabase:types      # regenerar tipos

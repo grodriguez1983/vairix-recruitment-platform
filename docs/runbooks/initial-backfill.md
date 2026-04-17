@@ -66,6 +66,7 @@ done
 ```
 
 Cada una debería tardar < 5 min. Monitorear:
+
 - `sync_state.last_run_status` en cada entidad.
 - `sync_errors` count; debería ser ≤ 1% del total.
 
@@ -78,6 +79,7 @@ gh workflow run backfill.yml --ref main -f entity=candidates
 Con ~5k candidates esperados, tarda ~30-60 min.
 
 Monitorear durante la corrida:
+
 - Logs de Actions (token bucket no debería saturar).
 - `select count(*) from candidates;` debe crecer monotónicamente.
 - Respuesta 429 de Teamtailor → workflow debería reintentar, no abortar.
@@ -103,6 +105,7 @@ gh workflow run backfill.yml --ref main -f entity=files
 ```
 
 Tarda ~1-2 h con 5k CVs. Monitorear:
+
 - Storage usage (bucket `candidate-cvs`).
 - Costo potencial si el tier de Supabase escala.
 
@@ -144,6 +147,7 @@ group by parse_error;
 Síntoma: logs de Actions muestran 429 repetidos, backoff creciente.
 
 Acción:
+
 1. Cancelar el workflow.
 2. Esperar 10 min (window de rate limit).
 3. Re-ejecutar **con la misma entidad**; el ETL es idempotente y
@@ -155,6 +159,7 @@ Síntoma: `sync_state.last_run_status = 'error'`,
 `last_synced_at` no avanzó.
 
 Acción:
+
 1. Leer `sync_state.last_run_error` → copia en post-mortem.
 2. Inspeccionar `sync_errors` para row-level failures.
 3. Si es un bug en el syncer: fix + PR + re-ejecutar.
@@ -163,6 +168,7 @@ Acción:
 ### CVs parseando mal (muchos `likely_scanned`)
 
 Expectativa: < 20%. Si > 20%, revisar:
+
 - Si vienen PDFs con formato distinto al que espera `pdf-parse`.
 - Candidato a Fase 2 OCR.
 - No bloquear el backfill por esto — los files quedan accesibles,
@@ -171,6 +177,7 @@ Expectativa: < 20%. Si > 20%, revisar:
 ### Storage usage explotó
 
 Acción:
+
 1. Auditar tamaños con:
    ```sql
    select candidate_id, sum(file_size_bytes) as bytes

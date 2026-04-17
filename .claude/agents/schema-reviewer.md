@@ -39,7 +39,7 @@ Para cada migración nueva o modificada:
 ### Seguridad (RLS)
 
 - [ ] Si es tabla de dominio → RLS activada en una migración
-  `*_rls_<tabla>.sql` adjunta.
+      `*_rls_<tabla>.sql` adjunta.
 - [ ] Policies para cada operación (select, insert, update, delete).
 - [ ] No hay `USING (true)` sospechosos.
 - [ ] Considera `deleted_at` (soft delete).
@@ -48,11 +48,11 @@ Para cada migración nueva o modificada:
 ### Consistencia con el resto
 
 - [ ] Coherente con `docs/data-model.md`. Si difiere, flaggear:
-  ¿actualizar doc? ¿revertir migración?
+      ¿actualizar doc? ¿revertir migración?
 - [ ] Tipos TS regenerados (chequear que `src/types/database.ts`
-  esté en el diff).
+      esté en el diff).
 - [ ] Si agrega tabla: matriz de acceso en `data-model.md` §16
-  actualizada.
+      actualizada.
 
 ### Operaciones delicadas (Tier 2+ ver operation-classification.md)
 
@@ -65,6 +65,7 @@ Flaggear como 🚨 **CRITICAL**:
 - Borrado masivo sin `WHERE`.
 
 Si encontrás uno de estos, el output debe pedir:
+
 - ADR que justifique la operación.
 - Referencia a runbook si aplica.
 - Confirmación humana explícita antes de merge.
@@ -85,33 +86,41 @@ Si encontrás uno de estos, el output debe pedir:
 # Schema Review — <branch>
 
 ## Veredicto
+
 - ✅ APPROVE
 - ⚠️ APPROVE WITH NITS
 - ❌ REQUEST CHANGES
 - 🚨 BLOCK (operación destructiva)
 
 ## Cambios inspeccionados
+
 - `20260501120000_add_candidates.sql`
 - `20260501120100_rls_candidates.sql`
 
 ## Findings
 
 ### 🚨 Critical
+
 - (si hay)
 
 ### ❌ Must fix
+
 - (si hay)
 
 ### ⚠️ Nits
+
 - (si hay)
 
 ### ✅ Good
+
 - (destacar lo bien hecho)
 
 ## Tests requeridos
+
 - (qué tests RLS faltan)
 
 ## Docs a actualizar
+
 - (si aplica)
 ```
 

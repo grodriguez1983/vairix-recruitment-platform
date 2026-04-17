@@ -38,6 +38,7 @@ C4Context
 ```
 
 **Notas**:
+
 - El único usuario humano es interno de VAIRIX (no hay acceso público).
 - Teamtailor es **la única fuente** de datos de dominio en Fase 1.
 - OpenAI solo se usa para embeddings en Fase 1; LLM para RAG en Fase 4.
@@ -140,6 +141,7 @@ generación masiva de embeddings.
 Una sola base. Schema en `public`. Ver `data-model.md`.
 
 Características activas:
+
 - `pgvector` para embeddings (ADR-001, ADR-005)
 - `pg_trgm` para fuzzy matching de nombres
 - `uuid-ossp` para IDs
@@ -265,6 +267,7 @@ Si un cambio propone cruzar un boundary, requiere ADR.
 ## 8. Reevaluación
 
 Esta arquitectura se revisita si:
+
 - Volumen supera 50k candidates (actualmente ~5k, ver ADR-001).
 - p95 de query vectorial > 500 ms.
 - Aparece segundo ATS además de Teamtailor → introducir capa de

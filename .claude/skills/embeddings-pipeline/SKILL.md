@@ -34,29 +34,29 @@ description: Cómo generar, invalidar y consultar embeddings con el pipeline del
 import { createHash } from 'crypto';
 
 export function contentHash(content: string, model: string): string {
-  return createHash('sha256')
-    .update(`${model}::${content}`)
-    .digest('hex');
+  return createHash('sha256').update(`${model}::${content}`).digest('hex');
 }
 ```
 
 **Incluir siempre**:
+
 - El texto normalizado (trim, whitespace colapsado).
 - El nombre del modelo (`text-embedding-3-small`).
 
 **Nunca incluir**:
+
 - Timestamps.
 - Metadata que cambia sin cambiar el contenido real.
 - El `candidate_id` (el hash es del contenido, no de la fuente).
 
 ## Fuentes a embeber (Fase 3)
 
-| `source_type` | `source_id` | Contenido |
-|---|---|---|
-| `cv` | `files.id` del CV más reciente | `files.parsed_text` |
-| `evaluation` | `evaluations.id` | `evaluations.notes` (si existe) |
-| `notes` | `null` | concat de `notes.body` del candidate |
-| `profile` | `null` | texto sintético: "Nombre, headline, tags, sumario" |
+| `source_type` | `source_id`                    | Contenido                                          |
+| ------------- | ------------------------------ | -------------------------------------------------- |
+| `cv`          | `files.id` del CV más reciente | `files.parsed_text`                                |
+| `evaluation`  | `evaluations.id`               | `evaluations.notes` (si existe)                    |
+| `notes`       | `null`                         | concat de `notes.body` del candidate               |
+| `profile`     | `null`                         | texto sintético: "Nombre, headline, tags, sumario" |
 
 Nota: `source_id` es FK lógica — en la tabla `embeddings` es
 `uuid` sin constraint, porque puede referenciar distintas tablas.
@@ -71,9 +71,7 @@ export async function runEmbeddingsWorker(): Promise<void> {
       const content = normalize(src.content);
       const hash = contentHash(content, MODEL);
 
-      const existing = await repos.embeddings.findBySource(
-        c.id, src.type, src.sourceId,
-      );
+      const existing = await repos.embeddings.findBySource(c.id, src.type, src.sourceId);
       if (existing?.content_hash === hash) continue;
 
       const vector = await provider.embed(content);

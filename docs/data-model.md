@@ -566,22 +566,22 @@ migraciones, siguiendo el patrón del ADR-003.
 
 Matriz de acceso:
 
-| Tabla | recruiter | admin |
-|---|---|---|
-| `candidates` | R/W (no soft-deleted) | R/W total |
-| `jobs` | R | R/W |
-| `stages` | R | R/W |
-| `applications` | R/W | R/W |
-| `evaluations` | R | R/W |
-| `notes` | R/W | R/W |
-| `files` | R | R/W |
-| `tags`, `candidate_tags` | R/W | R/W |
-| `shortlists`, `shortlist_candidates` | R/W | R/W |
-| `embeddings` | R (indirecto) | R/W |
-| `users` | R | R/W |
-| `app_users` | ❌ | R/W |
-| `sync_state`, `sync_errors` | ❌ | R/W |
-| `rejection_categories` | R | R/W |
+| Tabla                                | recruiter             | admin     |
+| ------------------------------------ | --------------------- | --------- |
+| `candidates`                         | R/W (no soft-deleted) | R/W total |
+| `jobs`                               | R                     | R/W       |
+| `stages`                             | R                     | R/W       |
+| `applications`                       | R/W                   | R/W       |
+| `evaluations`                        | R                     | R/W       |
+| `notes`                              | R/W                   | R/W       |
+| `files`                              | R                     | R/W       |
+| `tags`, `candidate_tags`             | R/W                   | R/W       |
+| `shortlists`, `shortlist_candidates` | R/W                   | R/W       |
+| `embeddings`                         | R (indirecto)         | R/W       |
+| `users`                              | R                     | R/W       |
+| `app_users`                          | ❌                    | R/W       |
+| `sync_state`, `sync_errors`          | ❌                    | R/W       |
+| `rejection_categories`               | R                     | R/W       |
 
 El backend (ETL y embeddings worker) usa **service role key**, por
 lo que RLS no aplica a esos jobs. RLS aplica exclusivamente a las
@@ -592,14 +592,17 @@ conexiones con JWT de usuario.
 ## 17. Vistas útiles (propuestas)
 
 ### `v_candidate_summary`
+
 Una fila por candidate con: conteo de applications, última activa,
 último stage, última evaluation, tags agregadas, última actividad.
 
 ### `v_dormant_candidates`
+
 Candidates sin application activa hace más de
 `DORMANT_THRESHOLD_MONTHS` (default 12).
 
 ### `v_rejection_insights`
+
 Agregado por `rejection_category` × mes × job × departamento.
 
 Las vistas se implementan en migraciones separadas cuando haya

@@ -10,6 +10,7 @@
 ## Contexto
 
 El sistema requiere:
+
 - Base de datos relacional con FKs y queries complejas.
 - Búsqueda full-text (filtros estructurados).
 - Búsqueda vectorial (semántica) sobre CVs y evaluations.
@@ -18,6 +19,7 @@ El sistema requiere:
 - Setup rápido (POC), bajo costo operativo, propiedad de los datos.
 
 Volumen esperado en el horizonte de 12 meses:
+
 - ~10k candidates, ~30k applications, ~50k evaluations
 - ~10k CVs almacenados
 - ~100k embeddings (múltiples por candidate)
@@ -27,12 +29,14 @@ Volumen esperado en el horizonte de 12 meses:
 ## Decisión
 
 Adoptar **Supabase** como plataforma única para:
+
 - Postgres (modelo relacional + JSONB para raw data)
 - **pgvector** para búsqueda vectorial
 - Storage (bucket para CVs)
 - Auth (reclutadores internos)
 
 No adoptar en esta fase:
+
 - Elasticsearch / OpenSearch
 - Pinecone, Weaviate, Qdrant u otros vector stores externos
 - Bases de datos separadas para OLTP vs search
@@ -42,12 +46,14 @@ No adoptar en esta fase:
 ## Alternativas consideradas
 
 ### A) Postgres self-hosted + pgvector
+
 - **Pros**: control total, sin vendor lock-in fuerte.
 - **Contras**: costo operativo alto, hay que resolver backups, auth y
   storage por separado.
 - **Descartada**: no aporta valor en fase POC.
 
 ### B) Postgres + Elasticsearch
+
 - **Pros**: búsqueda muy potente, features avanzadas (aggregations,
   facets, highlighting nativo).
 - **Contras**: dos sistemas a sincronizar, doble costo, doble
@@ -56,12 +62,14 @@ No adoptar en esta fase:
   si la búsqueda full-text de Postgres resulta insuficiente.
 
 ### C) Supabase + Pinecone (o similar)
+
 - **Pros**: mejor performance a gran escala en vector search.
 - **Contras**: costo adicional, sync de IDs, latencia extra, otro
   servicio a monitorear.
 - **Descartada**: pgvector alcanza de sobra para el volumen de Fase 1-3.
 
 ### D) Firebase / Firestore
+
 - **Pros**: setup trivial, auth incluido.
 - **Contras**: modelo documental, queries complejas dolorosas, sin
   búsqueda vectorial nativa, vendor lock-in fuerte.
@@ -72,6 +80,7 @@ No adoptar en esta fase:
 ## Consecuencias
 
 ### Positivas
+
 - Un solo proveedor para DB, storage, auth y vectors → menos fricción.
 - Postgres como denominador común permite queries híbridas (filtros
   SQL + vector similarity) en una sola query.
@@ -80,6 +89,7 @@ No adoptar en esta fase:
 - Migración a Postgres self-hosted es trivial si hiciera falta.
 
 ### Negativas
+
 - pgvector tiene límites a gran escala (> millones de vectores con
   alta dimensionalidad). Trigger para reevaluar: p95 de query vectorial
   > 500ms o índice > 10GB.
@@ -94,6 +104,7 @@ No adoptar en esta fase:
 ## Criterios de reevaluación
 
 Revisitar esta decisión si se cumple **cualquiera** de:
+
 - Superamos 500k candidates o 5M embeddings
 - Queries híbridas superan p95 > 1s en producción
 - Requerimos features de Elasticsearch (facets complejos, highlighting

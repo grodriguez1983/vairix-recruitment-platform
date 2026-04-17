@@ -49,10 +49,10 @@ RLS, no un rediseño.
 
 Dos roles en Fase 1:
 
-| Rol | Permisos |
-|---|---|
+| Rol         | Permisos                                                                                                                              |
+| ----------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `recruiter` | Lectura/escritura sobre candidates, applications, tags, shortlists, notes propias. Lectura de evaluations. NO ve sync logs ni config. |
-| `admin` | Todo lo del recruiter + sync state, configuración, rejection categories, user management, soft-deleted records. |
+| `admin`     | Todo lo del recruiter + sync state, configuración, rejection categories, user management, soft-deleted records.                       |
 
 **`hiring_manager` queda fuera de Fase 1.** Si aparece el caso de uso,
 se agrega en Fase 2 como read-only filtrado por jobs asignados.
@@ -126,10 +126,10 @@ Supabase deprecó las JWT-based `anon` / `service_role` keys a fines
 de 2025. Proyectos creados desde ~Nov 2025 **ya no las exponen**;
 vienen con el modelo nuevo:
 
-| Nuevo nombre | Env var | Prefijo | Reemplaza a |
-|---|---|---|---|
-| Publishable key (única por proyecto) | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | `sb_publishable_` | `anon` key (legacy) |
-| Secret key (N por proyecto, rotables individualmente) | `SUPABASE_SECRET_KEY` | `sb_secret_` | `service_role` key (legacy) |
+| Nuevo nombre                                          | Env var                                | Prefijo           | Reemplaza a                 |
+| ----------------------------------------------------- | -------------------------------------- | ----------------- | --------------------------- |
+| Publishable key (única por proyecto)                  | `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | `sb_publishable_` | `anon` key (legacy)         |
+| Secret key (N por proyecto, rotables individualmente) | `SUPABASE_SECRET_KEY`                  | `sb_secret_`      | `service_role` key (legacy) |
 
 Propiedades relevantes del modelo nuevo:
 
@@ -164,12 +164,14 @@ intervalo fijo. Se evalúa cuando el proyecto salga a producción
 ## Alternativas consideradas
 
 ### A) Sin auth (token compartido)
+
 - **Pros**: trivial para POC.
 - **Contras**: auditoría imposible, riesgo si se filtra el token,
   no escala.
 - **Descartada**.
 
 ### B) Multi-tenant desde día uno
+
 - **Pros**: listo para terceros.
 - **Contras**: complejidad de RLS por tenant, overhead innecesario
   para 15 usuarios de una sola empresa.
@@ -177,12 +179,14 @@ intervalo fijo. Se evalúa cuando el proyecto salga a producción
   por 5% del costo.
 
 ### C) Auth custom (Lucia, NextAuth)
+
 - **Pros**: más flexibilidad.
 - **Contras**: duplica lo que ya hace Supabase Auth, complica RLS
   (que se integra nativamente con `auth.uid()` y `auth.jwt()`).
 - **Descartada**.
 
 ### D) Incluir `hiring_manager` en Fase 1
+
 - **Pros**: cubre un caso real.
 - **Contras**: agrega policies adicionales, filtros por job asignado,
   UI diferenciada. No hay demanda confirmada.
@@ -193,6 +197,7 @@ intervalo fijo. Se evalúa cuando el proyecto salga a producción
 ## Consecuencias
 
 ### Positivas
+
 - Auth robusto con cero código propio de criptografía.
 - RLS centraliza permisos en la DB, imposible "olvidarse" desde el
   código de aplicación.
@@ -200,6 +205,7 @@ intervalo fijo. Se evalúa cuando el proyecto salga a producción
 - Auditoría implícita vía `auth.uid()` en logs de cambios.
 
 ### Negativas
+
 - RLS hace el debugging más complejo; todo query desde cliente va
   con JWT del usuario. Mitigación: en tests y scripts usar el
   service role key con precaución.

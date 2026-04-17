@@ -35,11 +35,13 @@ o "TBD"; si no se decidió, no es una decisión.
 ## Alternativas consideradas
 
 ### A) Opción A
+
 - **Pros**: …
 - **Contras**: …
 - **Descartada porque**: …
 
 ### B) Opción B
+
 - **Pros**: …
 - **Contras**: …
 - **Postergada porque**: …
@@ -52,9 +54,11 @@ alternativas creíbles, probablemente no merece ADR.
 ## Consecuencias
 
 ### Positivas
+
 - …
 
 ### Negativas
+
 - …
 
 Incluir trade-offs explícitos. Una decisión sin negativas es
@@ -65,6 +69,7 @@ sospechosa.
 ## Criterios de reevaluación
 
 Bajo qué condiciones esta decisión vuelve a la mesa:
+
 - Si X supera N.
 - Si aparece requerimiento Y.
 - Si el costo operativo …

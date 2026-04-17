@@ -149,13 +149,13 @@ Si un ref falla: `sync_errors` con `error_code = 'unresolved_ref'`.
 
 ## Clasificación de errores
 
-| Tipo | Acción | Avanza cursor? |
-|---|---|---|
-| Row-level: validation fallida, parsing JSON roto, FK no resoluble | `sync_errors` + continuar | Sí (al final del batch si no hubo fatales) |
-| Row-level: rate limit 429 | backoff + retry, si agota intentos → row error | Sí |
-| Fatal: auth 401 / 403 | error run, no retry | **No** |
-| Fatal: network timeout persistente | retry con backoff, si agota → error run | **No** |
-| Fatal: schema mismatch (rompe Zod validation) | error run, PR fix requerido | **No** |
+| Tipo                                                              | Acción                                         | Avanza cursor?                             |
+| ----------------------------------------------------------------- | ---------------------------------------------- | ------------------------------------------ |
+| Row-level: validation fallida, parsing JSON roto, FK no resoluble | `sync_errors` + continuar                      | Sí (al final del batch si no hubo fatales) |
+| Row-level: rate limit 429                                         | backoff + retry, si agota intentos → row error | Sí                                         |
+| Fatal: auth 401 / 403                                             | error run, no retry                            | **No**                                     |
+| Fatal: network timeout persistente                                | retry con backoff, si agota → error run        | **No**                                     |
+| Fatal: schema mismatch (rompe Zod validation)                     | error run, PR fix requerido                    | **No**                                     |
 
 ## Testing
 

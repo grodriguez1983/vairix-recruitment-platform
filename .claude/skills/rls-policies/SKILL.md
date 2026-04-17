@@ -28,11 +28,11 @@ description: Cómo escribir, aplicar y testear Row Level Security policies en Su
 
 ## Roles en Fase 1 (ADR-003)
 
-| Rol | JWT claim | Acceso general |
-|---|---|---|
-| `recruiter` | `role='recruiter'` | R/W candidates, applications, tags, shortlists, notes. R de evaluations. |
-| `admin` | `role='admin'` | Todo lo anterior + sync_state, rejection_categories, soft-deleted records, app_users. |
-| `anon` | no JWT / null | Nada. |
+| Rol         | JWT claim          | Acceso general                                                                        |
+| ----------- | ------------------ | ------------------------------------------------------------------------------------- |
+| `recruiter` | `role='recruiter'` | R/W candidates, applications, tags, shortlists, notes. R de evaluations.              |
+| `admin`     | `role='admin'`     | Todo lo anterior + sync_state, rejection_categories, soft-deleted records, app_users. |
+| `anon`      | no JWT / null      | Nada.                                                                                 |
 
 `hiring_manager` queda para Fase 2.
 

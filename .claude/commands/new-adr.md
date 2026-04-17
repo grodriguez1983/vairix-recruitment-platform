@@ -46,6 +46,7 @@ Creá un ADR nuevo siguiendo `docs/adr/adr-000-template.md`.
 
 Si la decisión invalida algo de `spec.md` o de un ADR previo,
 **marcarlo**:
+
 - Nuevo ADR: sección "Supersedes: ADR-XXX".
 - ADR viejo: cambiar estado a `Superseded by ADR-NNN`.
 - Update de `spec.md` si aplica.

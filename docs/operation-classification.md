@@ -12,12 +12,12 @@
 
 ## Tiers
 
-| Tier | Nombre | Definición | Gate requerido |
-|---|---|---|---|
-| 0 | **Reversible** | El resultado puede deshacerse con un comando trivial o es idempotente. | Ninguno extra. |
-| 1 | **Recoverable** | Hay plan de recovery documentado, pero requiere esfuerzo > 5 min. | Confirmar con humano vía prompt explícito. |
-| 2 | **Hard-to-recover** | Requiere restore de backup o re-sync masivo. Horas de downtime. | Confirmación humana + ADR o runbook. |
-| 3 | **Irreversible** | Imposible de deshacer sin pérdida real de data o estado externo. | Confirmación humana **por cada invocación**. Nunca en automation. |
+| Tier | Nombre              | Definición                                                             | Gate requerido                                                    |
+| ---- | ------------------- | ---------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| 0    | **Reversible**      | El resultado puede deshacerse con un comando trivial o es idempotente. | Ninguno extra.                                                    |
+| 1    | **Recoverable**     | Hay plan de recovery documentado, pero requiere esfuerzo > 5 min.      | Confirmar con humano vía prompt explícito.                        |
+| 2    | **Hard-to-recover** | Requiere restore de backup o re-sync masivo. Horas de downtime.        | Confirmación humana + ADR o runbook.                              |
+| 3    | **Irreversible**    | Imposible de deshacer sin pérdida real de data o estado externo.       | Confirmación humana **por cada invocación**. Nunca en automation. |
 
 ---
 
@@ -41,7 +41,7 @@
 - `supabase db reset` en **local** (destruye DB local; recovery vía
   re-seed).
 - Invalidar todos los embeddings forzando re-generación (`UPDATE
-  embeddings SET content_hash = NULL`).
+embeddings SET content_hash = NULL`).
 - Cambiar `rejection_rules.ts` — aunque es código, afecta dataset
   pre-normalizado; re-correr normalizer.
 - Rotar el token de Teamtailor (corta sync hasta actualizar secret).
@@ -57,7 +57,7 @@ pide confirmación textual del humano antes de ejecutar.
 - Ejecutar backfill full (`--full-resync`) fuera de ventana de
   mantenimiento.
 - Alterar una columna existente con riesgo de pérdida (`ALTER TABLE
-  ... DROP COLUMN`, `ALTER COLUMN TYPE` con downcast).
+... DROP COLUMN`, `ALTER COLUMN TYPE` con downcast).
 - Revocar policy RLS (aunque sea "por 5 min" para debug).
 - Cambiar el modelo de embeddings (dispara re-embedding de 15k+
   rows; costo en $).
@@ -113,6 +113,7 @@ confirma vía `CLAUDE_ALLOW_DESTRUCTIVE=1 <comando>`.
 ## Revisión periódica
 
 Este catálogo se actualiza cuando:
+
 - Aparece una nueva operación riesgosa (nuevo servicio, nueva tabla
   sensible).
 - Un incident post-mortem identifica una operación que debería
@@ -145,6 +146,6 @@ Casos hipotéticos que este catálogo debería prevenir:
 
 ## Referencias
 
-- Paper Generative Specification §4.3 *Defended: Consequence Classification*.
+- Paper Generative Specification §4.3 _Defended: Consequence Classification_.
 - CLAUDE.md sección "Operaciones prohibidas sin autorización".
 - `.claude/hooks/pre-tool-use.sh`.

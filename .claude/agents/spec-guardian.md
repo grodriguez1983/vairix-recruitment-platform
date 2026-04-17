@@ -24,6 +24,7 @@ Para cada sección de `spec.md`, `data-model.md`, ADRs:
 Ejemplo: ADR-007 dice "rejection_category_id FK a
 rejection_categories, con job separado post-sync".
 Verificar:
+
 - [ ] Columna existe en `evaluations`.
 - [ ] Seed de `rejection_categories` aplicado.
 - [ ] Worker `rejection-normalizer` existe (si Fase 2) o está en
@@ -50,6 +51,7 @@ supabase db dump --schema public --data-only=false > /tmp/real-schema.sql
 ```
 
 Buscar:
+
 - Tablas en DB no documentadas.
 - Columnas en DB no en `data-model.md`.
 - Índices faltantes (o extras).
@@ -104,38 +106,46 @@ lo están:
 # Spec Guardian — <date> — <branch>
 
 ## Estado general
+
 - ✅ Aligned / ⚠️ Minor drift / 🚨 Major gaps
 
 ## Gaps detectados
 
 ### 🚨 Major (bloquean release)
+
 1. **ADR-N menciona X, no hay implementación y no está en roadmap**
    - Ubicación: ADR-N §Decisión punto 3.
    - Propuesta: item F1-XXX con prompt `...`.
 
 ### ⚠️ Minor (crear issue)
+
 1. ...
 
 ### 🧹 Housekeeping
+
 1. ADR-002 debería marcarse `Superseded in part by ADR-004` en el
    header (orden de sync actualizado).
 2. `docs/status.md` no actualizado desde <fecha>.
 
 ## Coverage de use cases
-| UC | Tests listados | Tests existentes | Status |
-|---|---|---|---|
-| UC-01 | 4 | 2 | ⚠️ faltan 2 |
-| UC-05 | 5 | 5 | ✅ |
+
+| UC    | Tests listados | Tests existentes | Status      |
+| ----- | -------------- | ---------------- | ----------- |
+| UC-01 | 4              | 2                | ⚠️ faltan 2 |
+| UC-05 | 5              | 5                | ✅          |
 
 ## Inconsistencias data-model vs DB
+
 - (si aplica)
 
 ## Propuestas de ADR faltantes
+
 - Decisión detectada en commit abc123 ("batch size fijo en 100")
   sin ADR asociado. ¿Crear ADR? ¿O era trivial y documentar en
   código alcanza?
 
 ## Próximos pasos sugeridos
+
 1. ...
 2. ...
 ```

@@ -82,7 +82,7 @@ refactor(parser): extract normalizeWhitespace helper
 
 ## Escribir tests adversariales
 
-El test es un **cazador**, no un testigo (paper §4.3 *Verifiable*).
+El test es un **cazador**, no un testigo (paper §4.3 _Verifiable_).
 
 ### Preguntas previas al test
 
@@ -178,7 +178,7 @@ review manual.
 
 ## Referencias
 
-- Paper GS §4.3 *Verifiable* y *Defended: Process* — fundamento
+- Paper GS §4.3 _Verifiable_ y _Defended: Process_ — fundamento
   del phase-collapse.
 - `docs/test-architecture.md` — pirámide y coverage.
 - `.claude/hooks/pre-commit.sh` — hook que valida.

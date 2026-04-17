@@ -54,12 +54,14 @@ recruitment-platform/
 ## 3. Convenciones de código
 
 ### TypeScript
+
 - Nunca `any`. Si no se conoce el tipo, `unknown` + narrowing.
 - Preferir `type` sobre `interface` excepto para extensión pública.
 - Imports absolutos con alias `@/` apuntando a `src/`.
 - Funciones exportadas tipadas explícitamente en sus retornos.
 
 ### Naming
+
 - Archivos: `kebab-case.ts`.
 - Tipos y componentes: `PascalCase`.
 - Variables y funciones: `camelCase`.
@@ -67,11 +69,13 @@ recruitment-platform/
 - Tablas y columnas SQL: `snake_case`.
 
 ### Organización de módulos
+
 - Un dominio por carpeta (`teamtailor`, `embeddings`, `rag`).
 - Cada carpeta expone su API por `index.ts`.
 - No importar entre dominios lateralmente; si hace falta, extraer a `lib/shared`.
 
 ### Errores
+
 - Nunca atrapar errores solo para loggearlos y seguir.
 - Usar `Result<T, E>` o throws tipados; evitar excepciones genéricas.
 - En el ETL: errores de un registro no pueden tumbar el batch entero.
@@ -94,6 +98,7 @@ recruitment-platform/
 ## 5. Git workflow
 
 ### Branches
+
 - `main` — protegida, solo vía PR.
 - `feat/<scope>-<short-desc>` — features.
 - `fix/<scope>-<short-desc>` — bugfixes.
@@ -101,7 +106,9 @@ recruitment-platform/
 - `docs/<short-desc>` — solo documentación.
 
 ### Commits
+
 - **Conventional Commits**. Formato:
+
   ```
   <type>(<scope>): <subject>
 
@@ -109,6 +116,7 @@ recruitment-platform/
 
   <footer opcional>
   ```
+
 - Types válidos: `feat`, `fix`, `chore`, `docs`, `refactor`, `test`,
   `perf`, `build`, `ci`.
 - Scopes típicos: `etl`, `db`, `ui`, `rag`, `embeddings`, `teamtailor`,
@@ -117,6 +125,7 @@ recruitment-platform/
 - Nunca commit con `WIP`, `asdf`, o mensajes vacíos.
 
 ### PRs
+
 - Título en formato Conventional Commit (se usa para merge).
 - Descripción con:
   - **Qué** cambia
@@ -140,6 +149,7 @@ recruitment-platform/
 ## 7. Cómo debe comportarse Claude Code
 
 ### Antes de editar
+
 1. Leer `CLAUDE.md` y las skills relevantes.
 2. Si la tarea toca DB: consultar `data-model.md` en `docs/`.
 3. Si la tarea toca Teamtailor: consultar `teamtailor-api-notes.md`.
@@ -147,17 +157,20 @@ recruitment-platform/
    cambios de schema).
 
 ### Durante
+
 - Preferir cambios pequeños y verificables.
 - Correr `pnpm typecheck` y `pnpm test` tras cambios significativos.
 - Nunca dejar imports sin usar ni código muerto.
 - Si encuentra algo que contradice el spec: detenerse y preguntar.
 
 ### Después
+
 - Actualizar docs si el cambio afecta convenciones o schema.
 - Sugerir ADR si la decisión es estructural.
 - Preparar mensaje de commit en Conventional Commits.
 
 ### Qué NO hacer sin autorización explícita
+
 - Cambiar el stack (Next.js, Supabase, pgvector).
 - Agregar dependencias pesadas (>100kb) sin justificación.
 - Ejecutar `DROP`, `TRUNCATE`, `DELETE` sin `WHERE` específico.

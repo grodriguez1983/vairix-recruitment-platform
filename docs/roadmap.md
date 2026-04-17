@@ -13,6 +13,7 @@
 ## Cómo leer este documento
 
 Cada item tiene:
+
 - **ID**: referencia estable (ej: `F1-003`).
 - **Fase**: 1, 2, 3 o 4 (según `spec.md` §10).
 - **Depende de**: IDs bloqueantes.
@@ -29,6 +30,7 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 ### F1-001 — Bootstrap del repo ⏳ TODO
 
 **Prompt**:
+
 > Iniciá el repo siguiendo `claude-code-conventions.md` §1. Creá
 > `package.json` con Next.js 14 + TS estricto + pnpm. Configurá
 > `.nvmrc`, `.prettierrc`, `.eslintrc`, `tsconfig.json` con
@@ -37,6 +39,7 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 > `chore(infra): bootstrap repo scaffolding`.
 
 **DoD**:
+
 - `pnpm install` limpio.
 - `pnpm typecheck` verde (sin código aún, solo config).
 - `.env.example` copiado a su lugar final.
@@ -50,6 +53,7 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 **Depende de**: F1-001.
 
 **Prompt**:
+
 > Inicializá Supabase local con `supabase init`. Creá la primera
 > migración `001_extensions_and_helpers.sql` que instale
 > `uuid-ossp`, `vector`, `pg_trgm` y cree la función
@@ -59,6 +63,7 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 > `feat(db): add extensions and updated_at trigger helper`.
 
 **DoD**:
+
 - Migración aplica sin errores en local.
 - `supabase db diff` vacío después de aplicarla.
 
@@ -71,6 +76,7 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 **Depende de**: F1-002.
 
 **Prompt**:
+
 > Creá las migraciones necesarias para implementar todas las tablas
 > de `data-model.md` §§1-15. Una migración por "grupo lógico":
 > `002_app_users.sql`, `003_candidates.sql`, `004_users.sql`,
@@ -84,6 +90,7 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 > migración: `feat(db): add <table> schema and RLS policies`.
 
 **DoD**:
+
 - Todas las migraciones aplican en orden.
 - Seed de `rejection_categories` aplicado.
 - Tipos TS generados en `src/types/database.ts`.
@@ -98,19 +105,22 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 **Depende de**: F1-001.
 
 **Prompt**:
+
 > Implementá `src/lib/teamtailor/client.ts` con:
+>
 > - Token bucket (~4 req/s, burst 10).
 > - Backoff exponencial + jitter ante 429/5xx.
 > - Parser de respuestas JSON:API → objetos planos.
 > - Paginación iterable: `for await (const page of client.paginate('/candidates'))`.
 > - Respeta `Retry-After`.
 > - Tipa las entidades según `teamtailor-api-notes.md` §5.
-> Fixtures en `tests/fixtures/teamtailor/` con respuestas reales
-> anonimizadas. Tests con MSW que cubran: paginación completa, 429
-> con Retry-After, 5xx transitorio, 4xx persistente, rate limit
-> respetado. Commit: `feat(teamtailor): add rate-limited JSON:API client`.
+>   Fixtures en `tests/fixtures/teamtailor/` con respuestas reales
+>   anonimizadas. Tests con MSW que cubran: paginación completa, 429
+>   con Retry-After, 5xx transitorio, 4xx persistente, rate limit
+>   respetado. Commit: `feat(teamtailor): add rate-limited JSON:API client`.
 
 **DoD**:
+
 - Todos los tests de `docs/test-architecture.md` §3 "Against Teamtailor" pasan.
 - Cobertura de `src/lib/teamtailor/` ≥ 90%.
 
@@ -123,7 +133,9 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 **Depende de**: F1-003, F1-004.
 
 **Prompt**:
+
 > Implementá el esqueleto del ETL en `src/lib/sync/` con:
+>
 > - `acquireLock(entity)` / `releaseLock(entity)` sobre `sync_state`,
 >   respetando stale timeout de 1h (ADR-004 §Concurrencia).
 > - `runIncremental(entity)` genérico que toma un `EntitySyncer`
@@ -133,13 +145,14 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 > - Manejo de errores: row error → `sync_errors`, batch continúa;
 >   fatal → `last_run_status='error'`, `last_synced_at` NO avanza.
 > - Entry point como script: `pnpm sync:incremental <entity>`.
-> Tests: `test_sync_upsert_is_idempotent`,
-> `test_sync_stale_lock_is_reclaimed`,
-> `test_sync_fatal_error_preserves_last_synced_at`,
-> `test_sync_row_error_does_not_stop_batch`.
-> Commit: `feat(sync): add ETL skeleton and stages syncer`.
+>   Tests: `test_sync_upsert_is_idempotent`,
+>   `test_sync_stale_lock_is_reclaimed`,
+>   `test_sync_fatal_error_preserves_last_synced_at`,
+>   `test_sync_row_error_does_not_stop_batch`.
+>   Commit: `feat(sync): add ETL skeleton and stages syncer`.
 
 **DoD**:
+
 - Los 4 tests adversariales del use case UC-05 pasan.
 - `pnpm sync:incremental stages` corre contra Supabase local + MSW.
 
@@ -152,17 +165,20 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 **Depende de**: F1-005.
 
 **Prompt**:
+
 > Implementá un `EntitySyncer` por entidad listada en
 > `spec.md` §5. Respetá el orden de sync. Cada syncer:
+>
 > - Mapea respuesta Teamtailor → schema interno (ver
 >   `data-model.md`).
 > - Resuelve FKs externas a `uuid` interno antes del insert (ej:
 >   `application.job_id` se resuelve del `teamtailor_id` del job).
 > - Guarda `raw_data` con el payload original.
 > - Test unitario por mapeo + integration con fixtures.
-> Commits separados por syncer: `feat(sync): add <entity> syncer`.
+>   Commits separados por syncer: `feat(sync): add <entity> syncer`.
 
 **DoD**:
+
 - Todos los syncers pasan contra fixtures.
 - `pnpm sync:incremental` (sin arg) ejecuta el orden completo.
 
@@ -175,7 +191,9 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 **Depende de**: F1-006.
 
 **Prompt**:
+
 > Implementá `src/lib/cv/downloader.ts` que:
+>
 > - Toma un `file` entity de Teamtailor, descarga el binario con
 >   la URL presignada (que expira) dentro de su ventana.
 > - Calcula SHA-256 del binario.
@@ -184,10 +202,11 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 >   `<candidate_uuid>/<file_uuid>.<ext>`, persiste metadata en
 >   `files` (incluyendo `content_hash`).
 > - Rechaza archivos > 10 MB con log warning.
-> Tests integration con Storage local + MSW.
-> Commit: `feat(cv): add downloader and storage upload`.
+>   Tests integration con Storage local + MSW.
+>   Commit: `feat(cv): add downloader and storage upload`.
 
 **DoD**:
+
 - Tests de UC-07 acceptance criteria verdes.
 - Un archivo re-descargado sin cambios NO se re-sube.
 
@@ -200,7 +219,9 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 **Depende de**: F1-007.
 
 **Prompt**:
+
 > Implementá `src/lib/cv/parser.ts` que:
+>
 > - Recibe un `file` recién subido.
 > - Descarga desde Storage (service role).
 > - Elige parser según `file_type`: `pdf-parse` para pdf,
@@ -209,10 +230,11 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 > - En caso de error, setea `parse_error` con código:
 >   `unsupported_format`, `parse_failure`, `empty_text`,
 >   `likely_scanned` (si PDF y texto útil < 200 chars).
-> Tests: parseo de CV válido, scanned PDF detectado, DOCX parsea.
-> Commit: `feat(cv): add parser with pdf, docx, txt support`.
+>   Tests: parseo de CV válido, scanned PDF detectado, DOCX parsea.
+>   Commit: `feat(cv): add parser with pdf, docx, txt support`.
 
 **DoD**:
+
 - Tests de UC-07 pasan.
 - CVs escaneados marcados correctamente.
 
@@ -225,7 +247,9 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 **Depende de**: F1-003.
 
 **Prompt**:
+
 > Implementá auth en Next.js App Router siguiendo ADR-003:
+>
 > - `src/lib/auth/` con `requireAuth()`, `requireRole('admin')`.
 > - Custom claim `role` inyectado vía función
 >   `auth.jwt_custom_claims` que lee `app_users.role`.
@@ -234,10 +258,11 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 > - Toggle dark/light, dark por default.
 > - Font loading con `next/font/google` (DM Sans + Inter).
 > - Tailwind config con todos los CSS vars de §11.
-> Tests E2E: login exitoso, logout, acceso denegado sin JWT.
-> Commit: `feat(auth): add supabase auth and base layout`.
+>   Tests E2E: login exitoso, logout, acceso denegado sin JWT.
+>   Commit: `feat(auth): add supabase auth and base layout`.
 
 **DoD**:
+
 - Login + logout funcionan en local.
 - Dark/light switch persiste.
 - RLS activa en todas las queries de UI.
@@ -251,18 +276,21 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 **Depende de**: F1-006, F1-009.
 
 **Prompt**:
+
 > Implementá la búsqueda estructurada (UC-01 sin la parte semántica).
+>
 > - `/api/search` route con auth + filters (status, date range,
 >   skills, rejection_category, job).
 > - UI: barra de búsqueda tipo Google + drawer de filtros lateral.
 > - Card de candidate según `ui-style-guide.md` §8 (corner
 >   asimétrico en shortlisted).
 > - Paginación simple.
-> Tests E2E: búsqueda devuelve resultados esperados, filtros
-> aplican, RLS respeta soft delete.
-> Commit: `feat(ui): add structured search and candidate cards`.
+>   Tests E2E: búsqueda devuelve resultados esperados, filtros
+>   aplican, RLS respeta soft delete.
+>   Commit: `feat(ui): add structured search and candidate cards`.
 
 **DoD**:
+
 - Smoke E2E UC-01 (parte estructurada) verde.
 - Performance: p95 < 300 ms con 5k candidates en local.
 
@@ -275,6 +303,7 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 **Depende de**: F1-010, F1-008.
 
 **Prompt**:
+
 > Implementá UC-04: drawer/página de perfil con tabs CV,
 > Applications, Evaluations, Tags, Notes. Endpoint
 > `/api/files/:id/signed-url` que genera URL de 1h. UI muestra CV
@@ -283,6 +312,7 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 > Commit: `feat(ui): add candidate profile with consolidated view`.
 
 **DoD**:
+
 - UC-04 E2E verde.
 - Signed URL expira en 1h (test unitario del TTL).
 
@@ -295,6 +325,7 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 **Depende de**: F1-011.
 
 **Prompt**:
+
 > Implementá CRUD de tags + `candidate_tags`. UI: chips editables
 > inline en perfil, autocomplete de tags existentes.
 > Tests: tag duplicado rechazado, solo creator o admin puede borrar.
@@ -309,6 +340,7 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 **Depende de**: F1-011.
 
 **Prompt**:
+
 > Implementá UC-03. Modelo ya en schema (F1-003). UI: lista de
 > shortlists en sidebar, "Add to shortlist" desde resultado de
 > búsqueda y desde perfil, vista de shortlist con acciones archive
@@ -325,18 +357,21 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 **Depende de**: F1-001.
 
 **Prompt**:
+
 > Configurá husky + lint-staged con:
+>
 > - pre-commit: prettier + eslint + typecheck sobre files
 >   staged.
 > - commit-msg: validar Conventional Commits (`@commitlint/cli`).
 > - pre-push: correr tests unitarios.
 > - Hook custom `pre-commit-phase` que rechaza `feat:` commits sin
 >   `test: [RED]` previo en el mismo scope (lee git log).
-> GitHub Actions `.github/workflows/ci.yml` con el pipeline de
-> `docs/test-architecture.md` §10.
-> Commit: `ci: add pre-commit hooks and github actions pipeline`.
+>   GitHub Actions `.github/workflows/ci.yml` con el pipeline de
+>   `docs/test-architecture.md` §10.
+>   Commit: `ci: add pre-commit hooks and github actions pipeline`.
 
 **DoD**:
+
 - Commit con test skippeado es bloqueado.
 - Commit sin formato conventional es bloqueado.
 - CI corre typecheck + lint + unit + integration en PR.
@@ -350,14 +385,16 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 **Depende de**: F1-006, F1-008.
 
 **Prompt**:
+
 > Escribí `docs/runbooks/initial-backfill.md` con:
+>
 > - Pre-flight checks.
 > - Orden de ejecución.
 > - Qué monitorear.
 > - Estimación de tiempo.
 > - Plan de rollback si algo sale mal.
 > - Comandos exactos a ejecutar.
-> Commit: `docs(runbook): add initial backfill procedure`.
+>   Commit: `docs(runbook): add initial backfill procedure`.
 
 **Estimación**: 2 h.
 

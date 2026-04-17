@@ -30,13 +30,13 @@ description: Cómo descargar, almacenar, parsear y acceder a CVs en este proyect
 
 ## Tipos soportados (Fase 1)
 
-| Extensión | Parser | Notas |
-|---|---|---|
-| `.pdf` | `pdf-parse` | Rápido, falla con escaneados |
-| `.docx` | `mammoth` | Extrae texto plano |
-| `.doc` | intentar, fallback error | Legacy, marginal |
-| `.txt` | `fs.readFile` | Trivial |
-| `.rtf` | `striptags` | Usual mixto |
+| Extensión | Parser                   | Notas                        |
+| --------- | ------------------------ | ---------------------------- |
+| `.pdf`    | `pdf-parse`              | Rápido, falla con escaneados |
+| `.docx`   | `mammoth`                | Extrae texto plano           |
+| `.doc`    | intentar, fallback error | Legacy, marginal             |
+| `.txt`    | `fs.readFile`            | Trivial                      |
+| `.rtf`    | `striptags`              | Usual mixto                  |
 
 Fuera de esta lista → `parse_error = 'unsupported_format'`. El
 archivo queda en storage pero sin `parsed_text`.
@@ -45,7 +45,8 @@ archivo queda en storage pero sin `parsed_text`.
 
 ```typescript
 export async function downloadCvFromTeamtailor(
-  file: TTFileRecord, candidate: CandidateRow
+  file: TTFileRecord,
+  candidate: CandidateRow,
 ): Promise<FileRow | SkippedFile> {
   // 1. Descargar binario desde URL presignada de TT
   const binary = await downloadWithinTtl(file.url);
@@ -173,6 +174,7 @@ Cliente cachea el signed URL por ~50 min (margen antes de expiración).
 quedan accesibles al humano pero no alimentan búsqueda.
 
 Plan Fase 2:
+
 - Evaluar Tesseract local (gratis, ES+EN) vs Textract/Document AI.
 - Selectivo: OCR solo si el candidate está en shortlist o se busca
   explícitamente.
