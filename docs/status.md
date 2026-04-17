@@ -4,15 +4,43 @@
 > del estado; no es un registro histórico completo (para eso está
 > el git log).
 
-**Última actualización**: _(pendiente — primer commit)_
-**Última sesión**: _(ninguna aún)_
+**Última actualización**: 2026-04-17
+**Última sesión**: 2026-04-17 — install-chronicle-mcp completo (etapas 1–6)
 **Fase activa**: **Fase 1 — Fundación**
 
 ---
 
 ## ✅ Completado
 
-_(nada todavía)_
+- **infra/chronicle-mcp** ✅ done — 2026-04-17 — commit _(pendiente)_
+  - `~/.chronicle/config.json` creado (userId=gabo,
+    dbPath=$HOME/.chronicle/chronicle.db)
+  - Entrada `chronicle` agregada en `.mcp.json` (mcpServers +
+    tooling_boundaries), JSON validado con `jq`
+  - Pre-descarga de `chronicle-mcp` vía `npx` OK
+  - ADR-008 creado
+  - **Etapa 3** ✅ seed de 15 items: 10 memorias Core
+    (7 architectural ADR-001..007 + 3 procedural: rate limit TT,
+    chmod post-unzip, regen tipos post-migración), 2 Working
+    (semantic: quirk macOS Finder dotfiles, ausencia sandbox TT),
+    3 preferences (pnpm, Conventional Commits, TS estricto)
+  - **Etapa 4** ✅ 3 triggers activos: `backfill` (warning/T2),
+    `drop-table` (critical/T3), `deploy` (warning/checklist
+    pre-merge)
+  - **Etapa 5** ✅ validación: `stats` = 12 mem + 3 prefs,
+    `recall "RLS y roles"` devuelve ADR-001/002/003, los 3 `check`
+    disparan OK
+  - Railway sync **NO activado** (Fase 1 → requiere ADR dedicado)
+  - Desvío del runbook: `docs/scaffolding-inventory.md` no existe
+    en el repo; el step 7.1 se saltea y se documenta acá en lugar
+    de crear el archivo out-of-scope
+  - Quirk menor: `hostname` en macOS devolvió la IP local
+    (192.168.1.8) como `deviceId`. No bloqueante; editable en
+    caliente en `~/.chronicle/config.json`
+  - Quirk Chronicle: las 2 memorias `semantic` quedaron en tier
+    `working` en lugar de `buffer` (Chronicle auto-tiera por
+    tipo/confirmación; no expone parámetro de tier explícito).
+    No bloqueante
 
 ---
 

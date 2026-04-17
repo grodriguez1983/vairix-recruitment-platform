@@ -51,6 +51,14 @@
         "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
       },
       "description": "GitHub MCP: leer issues, PRs, commits. Usar para cross-referencing roadmap items con PRs existentes. Scope read-only preferido; write operations requieren confirmación humana (ver operation-classification.md)."
+    },
+    "chronicle": {
+      "command": "npx",
+      "args": ["-y", "chronicle-mcp"],
+      "env": {
+        "CHRONICLE_DB": "${HOME}/.chronicle/chronicle.db"
+      },
+      "description": "Chronicle MCP: memoria persistente del equipo (gotchas de runtime, preferencias, procedural memory, triggers sobre ops sensibles). Complementa ADRs — no los reemplaza. Ver docs/adr/adr-008-chronicle-mcp.md y docs/runbooks/install-chronicle-mcp.md."
     }
   },
   "tooling_boundaries": {
@@ -70,6 +78,10 @@
     "github": {
       "allowed": ["leer issues y PRs", "comentar en draft", "fetch metadata"],
       "forbidden": ["merge de PRs", "borrar branches", "cambiar branch protection"]
+    },
+    "chronicle": {
+      "allowed": ["remember", "recall", "session_start", "session_end", "set_trigger", "check_triggers", "set_preference", "get_preferences", "stats"],
+      "forbidden": ["activar sync a Railway sin ADR dedicado (PII cross-boundary)", "seed de secretos o tokens como memorias", "forget masivo sin confirmación"]
     }
   },
   "notes_for_humans": [
