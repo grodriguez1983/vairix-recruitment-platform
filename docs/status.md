@@ -5,14 +5,33 @@
 > el git log).
 
 **Última actualización**: 2026-04-17
-**Última sesión**: 2026-04-17 — install-chronicle-mcp completo (etapas 1–6)
+**Última sesión**: 2026-04-17 — F1-001 bootstrap del repo
 **Fase activa**: **Fase 1 — Fundación**
 
 ---
 
 ## ✅ Completado
 
-- **infra/chronicle-mcp** ✅ done — 2026-04-17 — commit _(pendiente)_
+- **F1-001** ✅ done — 2026-04-17 — commits `078f6f2`, `71b78bb`
+  - `tsconfig.json` con `strict` + `noUncheckedIndexedAccess` + alias `@/`
+  - `eslint.config.js` (flat config ESLint 9) + `@typescript-eslint`
+    - `@next/eslint-plugin-next` con `no-explicit-any:error` y
+      `consistent-type-imports:warn`. `no-undef:off` porque TS ya
+      cubre globals (JSX, etc.)
+  - `.prettierrc` (100 cols, singleQuote, trailingComma all) +
+    `.prettierignore`
+  - Skeleton App Router: `src/app/layout.tsx` + `src/app/page.tsx`,
+    `next-env.d.ts`. `package.json` con `"type": "module"` para
+    ESLint ESM
+  - Fix colateral: el hook `.claude/hooks/pre-commit.sh` llamaba
+    `pnpm test --run` y pnpm 9 interpretaba `run` como subcomando.
+    Reemplazado por `pnpm exec vitest run`
+  - `pnpm format` corrió contra todo el repo (commit separado
+    `71b78bb` de solo reformato — 41 archivos docs/config)
+  - DoD: `pnpm install` limpio, `pnpm typecheck` verde,
+    `pnpm lint` verde
+
+- **infra/chronicle-mcp** ✅ done — 2026-04-17 — commit `5953276`
   - `~/.chronicle/config.json` creado (userId=gabo,
     dbPath=$HOME/.chronicle/chronicle.db)
   - Entrada `chronicle` agregada en `.mcp.json` (mcpServers +
@@ -52,9 +71,9 @@ _(nada todavía)_
 
 ## ⏳ Próximo (top 3 del roadmap)
 
-1. **F1-001** — Bootstrap del repo.
-2. **F1-002** — Supabase local + primera migración.
-3. **F1-003** — Schema de dominio + RLS base.
+1. **F1-002** — Supabase local + primera migración.
+2. **F1-003** — Schema de dominio + RLS base.
+3. **F1-004** — Primer syncer (stages + users) contra Teamtailor.
 
 Ver `docs/roadmap.md` para el plan completo con prompts.
 
@@ -83,10 +102,10 @@ _(lista de inconsistencias encontradas y su plan de resolución)_
 
 ## 📊 Health checks
 
-- [ ] `pnpm typecheck` — _(no repo yet)_
-- [ ] `pnpm lint` — _(no repo yet)_
-- [ ] `pnpm test` — _(no repo yet)_
-- [ ] Coverage global ≥ 80% — _(no repo yet)_
+- [x] `pnpm typecheck` — verde (2026-04-17)
+- [x] `pnpm lint` — verde (2026-04-17)
+- [ ] `pnpm test` — sin tests aún (vitest `passWithNoTests`)
+- [ ] Coverage global ≥ 80% — _(sin código de dominio aún)_
 
 ---
 
