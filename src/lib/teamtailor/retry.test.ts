@@ -15,11 +15,13 @@ describe('parseRetryAfter', () => {
   });
 
   it('parses HTTP date (RFC 7231)', () => {
+    // HTTP dates have second-level precision; toUTCString() truncates
+    // sub-second. Worst case is ~1s skew if called near a second
+    // boundary, so accept any positive value below the target + 1s.
     const future = new Date(Date.now() + 3000).toUTCString();
     const ms = parseRetryAfter(future);
-    // accept within 100ms window (test clock skew)
-    expect(ms).toBeGreaterThan(2500);
-    expect(ms).toBeLessThan(3500);
+    expect(ms).toBeGreaterThan(0);
+    expect(ms).toBeLessThanOrEqual(3000);
   });
 
   it('returns 0 for past HTTP date', () => {
