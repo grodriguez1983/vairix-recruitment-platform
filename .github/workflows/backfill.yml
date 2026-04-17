@@ -1,0 +1,93 @@
+name: Backfill (manual)
+
+# Backfill masivo desde Teamtailor. Tier 2 — ver
+# docs/operation-classification.md.
+#
+# Workflow dispatch manual, requiere:
+#   - entity a sincronizar
+#   - confirmación explícita (input)
+#   - DRY_RUN opcional
+#
+# Corre en GitHub Actions porque puede tardar horas (ADR-004).
+
+on:
+  workflow_dispatch:
+    inputs:
+      entity:
+        description: "Entidad a sincronizar"
+        required: true
+        type: choice
+        options:
+          - stages
+          - users
+          - jobs
+          - candidates
+          - applications
+          - evaluations
+          - notes
+          - files
+          - all
+      dry_run:
+        description: "Dry run (no escribe en DB)"
+        required: false
+        type: boolean
+        default: false
+      confirm:
+        description: 'Escribí "yes" para confirmar (backfill es Tier 2)'
+        required: true
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  backfill:
+    name: Backfill — ${{ inputs.entity }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 360  # 6 h máximo
+
+    steps:
+      - name: Gate de confirmación
+        if: ${{ inputs.confirm != 'yes' }}
+        run: |
+          echo "::error::input 'confirm' debe ser literal 'yes'. Backfill cancelado."
+          exit 1
+
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - uses: pnpm/action-setup@v4
+
+      - name: Install deps
+        run: pnpm install --frozen-lockfile
+
+      - name: Run backfill
+        env:
+          # Credenciales productivas — ver SecOps runbook
+          TEAMTAILOR_API_TOKEN: ${{ secrets.TEAMTAILOR_API_TOKEN }}
+          TEAMTAILOR_API_VERSION: ${{ secrets.TEAMTAILOR_API_VERSION }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          NEXT_PUBLIC_SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          DRY_RUN: ${{ inputs.dry_run }}
+          APP_ENV: production
+          LOG_LEVEL: info
+        run: |
+          if [[ "${{ inputs.entity }}" == "all" ]]; then
+            pnpm sync:full
+          else
+            pnpm sync:backfill --entity=${{ inputs.entity }}
+          fi
+
+      - name: Report summary
+        if: always()
+        run: |
+          echo "### Backfill result" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Entity: ${{ inputs.entity }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Dry run: ${{ inputs.dry_run }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Status: ${{ job.status }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "" >> "$GITHUB_STEP_SUMMARY"
+          echo "Ver logs de esta run y consultar docs/runbooks/initial-backfill.md §Post-flight." >> "$GITHUB_STEP_SUMMARY"

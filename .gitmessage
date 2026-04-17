@@ -1,0 +1,56 @@
+# <type>(<scope>): <subject>
+#
+# <body: explica QUÉ cambia y POR QUÉ, no CÓMO — el diff dice cómo>
+#
+# <footer: BREAKING CHANGE | Refs | ADR-NNN | Closes #N>
+#
+# -----------------------------------------------------------------
+# type (Conventional Commits):
+#   feat     — feature nueva
+#   fix      — bug fix
+#   refactor — cambio interno sin feature nueva ni bug fix
+#   docs     — solo documentación
+#   test     — agregar o arreglar tests
+#   chore    — tooling, infra
+#   perf     — mejora de performance
+#   build    — build system, deps
+#   ci       — CI/CD
+#   style    — formato, punto y coma, no lógica
+#   revert   — revertir commit previo
+#
+# scope (sugeridos para este repo):
+#   etl          — pipeline de sync
+#   db           — migraciones, schema
+#   ui           — componentes y páginas
+#   rag          — retrieval + LLM (Fase 4)
+#   embeddings   — worker de embeddings
+#   teamtailor   — cliente + tipos
+#   sync         — coordinación del ETL
+#   auth         — login, RLS, roles
+#   cv           — download, parsing
+#   rls          — policies
+#   infra        — config, hooks, CI
+#
+# TDD phase (si aplica):
+#   test(scope): [RED] ...    ← test que falla
+#   feat(scope): [GREEN] ...  ← implementación mínima que pasa
+#
+# TDD skip (si es legítimo):
+#   agregar en el body: [tdd-skip: <razón>]
+#
+# -----------------------------------------------------------------
+# Ejemplos:
+#
+#   feat(etl): add stages syncer with idempotent upsert
+#
+#   test(parser): [RED] rejects PDF with empty text
+#
+#   Expected: parseCv returns { parse_error: 'empty_text' }
+#   Actual: TypeError: parseCv is not a function
+#
+#   feat(parser): [GREEN] handle empty-text PDFs
+#
+#   Minimal implementation: returns parse_error='empty_text'
+#   when extracted text is shorter than MIN_USEFUL_TEXT.
+#
+#   Refs: ADR-006

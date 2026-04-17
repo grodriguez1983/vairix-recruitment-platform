@@ -1,0 +1,82 @@
+{
+  "name": "recruitment-platform",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Internal talent intelligence platform over Teamtailor data",
+  "packageManager": "pnpm@9.0.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc --noEmit",
+    "lint": "eslint . --max-warnings 0",
+    "format": "prettier --write .",
+    "test": "vitest",
+    "test:unit": "vitest run --dir src",
+    "test:integration": "vitest run --dir tests/integration",
+    "test:rls": "vitest run --dir tests/rls",
+    "test:e2e:smoke": "playwright test --grep @smoke",
+    "test:e2e:full": "playwright test",
+    "test:e2e:seed": "tsx tests/e2e/seed.ts",
+    "mutate": "stryker run",
+    "sync:incremental": "tsx src/scripts/sync-incremental.ts",
+    "sync:full": "tsx src/scripts/sync-full.ts",
+    "sync:backfill": "tsx src/scripts/backfill.ts",
+    "supabase:types": "supabase gen types typescript --local > src/types/database.ts",
+    "prepare": "husky install",
+    "bootstrap": "bash scripts/bootstrap.sh"
+  },
+  "dependencies": {
+    "next": "^14.2.0",
+    "react": "^18.3.0",
+    "react-dom": "^18.3.0",
+    "@supabase/supabase-js": "^2.45.0",
+    "zod": "^3.23.0",
+    "pdf-parse": "^1.1.1",
+    "mammoth": "^1.8.0",
+    "lucide-react": "^0.383.0",
+    "class-variance-authority": "^0.7.0",
+    "clsx": "^2.1.0",
+    "tailwind-merge": "^2.4.0",
+    "tailwindcss": "^3.4.0",
+    "openai": "^4.56.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "@types/react": "^18.3.0",
+    "@types/pdf-parse": "^1.1.4",
+    "typescript": "^5.5.0",
+    "eslint": "^9.0.0",
+    "@typescript-eslint/eslint-plugin": "^7.0.0",
+    "@typescript-eslint/parser": "^7.0.0",
+    "eslint-config-next": "^14.2.0",
+    "prettier": "^3.3.0",
+    "vitest": "^2.0.0",
+    "@vitest/coverage-v8": "^2.0.0",
+    "@playwright/test": "^1.46.0",
+    "msw": "^2.3.0",
+    "tsx": "^4.17.0",
+    "husky": "^9.1.0",
+    "lint-staged": "^15.2.0",
+    "@commitlint/cli": "^19.4.0",
+    "@commitlint/config-conventional": "^19.4.0",
+    "@stryker-mutator/core": "^8.3.0",
+    "@stryker-mutator/vitest-runner": "^8.3.0",
+    "@stryker-mutator/typescript-checker": "^8.3.0",
+    "supabase": "^1.200.0"
+  },
+  "lint-staged": {
+    "*.{ts,tsx}": [
+      "eslint --fix --max-warnings 0",
+      "prettier --write"
+    ],
+    "*.{md,json,yml,yaml}": ["prettier --write"],
+    "*.sql": ["prettier --write"]
+  },
+  "commitlint": {
+    "extends": ["@commitlint/config-conventional"]
+  }
+}

@@ -1,0 +1,71 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/claude-code/main/schemas/settings.schema.json",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $CLAUDE_PROJECT_DIR/.claude/hooks/pre-tool-use.sh"
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $CLAUDE_PROJECT_DIR/.claude/hooks/post-edit.sh"
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash $CLAUDE_PROJECT_DIR/.claude/hooks/prompt-guard.sh"
+          }
+        ]
+      }
+    ]
+  },
+  "permissions": {
+    "allow": [
+      "Bash(pnpm *)",
+      "Bash(supabase *)",
+      "Bash(git status)",
+      "Bash(git diff *)",
+      "Bash(git log *)",
+      "Bash(git add *)",
+      "Bash(git commit *)",
+      "Bash(git branch *)",
+      "Bash(git checkout -b *)",
+      "Read(**)",
+      "Edit(**)",
+      "Write(**)"
+    ],
+    "deny": [
+      "Bash(git push --force *)",
+      "Bash(git push origin main*)",
+      "Bash(rm -rf /*)",
+      "Bash(DROP TABLE*)",
+      "Bash(TRUNCATE*)",
+      "Bash(supabase db reset --linked*)",
+      "Bash(supabase db reset --db-url*)"
+    ],
+    "ask": [
+      "Bash(pnpm sync:full*)",
+      "Bash(pnpm reindex*)",
+      "Bash(supabase db push*)",
+      "Bash(gh workflow run backfill*)",
+      "Bash(gh pr merge*)"
+    ]
+  },
+  "model": "claude-opus-4-7",
+  "comment": "Ver docs/operation-classification.md para la lógica detrás de las deny/ask lists. Si necesitás levantar una deny-rule, actualizá ese doc y el PR debe pasar por security-reviewer."
+}

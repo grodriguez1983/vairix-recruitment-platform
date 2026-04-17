@@ -1,0 +1,52 @@
+# dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# builds
+.next/
+out/
+dist/
+build/
+
+# env (NUNCA committear)
+.env
+.env.local
+.env.*.local
+!.env.example
+
+# testing
+coverage/
+.nyc_output/
+playwright-report/
+test-results/
+stryker-tmp/
+reports/
+
+# supabase local
+supabase/.branches
+supabase/.temp/
+supabase/volumes/
+
+# logs
+*.log
+npm-debug.log*
+pnpm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# IDE
+.vscode/*
+!.vscode/settings.recommended.json
+!.vscode/extensions.json
+.idea/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# misc
+.cache/
+.turbo/
+*.tsbuildinfo

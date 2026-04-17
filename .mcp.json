@@ -1,0 +1,81 @@
+{
+  "$schema": "https://raw.githubusercontent.com/anthropics/mcp/main/schemas/mcp.schema.json",
+  "mcpServers": {
+    "supabase": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@supabase/mcp-server-supabase",
+        "--project-ref=${SUPABASE_PROJECT_REF}"
+      ],
+      "env": {
+        "SUPABASE_ACCESS_TOKEN": "${SUPABASE_ACCESS_TOKEN}"
+      },
+      "description": "Supabase MCP: gestionar migraciones, tipos, queries contra la instancia. Usar para: inspeccionar schema, correr db diff, verificar RLS. NO usar para queries productivas."
+    },
+    "postgres-local": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "postgresql://postgres:postgres@localhost:54322/postgres"
+      ],
+      "description": "Postgres MCP contra Supabase local (puerto por defecto 54322). Usar para explorar schema y validar queries antes de pegarlas en código."
+    },
+    "filesystem": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-filesystem",
+        "${workspaceFolder}"
+      ],
+      "description": "Filesystem del repo. Scope limitado al workspace actual."
+    },
+    "git": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-git",
+        "--repository",
+        "${workspaceFolder}"
+      ],
+      "description": "Git operations read-only: log, blame, diff. Claude Code usa este MCP para auditar historia antes de cambios estructurales."
+    },
+    "github": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-github"
+      ],
+      "env": {
+        "GITHUB_PERSONAL_ACCESS_TOKEN": "${GITHUB_TOKEN}"
+      },
+      "description": "GitHub MCP: leer issues, PRs, commits. Usar para cross-referencing roadmap items con PRs existentes. Scope read-only preferido; write operations requieren confirmación humana (ver operation-classification.md)."
+    }
+  },
+  "tooling_boundaries": {
+    "_comment": "Este bloque es documentación para humanos, no config. Recuerda a Claude Code (y a lectores) qué es y qué no es legítimo hacer con cada MCP.",
+    "supabase": {
+      "allowed": ["db diff", "db push", "gen types", "migration new", "status"],
+      "forbidden": ["db reset contra non-localhost", "secrets set sin confirmación", "project-api-keys sin supervisión"]
+    },
+    "postgres-local": {
+      "allowed": ["SELECT queries", "\\d table descriptions", "EXPLAIN"],
+      "forbidden": ["DROP", "TRUNCATE", "DELETE sin WHERE", "ALTER que destruya columna"]
+    },
+    "git": {
+      "allowed": ["log", "blame", "diff", "show"],
+      "forbidden": ["push --force", "push a main", "reset --hard fuera de branch de trabajo"]
+    },
+    "github": {
+      "allowed": ["leer issues y PRs", "comentar en draft", "fetch metadata"],
+      "forbidden": ["merge de PRs", "borrar branches", "cambiar branch protection"]
+    }
+  },
+  "notes_for_humans": [
+    "Este archivo se versiona en el repo.",
+    "Las variables de entorno arriba (${SUPABASE_ACCESS_TOKEN}, etc.) se leen del entorno del usuario que corre Claude Code (no se committean).",
+    "Para agregar un MCP server nuevo: PR con el bloque acá + actualización de operation-classification.md si el server puede ejecutar acciones Tier 2+.",
+    "No hay MCP de Teamtailor porque no existe uno oficial; el acceso va siempre vía src/lib/teamtailor/ con tests."
+  ]
+}
