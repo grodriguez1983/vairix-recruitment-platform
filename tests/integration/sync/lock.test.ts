@@ -108,7 +108,7 @@ describe('sync_state lock primitives', () => {
     });
     const after = await readSyncState(db, ENTITY);
     expect(after.lastRunStatus).toBe('success');
-    expect(after.lastSyncedAt).toBe(watermark);
+    expect(new Date(after.lastSyncedAt!).getTime()).toBe(new Date(watermark).getTime());
     expect(after.recordsSynced).toBe(42);
     expect(after.lastRunFinishedAt).not.toBeNull();
     expect(after.lastCursor).toBe('2026-04-17T00:00:00Z');
@@ -126,7 +126,9 @@ describe('sync_state lock primitives', () => {
     });
     const after = await readSyncState(db, ENTITY);
     expect(after.lastRunStatus).toBe('error');
-    expect(after.lastSyncedAt).toBe(prior);
+    // Postgres normalizes timestamptz to a different textual form
+    // (`+00:00` vs `.000Z`); compare by numeric equivalence.
+    expect(new Date(after.lastSyncedAt!).getTime()).toBe(new Date(prior).getTime());
     expect(after.lastRunFinishedAt).not.toBeNull();
   });
 });
