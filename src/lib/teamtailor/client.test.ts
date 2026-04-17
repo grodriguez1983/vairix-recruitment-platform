@@ -113,13 +113,16 @@ describe('TeamtailorClient — retry behavior', () => {
         return HttpResponse.json(page3);
       }),
     );
-    const { client, clock } = makeClient();
+    const { client, clock } = makeClient({
+      retry: { maxAttempts: 5, baseDelayMs: 100, maxDelayMs: 30_000, jitter: (ms: number) => ms },
+    });
     const doc = await client.get('/candidates');
     expect(calls).toBe(2);
     expect(doc.data).toHaveLength(1);
-    // sleep should have been called at least once for ~2000 ms
-    const sleepCalls = clock.sleep.mock.calls.map((c) => c[0]);
-    expect(sleepCalls.some((ms) => ms >= 2000)).toBe(true);
+    // Retry-After: 2 → 2000 ms; with identity jitter the sleep must
+    // record exactly 2000 (overriding the 100 ms exponential base).
+    const sleepCalls = clock.sleep.mock.calls.map((c) => c[0] as number);
+    expect(sleepCalls).toContain(2000);
   });
 
   it('retries transient 5xx with exponential backoff', async () => {
