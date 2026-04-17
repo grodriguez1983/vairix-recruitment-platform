@@ -5,12 +5,44 @@
 > el git log).
 
 **Última actualización**: 2026-04-17
-**Última sesión**: 2026-04-17 — F1-004 cliente Teamtailor (pure + MSW)
+**Última sesión**: 2026-04-17 — F1-005 ETL skeleton + stages syncer
 **Fase activa**: **Fase 1 — Fundación**
 
 ---
 
 ## ✅ Completado
+
+- **F1-005** ✅ done — 2026-04-17 — commits
+  `5543446`/`fbe9c1e` (F1-005a: lock),
+  `956bd17` (F1-005c: CLI), con F1-005b entre ambos
+  (`test(sync): [RED] runIncremental...` + `feat(sync): [GREEN] runIncremental...`).
+  - `src/lib/sync/`:
+    - `errors.ts` — `SyncError`, `LockBusyError`, `UnknownEntityError`.
+    - `lock.ts` — `acquireLock` con conditional UPDATE (no matchea
+      si hay run activo dentro del stale window); `releaseLock`
+      estampa `last_run_finished` + status, en 'error' NO avanza
+      `last_synced_at`; `readSyncState` helper camelCase.
+    - `run.ts` — `runIncremental` genérico + contrato
+      `EntitySyncer` (buildInitialRequest / mapResource / upsert).
+      Row error → `sync_errors`, batch continúa. Upsert falla
+      o TT agota retries → release error + watermark pinned.
+      Usa `last_run_started` como nuevo watermark al success.
+    - `stages.ts` — primer syncer concreto: mapea
+      `/stages` → tabla `stages` con `job_id = null` (la
+      reconciliación con jobs viene en F1-006).
+  - `src/scripts/sync-incremental.ts` — CLI entry point con
+    exit codes distintos por escenario (0/1/2/3/4).
+  - Tests: 10 nuevos integration tests contra Supabase local +
+    MSW, cubren los 5 acceptance criteria de UC-05 (idempotency,
+    stale lock reclaim, fatal preserves watermark, row error
+    continues batch, upsert all pages).
+  - Gotcha corregido: MSW `setupServer` por default bloquea
+    TODOS los requests con `onUnhandledRequest: 'error'`;
+    usamos un matcher custom para sólo bloquear calls al
+    BASE_URL de Teamtailor y dejar pasar los de Supabase local.
+  - Gotcha corregido: Postgres timestamptz vuelve como
+    `+00:00` por PostgREST (no `.000Z`); las aserciones
+    comparan por epoch ms.
 
 - **F1-004** ✅ done — 2026-04-17 — commits
   `a4097e1`/`0a72be6` (F1-004a: errors/types/rate-limit/retry/parse),
@@ -150,10 +182,11 @@ _(nada todavía)_
 
 ## ⏳ Próximo (top 3 del roadmap)
 
-1. **F1-005** — Skeleton de ETL + `sync_state` (primer syncer:
-   stages + users).
-2. **F1-006** — Dashboard mínimo (UI layer, pre-ETL productivo).
-3. **F1-007** — Syncer de jobs con cursor incremental.
+1. **F1-006** — Syncers restantes por entidad (users, jobs,
+   candidates, applications, evaluations, notes, files) + reconciliación
+   de FKs (ej: `stages.job_id`).
+2. **F1-007** — CV download + Storage upload.
+3. **F1-008** — Dashboard mínimo (UI layer, post-ETL productivo).
 
 Ver `docs/roadmap.md` para el plan completo con prompts.
 
@@ -184,11 +217,11 @@ _(lista de inconsistencias encontradas y su plan de resolución)_
 
 - [x] `pnpm typecheck` — verde (2026-04-17)
 - [x] `pnpm lint` — verde (2026-04-17)
-- [x] `pnpm test` — 106/106 verde (2026-04-17), ~11s end-to-end
-      (54 RLS + 52 unit de `src/lib/teamtailor`)
-- [ ] Coverage global ≥ 80% — _(primera feature con cobertura real
-      ya existe: teamtailor/ tiene 52 tests sobre 7 módulos puros;
-      cobertura no medida formalmente todavía)_
+- [x] `pnpm test` — 116/116 verde (2026-04-17), ~10s end-to-end
+      (54 RLS + 52 unit de `src/lib/teamtailor` + 10 integration
+      de `src/lib/sync`)
+- [ ] Coverage global ≥ 80% — _(no medido formalmente todavía;
+      teamtailor/ y sync/ con cobertura representativa por tests)_
 
 ---
 
