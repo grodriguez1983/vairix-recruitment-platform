@@ -75,10 +75,15 @@ if [[ -n "$migration_changes" ]]; then
     # Caso (b): comparar generación actual vs archivo en disk.
     # Si coinciden, los tipos están al día — OK.
     if command -v pnpm >/dev/null 2>&1 && [[ -f src/types/database.ts ]]; then
-      generated=$(pnpm --silent exec supabase gen types typescript --local 2>/dev/null || true)
-      if [[ -n "$generated" ]] && diff -q <(echo "$generated") src/types/database.ts >/dev/null 2>&1; then
+      # Escribir a tempfile preserva trailing newlines (command substitution los
+      # stripea y arruina el diff).
+      tmpfile=$(mktemp)
+      pnpm --silent exec supabase gen types typescript --local >"$tmpfile" 2>/dev/null || true
+      if [[ -s "$tmpfile" ]] && diff -q "$tmpfile" src/types/database.ts >/dev/null 2>&1; then
         echo "   ℹ️  src/types/database.ts ya refleja el schema vivo (sin diff)."
+        rm -f "$tmpfile"
       else
+        rm -f "$tmpfile"
         cat >&2 <<EOF
 ❌ Hay migración staged pero src/types/database.ts no está al día.
 
