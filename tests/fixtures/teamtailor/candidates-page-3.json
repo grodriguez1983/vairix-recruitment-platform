@@ -1,0 +1,19 @@
+{
+  "data": [
+    {
+      "id": "1005",
+      "type": "candidates",
+      "attributes": {
+        "first-name": "Barbara",
+        "last-name": "Liskov",
+        "email": "barbara@example.test",
+        "created-at": "2026-01-14T09:00:00Z"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.teamtailor.com/v1/candidates?page%5Bnumber%5D=3",
+    "prev": "https://api.teamtailor.com/v1/candidates?page%5Bnumber%5D=2"
+  },
+  "meta": { "record-count": 5, "page-count": 3 }
+}

@@ -1,0 +1,30 @@
+{
+  "data": [
+    {
+      "id": "1001",
+      "type": "candidates",
+      "attributes": {
+        "first-name": "Ada",
+        "last-name": "Lovelace",
+        "email": "ada@example.test",
+        "created-at": "2026-01-10T09:00:00Z"
+      }
+    },
+    {
+      "id": "1002",
+      "type": "candidates",
+      "attributes": {
+        "first-name": "Alan",
+        "last-name": "Turing",
+        "email": "alan@example.test",
+        "created-at": "2026-01-11T09:00:00Z"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://api.teamtailor.com/v1/candidates?page%5Bnumber%5D=1",
+    "next": "https://api.teamtailor.com/v1/candidates?page%5Bnumber%5D=2",
+    "last": "https://api.teamtailor.com/v1/candidates?page%5Bnumber%5D=3"
+  },
+  "meta": { "record-count": 5, "page-count": 3 }
+}
