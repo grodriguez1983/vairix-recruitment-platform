@@ -13,6 +13,7 @@
 import { HttpError, ParseError, TeamtailorError } from './errors';
 import { parseDocument } from './parse';
 import { paginate, type FetchPage } from './paginate';
+import { paginateWithIncluded, type PrimaryWithIncluded } from './paginate-with-included';
 import { TokenBucket } from './rate-limit';
 import {
   computeBackoff,
@@ -117,6 +118,21 @@ export class TeamtailorClient {
     const initialUrl = this.buildUrl(path, params);
     const fetchPage: FetchPage<A> = (url) => this.getAbsolute<A>(url);
     return paginate<A>(fetchPage, initialUrl);
+  }
+
+  /**
+   * Lazy async iterator that preserves the JSON:API `included` array
+   * alongside each primary resource. Required by syncers that
+   * sideload resources (ADR-010 §2). Uses the same retry +
+   * rate-limit pipeline as `paginate()`.
+   */
+  paginateWithIncluded<A = Record<string, unknown>>(
+    path: string,
+    params?: Record<string, string>,
+  ): AsyncIterable<PrimaryWithIncluded<A>> {
+    const initialUrl = this.buildUrl(path, params);
+    const fetchPage: FetchPage<A> = (url) => this.getAbsolute<A>(url);
+    return paginateWithIncluded<A>(fetchPage, initialUrl);
   }
 
   private buildUrl(path: string, params?: Record<string, string>): string {
