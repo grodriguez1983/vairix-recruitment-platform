@@ -12,6 +12,17 @@
 
 ## ✅ Completado
 
+- **F1-007 desbloqueado** ✅ 2026-04-18 — probe en
+  `src/scripts/probe-uploads.ts` confirmó que `/v1/uploads` existe
+  top-level, `include=candidate` popula la relationship, atributos
+  son `url` (S3 signed, expira), `fileName`, `internal` (bool),
+  `createdAt`, `updatedAt`. Sin `size`/`mimeType` — derivar de la
+  extensión (.pdf/.doc/.docx → cv, .xlsx/.csv → vairix_cv_sheet).
+  Detalle completo en `docs/teamtailor-api-notes.md §5.7`. F1-007
+  pasa de 🚫 BLOCKED a 🔓 UNBLOCKED. Pendiente de input del usuario
+  sobre política del bucket `candidate-cvs` antes de implementar el
+  downloader.
+
 - **F1-006b VAIRIX CV Sheet filter + profile section** ✅ done —
   2026-04-18 — commits `2604b7c` (migration files.kind) → `c0d0418`
   (RED search) → `2582a9a` (GREEN search filter) → `6f4fbff` (UI:

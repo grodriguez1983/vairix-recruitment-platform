@@ -206,13 +206,25 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 
 ---
 
-### F1-007 — CV download + Storage upload 🚫 BLOCKED
+### F1-007 — CV download + Storage upload 🔓 UNBLOCKED (2026-04-18)
 
-> **Blocker**: `docs/teamtailor-api-notes.md` marca el shape de `/v1/uploads`
-> como `[VERIFICAR]`. Antes de escribir el downloader hay que confirmar
-> con una llamada real a TT el formato del payload (especialmente si
-> viene como endpoint propio vs. sideloaded en `/v1/candidates`).
-> El parser F1-008 ya está listo para consumir lo que resulte.
+> **Blocker resuelto** (probe en `src/scripts/probe-uploads.ts`,
+> resultado documentado en `docs/teamtailor-api-notes.md` §5.7):
+> `/v1/uploads` existe top-level, con `include=candidate` poblando
+> la relationship. Atributos: `url` (S3 signed, expira), `fileName`,
+> `internal` (bool), `createdAt`, `updatedAt`. Sin `size`/`mimeType`
+> — derivar de la extensión.
+>
+> **Pendiente para arrancar la implementación** (requiere input del
+> usuario):
+>
+> - Decisión sobre bucket `candidate-cvs` (tamaño máx, MIME
+>   whitelist, política RLS).
+> - Decisión: ¿guardamos sólo `internal=true` o también `false`
+>   (cover letters de candidatos)? ¿Separamos en `kind='cv'` vs
+>   `kind='cv_public'`?
+> - Heurística de clasificación `.pdf/.docx → cv`,
+>   `.xlsx/.xls/.csv → vairix_cv_sheet` ya consensuada con F1-006b.
 
 **Depende de**: F1-006.
 

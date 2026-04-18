@@ -220,12 +220,47 @@ en `evaluation_answers` con `question_tt_id` + columna tipada.
 Cursor incremental: `filter[updated-at][from]=<iso>`. Paginación y
 rate-limit se comportan igual que el resto de endpoints.
 
-### 5.7 `GET /v1/uploads` o resumes
+### 5.7 `GET /v1/uploads` (verificado 2026-04-18, probe `src/scripts/probe-uploads.ts`)
 
-**[VERIFICAR]** El endpoint exacto y estructura de descarga de CVs.
-Las URLs suelen ser presignadas y con expiración corta, por lo que
-hay que descargar y re-almacenar en Supabase Storage en el momento
-del sync, no guardar el link.
+Endpoint **top-level `/v1/uploads`** existe. Funciona también como
+sideload en `/v1/candidates?include=uploads` (relationship `uploads`,
+to-many).
+
+Atributos (`attributes`):
+
+- `url` — URL presignada de S3 (`teamtailor-na-maroon.s3.us-west-2.amazonaws.com/uploads/...`).
+  **Expira** — descargar dentro de la ventana de sync y re-almacenar
+  en Supabase Storage.
+- `fileName` — nombre original con extensión (ej. `emir-drube-resume.pdf`,
+  `cover_letter_eng.docx`, `image-2-.png`). Derivar `file_type` de la
+  extensión — **NO viene** `size` ni `mimeType` en el payload.
+- `internal` — boolean. `true` = subido internamente por recruiter;
+  `false` = subido por el candidato durante la aplicación. Guardar el
+  flag, filtrar por él si hace falta distinguir fuentes.
+- `createdAt`, `updatedAt` — ISO-8601.
+
+Relationships (se populan con `?include=<rel>`):
+
+- `candidate` — to-one `{ type: 'candidates', id: '<tt_id>' }`. Solo
+  aparece la `data` cuando pedís `include=candidate` o cuando sideloade
+  desde `/candidates`. Sin eso, solo viene el objeto `links`.
+- `job` — to-one, para uploads atadas a una aplicación.
+- `answer` — to-one, para attachments de preguntas de la aplicación.
+
+**Estrategia de sync recomendada** (ADR-004-style, parejo al resto):
+
+Usar `/v1/uploads?include=candidate` con cursor incremental por
+`updated_at`. Resuelve el `candidate_id` externo al `uuid` interno
+como los otros syncers. No usar el path sideload en `/candidates`
+porque el watermark por-entidad (sync_state) queda cleaner con un
+endpoint dedicado.
+
+**Heurística para distinguir CVs de otros uploads** (sin `mimeType`):
+
+- Extensión en `fileName`: `.pdf`, `.doc`, `.docx` → CV candidate.
+- `.xlsx`, `.xls`, `.csv` → planilla VAIRIX (F1-006b, `kind='vairix_cv_sheet'`).
+- `.png`, `.jpg`, `.heic`, etc. → otros (probablemente fotos, no CV).
+- Resto → marcar como "unknown" en files y dejar el parser decidir.
 
 ### 5.8 Custom fields
 
