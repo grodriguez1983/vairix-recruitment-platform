@@ -4,13 +4,41 @@
 > del estado; no es un registro histórico completo (para eso está
 > el git log).
 
-**Última actualización**: 2026-04-17
-**Última sesión**: 2026-04-17 — F1-005 ETL skeleton + stages syncer
+**Última actualización**: 2026-04-18
+**Última sesión**: 2026-04-18 — F1-009e Playwright e2e smoke suite
 **Fase activa**: **Fase 1 — Fundación**
 
 ---
 
 ## ✅ Completado
+
+- **F1-009e** ✅ done — 2026-04-18 — Playwright e2e smoke suite.
+  - `playwright.config.ts` — `webServer` arranca `next dev` en
+    puerto 3100 forzando `NEXT_PUBLIC_SUPABASE_*` al stack local
+    aunque `.env.local` apunte a remoto. `workers: 1`,
+    `fullyParallel: false`, `storageState` compartido.
+  - `tests/e2e/seed.ts` — seed idempotente (`wipeE2EArtifacts` +
+    `seedE2EFixtures`) que crea admin auth user, `app_users` admin,
+    3 candidates (Alice/Bob/Carla), 1 job "Backend Engineer" y 1
+    application activa (Alice→backend). Identificable por email
+    `@e2e.test` y `teamtailor_id` prefijo `e2e-`. Corre también
+    stand-alone con `pnpm test:e2e:seed`.
+  - `tests/e2e/global-setup.ts` — mintea sesión admin sin round-trip
+    browser: `admin.generateLink` → `email_otp` → `verifyOtp` con
+    anon client → serializa la sesión con el mismo formato que
+    `@supabase/ssr` (cookie `sb-127-auth-token`, prefijo `base64-`,
+    base64url de JSON, chunking a 3180 chars) y escribe
+    `playwright/.auth/admin.json` directo. Esto esquiva el hecho
+    de que `generateLink` devuelve implicit-flow (hash tokens)
+    mientras que el callback de la app es PKCE-only.
+  - `tests/e2e/smoke.spec.ts` — 8 tests `@smoke`: home autenticado,
+    empty state de candidates, query devuelve Alice, filtro status,
+    click → profile, 404 en UUID inválido, logout, redirect a
+    `/login` en no-autenticado. Todos verdes en ~13s.
+  - Fix lateral: `src/app/login/login-form.tsx` tenía
+    `useActionState` (React 19) pero el proyecto usa React 18.3;
+    cambiado a `useFormState` desde `react-dom`.
+  - Nuevo script `pnpm test:e2e:smoke` para correr la suite.
 
 - **F1-005** ✅ done — 2026-04-17 — commits
   `5543446`/`fbe9c1e` (F1-005a: lock),
