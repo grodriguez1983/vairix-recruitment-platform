@@ -31,7 +31,8 @@ function hasAnyFilter(filters: SearchFilters): boolean {
     filters.status !== null ||
     filters.rejectedAfter !== null ||
     filters.rejectedBefore !== null ||
-    filters.jobId !== null
+    filters.jobId !== null ||
+    filters.hasVairixCvSheet === true
   );
 }
 
@@ -42,6 +43,58 @@ function hasApplicationFilter(filters: SearchFilters): boolean {
     filters.rejectedBefore !== null ||
     filters.jobId !== null
   );
+}
+
+/**
+ * Resolves "candidates with a VAIRIX CV sheet associated" to a list
+ * of candidate ids. A candidate qualifies if EITHER:
+ *
+ *   - an `evaluation_answers` row exists with
+ *     `question_tt_id='24016'` and `value_text` non-null (the TT
+ *     custom field `"Información para CV"` carrying the Google
+ *     Sheets URL), OR
+ *   - a `files` row exists with `kind='vairix_cv_sheet'` and no
+ *     soft-delete (the manually uploaded xlsx/csv).
+ *
+ * Both lookups go through the RLS-scoped client so recruiters never
+ * see rows they aren't allowed to. Duplicates are deduped into a Set.
+ */
+async function candidateIdsWithVairixCvSheet(supabase: SupabaseClient): Promise<string[]> {
+  const ids = new Set<string>();
+
+  const { data: answers, error: ansErr } = await supabase
+    .from('evaluation_answers')
+    .select('evaluation_id, value_text, evaluations:evaluations(candidate_id)')
+    .eq('question_tt_id', '24016')
+    .not('value_text', 'is', null);
+  if (ansErr) {
+    throw new Error(`search: evaluation_answers lookup failed: ${ansErr.message}`);
+  }
+  for (const row of answers ?? []) {
+    // `evaluations` is a to-one embed, but PostgREST types it as
+    // either an object or array depending on the generated types;
+    // narrow defensively.
+    const ev = (row as unknown as { evaluations: unknown }).evaluations;
+    const candidateId = Array.isArray(ev)
+      ? ((ev[0] as { candidate_id?: string | null } | undefined)?.candidate_id ?? null)
+      : ((ev as { candidate_id?: string | null } | null)?.candidate_id ?? null);
+    if (candidateId) ids.add(candidateId);
+  }
+
+  const { data: files, error: filesErr } = await supabase
+    .from('files')
+    .select('candidate_id')
+    .eq('kind', 'vairix_cv_sheet')
+    .is('deleted_at', null);
+  if (filesErr) {
+    throw new Error(`search: files lookup failed: ${filesErr.message}`);
+  }
+  for (const row of files ?? []) {
+    const id = (row as { candidate_id: string | null }).candidate_id;
+    if (id) ids.add(id);
+  }
+
+  return Array.from(ids);
 }
 
 function escapeIlikePattern(value: string): string {
@@ -88,6 +141,24 @@ export async function searchCandidates(
     restrictToIds = await candidateIdsMatchingApplications(supabase, filters);
     if (restrictToIds.length === 0) {
       return { results: [], page: filters.page, pageSize: filters.pageSize, total: 0 };
+    }
+  }
+
+  // "Has VAIRIX CV sheet" intersects with the set above (AND
+  // semantics across independent filters).
+  if (filters.hasVairixCvSheet === true) {
+    const sheetIds = await candidateIdsWithVairixCvSheet(supabase);
+    if (sheetIds.length === 0) {
+      return { results: [], page: filters.page, pageSize: filters.pageSize, total: 0 };
+    }
+    if (restrictToIds === null) {
+      restrictToIds = sheetIds;
+    } else {
+      const sheetSet = new Set(sheetIds);
+      restrictToIds = restrictToIds.filter((id) => sheetSet.has(id));
+      if (restrictToIds.length === 0) {
+        return { results: [], page: filters.page, pageSize: filters.pageSize, total: 0 };
+      }
     }
   }
 
