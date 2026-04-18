@@ -458,7 +458,13 @@ expandidos acá para no inflar el documento.)
   25 tests nuevos en total. Pendiente: source `cv` (bloqueado por
   F1-007/F1-008), source `evaluation` (bloqueado por F1-006
   evaluations ingest).
-- F3-002 — Query de búsqueda con embeddings.
+- F3-002 — Query de búsqueda con embeddings. ✅ **DONE (base)**
+  (2026-04-18, `26c8e53`..`9461dc4`). Migración con función RPC
+  `semantic_search_embeddings` (cosine similarity sobre embeddings,
+  RLS aplica vía `security invoker`), servicio `semanticSearchCandidates`
+  (embed query + llamada RPC + dedupe opcional por candidate_id).
+  9 tests nuevos (5 unit + 4 integration). Pendiente: UI/API endpoint
+  para UC-02 y hydration de candidate cards.
 - F3-003 — Búsqueda híbrida (structured + vector).
 - F3-004 — OCR opt-in para CVs escaneados.
 

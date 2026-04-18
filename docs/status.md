@@ -5,12 +5,32 @@
 > el git log).
 
 **Última actualización**: 2026-04-18
-**Última sesión**: 2026-04-18 — F1-006 notes, F1-008 CV parser, F1-012 tags, F1-013 shortlists, F2-002 rejection normalizer (ready-to-run), F2-004 sync_errors admin, F3-001 profile-source embeddings
-**Fase activa**: **Fase 1 — Fundación** (+ F2-002/F2-004 adelantadas, F3-001 profile slice)
+**Última sesión**: 2026-04-18 — F1-006 notes, F1-008 CV parser, F1-012 tags, F1-013 shortlists, F2-002 rejection normalizer (ready-to-run), F2-004 sync_errors admin, F3-001 profile+notes embeddings, F3-002 semantic search
+**Fase activa**: **Fase 1 — Fundación** (+ F2-002/F2-004 adelantadas, F3-001 profile+notes slices, F3-002 base)
 
 ---
 
 ## ✅ Completado
+
+- **F3-002** ✅ done (base, sin UI) — 2026-04-18 — Query de búsqueda
+  semántica (ADR-005 §Consumo), rango de commits `26c8e53..9461dc4`.
+  - Migración `20260418200000_semantic_search_fn.sql` — función
+    `public.semantic_search_embeddings(query_embedding float8[],
+max_results int default 20, source_type_filter text[] default null)`
+    que devuelve `(candidate_id, source_type, score)` ordenado por
+    proximidad coseno. `security invoker` → RLS de `embeddings`
+    aplica; `set search_path = public, extensions` (ADR-009);
+    casting interno `float8[]::vector` porque PostgREST no parsea
+    el formato textual de pgvector.
+  - `src/lib/rag/semantic-search.ts` — `semanticSearchCandidates`
+    embeda la query y llama al RPC; short-circuit en query vacía;
+    valida dimensión del vector; `dedupeByCandidate` colapsa hits
+    por candidate_id tomando el mejor score y acumulando source
+    types matcheados, ordenado score DESC.
+  - Tests: 5 unit (dedupe helper) + 4 integration (end-to-end con
+    stub provider, source filter, limit, exact-match ≈ 1.0).
+  - Pendiente: UI/API endpoint (UC-02 pure semantic), hydration
+    de candidate cards, hybrid search (F3-003).
 
 - **F3-001** 🏃 en curso — 2026-04-18 — Pipeline de embeddings
   (ADR-005). Sources `profile` y `notes` landeados (`adae0c2..e6bd61e`).
