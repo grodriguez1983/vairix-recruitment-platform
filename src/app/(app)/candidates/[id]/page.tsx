@@ -15,9 +15,11 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import { requireAuth } from '@/lib/auth/require';
+import { listActiveShortlists } from '@/lib/shortlists/service';
 import { createClient } from '@/lib/supabase/server';
 import { listTagsForCandidate, listAllTagNames } from '@/lib/tags/service';
 
+import { AddToShortlist } from './add-to-shortlist';
 import { CandidateTags } from './candidate-tags';
 
 export const dynamic = 'force-dynamic';
@@ -163,10 +165,13 @@ export default async function CandidateProfilePage({ params }: PageProps): Promi
     .filter((v) => v.custom_fields !== null)
     .sort((a, b) => (a.custom_fields?.name ?? '').localeCompare(b.custom_fields?.name ?? ''));
 
-  const [tags, allTagNames] = await Promise.all([
+  const [tags, allTagNames, activeShortlists] = await Promise.all([
     listTagsForCandidate(supabase, c.id).catch(() => []),
     listAllTagNames(supabase).catch(() => [] as string[]),
+    listActiveShortlists(supabase).catch(() => []),
   ]);
+
+  const shortlistOptions = activeShortlists.map((sl) => ({ id: sl.id, name: sl.name }));
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -298,6 +303,8 @@ export default async function CandidateProfilePage({ params }: PageProps): Promi
       </section>
 
       <CandidateTags candidateId={c.id} initialTags={tags} allTagNames={allTagNames} />
+
+      <AddToShortlist candidateId={c.id} shortlists={shortlistOptions} />
 
       <section className="rounded-lg border border-border border-dashed bg-surface p-6">
         <h2 className="font-display text-base font-semibold text-text-primary">More coming soon</h2>

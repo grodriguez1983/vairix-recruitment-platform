@@ -22,6 +22,7 @@ interface NavItem {
 const NAV_ITEMS: readonly NavItem[] = [
   { href: '/', label: 'Home' },
   { href: '/candidates', label: 'Candidates' },
+  { href: '/shortlists', label: 'Shortlists' },
   { href: '/admin', label: 'Admin', adminOnly: true },
 ];
 
