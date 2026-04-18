@@ -27,11 +27,13 @@ import { LockBusyError, SyncError, UnknownEntityError } from '../lib/sync/errors
 import { runIncremental, type EntitySyncer } from '../lib/sync/run';
 import { stagesSyncer } from '../lib/sync/stages';
 import { usersSyncer } from '../lib/sync/users';
+import { jobsSyncer } from '../lib/sync/jobs';
 
 const SYNCERS: Record<string, EntitySyncer<unknown>> = {
   stages: stagesSyncer as EntitySyncer<unknown>,
   users: usersSyncer as EntitySyncer<unknown>,
-  // jobs, candidates, applications, evaluations, notes, files
+  jobs: jobsSyncer as EntitySyncer<unknown>,
+  // candidates, applications, evaluations, notes, files
   // se agregan en el resto de F1-006.
 };
 
