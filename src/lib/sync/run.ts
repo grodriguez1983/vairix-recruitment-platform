@@ -41,6 +41,14 @@ export interface EntitySyncer<Row = unknown> {
   /** Must match the row in `sync_state.entity`. */
   entity: string;
   /**
+   * When true, the runner iterates pages via
+   * `client.paginateWithIncluded()` so `mapResource()` receives the
+   * sideloaded `included` array alongside the primary resource. When
+   * false/omitted, the runner uses the simpler `paginate()` path and
+   * the second arg is `[]`. See ADR-010 §2.
+   */
+  includesSideloads?: boolean;
+  /**
    * Returns the initial HTTP request for this entity given the last
    * cursor (or null if there's no prior sync).
    */
@@ -49,8 +57,11 @@ export interface EntitySyncer<Row = unknown> {
    * Maps a single parsed TT resource to an internal DB row. Throws
    * if the resource is unmappable — the runner catches this as a
    * row-level error (logged to sync_errors) and continues the batch.
+   *
+   * `included` is the JSON:API sideloaded resources from the same
+   * page (only populated when `includesSideloads=true`, otherwise []).
    */
-  mapResource(resource: TTParsedResource): Row;
+  mapResource(resource: TTParsedResource, included: TTParsedResource[]): Row;
   /**
    * Upserts a batch of rows. Failure is treated as FATAL by the
    * runner: the lock releases with status='error' and
@@ -113,9 +124,12 @@ export async function runIncremental<Row>(
     const { path, params } = syncer.buildInitialRequest(cursor);
     const batch: Row[] = [];
 
-    for await (const resource of deps.client.paginate(path, params)) {
+    const pushOrRecord = async (
+      resource: TTParsedResource,
+      included: TTParsedResource[],
+    ): Promise<void> => {
       try {
-        const row = syncer.mapResource(resource);
+        const row = syncer.mapResource(resource, included);
         batch.push(row);
       } catch (e) {
         rowErrors += 1;
@@ -126,10 +140,20 @@ export async function runIncremental<Row>(
           payload: resource,
           runStartedAt,
         });
-        continue;
+        return;
       }
       if (batch.length >= BATCH_SIZE) {
         recordsSynced += await syncer.upsert(batch.splice(0, batch.length), deps);
+      }
+    };
+
+    if (syncer.includesSideloads) {
+      for await (const { resource, included } of deps.client.paginateWithIncluded(path, params)) {
+        await pushOrRecord(resource, included);
+      }
+    } else {
+      for await (const resource of deps.client.paginate(path, params)) {
+        await pushOrRecord(resource, []);
       }
     }
     if (batch.length > 0) {
