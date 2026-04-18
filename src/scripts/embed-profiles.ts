@@ -22,10 +22,8 @@
  */
 import { createClient } from '@supabase/supabase-js';
 
-import { createOpenAiProvider } from '../lib/embeddings/openai-provider';
 import { runProfileEmbeddings } from '../lib/embeddings/profile-worker';
-import { createStubProvider } from '../lib/embeddings/stub-provider';
-import type { EmbeddingProvider } from '../lib/embeddings/provider';
+import { resolveEmbeddingProvider } from '../lib/embeddings/provider-factory';
 
 function requireEnv(name: string): string {
   const v = process.env[name];
@@ -42,18 +40,17 @@ async function main(): Promise<void> {
 
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
   const supabaseKey = requireEnv('SUPABASE_SECRET_KEY');
-  const model = process.env.EMBEDDINGS_MODEL ?? 'text-embedding-3-small';
 
   const db = createClient(supabaseUrl, supabaseKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
 
-  let provider: EmbeddingProvider;
-  if (useStub) {
-    provider = createStubProvider({ model: 'stub-cli', dim: 1536 });
-  } else {
-    const apiKey = requireEnv('OPENAI_API_KEY');
-    provider = createOpenAiProvider({ apiKey, model, dim: 1536 });
+  let provider;
+  try {
+    provider = resolveEmbeddingProvider({ useStub });
+  } catch (e) {
+    console.error(`[embed] ${e instanceof Error ? e.message : e}`);
+    process.exit(2);
   }
 
   try {
