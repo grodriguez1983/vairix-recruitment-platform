@@ -1,0 +1,61 @@
+{
+  "data": [
+    {
+      "id": "10001",
+      "type": "job-applications",
+      "attributes": {
+        "status": "active",
+        "source": "linkedin",
+        "cover-letter": "I am very interested...",
+        "sourced": false,
+        "rejected-at": null,
+        "created-at": "2026-02-01T10:00:00Z",
+        "updated-at": "2026-02-15T10:00:00Z"
+      },
+      "relationships": {
+        "candidate": { "data": { "id": "9001", "type": "candidates" } },
+        "job": { "data": { "id": "7001", "type": "jobs" } },
+        "stage": { "data": { "id": "3001", "type": "stages" } }
+      }
+    },
+    {
+      "id": "10002",
+      "type": "job-applications",
+      "attributes": {
+        "status": "rejected",
+        "source": "careers-site",
+        "cover-letter": null,
+        "sourced": false,
+        "rejected-at": "2026-03-10T14:00:00Z",
+        "created-at": "2026-02-01T10:00:00Z",
+        "updated-at": "2026-03-10T14:00:00Z"
+      },
+      "relationships": {
+        "candidate": { "data": { "id": "9001", "type": "candidates" } },
+        "job": { "data": { "id": "7001", "type": "jobs" } },
+        "stage": { "data": null }
+      }
+    },
+    {
+      "id": "10003",
+      "type": "job-applications",
+      "attributes": {
+        "status": "active",
+        "source": "referral",
+        "cover-letter": null,
+        "sourced": true,
+        "rejected-at": null,
+        "created-at": "2026-02-05T10:00:00Z",
+        "updated-at": "2026-02-05T10:00:00Z"
+      },
+      "relationships": {
+        "candidate": { "data": { "id": "99999", "type": "candidates" } },
+        "job": { "data": { "id": "7001", "type": "jobs" } },
+        "stage": { "data": null }
+      }
+    }
+  ],
+  "links": {
+    "self": "https://tt.test/v1/job-applications?page%5Bnumber%5D=1"
+  }
+}
