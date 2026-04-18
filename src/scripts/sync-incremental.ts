@@ -29,14 +29,15 @@ import { stagesSyncer } from '../lib/sync/stages';
 import { usersSyncer } from '../lib/sync/users';
 import { jobsSyncer } from '../lib/sync/jobs';
 import { candidatesSyncer } from '../lib/sync/candidates';
+import { applicationsSyncer } from '../lib/sync/applications';
 
 const SYNCERS: Record<string, EntitySyncer<unknown>> = {
   stages: stagesSyncer as EntitySyncer<unknown>,
   users: usersSyncer as EntitySyncer<unknown>,
   jobs: jobsSyncer as EntitySyncer<unknown>,
   candidates: candidatesSyncer as EntitySyncer<unknown>,
-  // applications, evaluations, notes, files
-  // se agregan en el resto de F1-006.
+  applications: applicationsSyncer as EntitySyncer<unknown>,
+  // evaluations, notes, files se agregan en el resto de F1-006.
 };
 
 function requireEnv(name: string): string {
