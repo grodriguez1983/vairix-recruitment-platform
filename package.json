@@ -27,6 +27,7 @@
     "sync:full": "tsx src/scripts/sync-full.ts",
     "sync:backfill": "tsx src/scripts/backfill.ts",
     "embed:profiles": "tsx src/scripts/embed-profiles.ts",
+    "embed:notes": "tsx src/scripts/embed-notes.ts",
     "supabase:types": "supabase gen types typescript --local > src/types/database.ts",
     "prepare": "husky install",
     "bootstrap": "bash scripts/bootstrap.sh"
