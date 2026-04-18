@@ -1,0 +1,43 @@
+{
+  "data": [
+    {
+      "id": "465",
+      "type": "custom-fields",
+      "attributes": {
+        "name": "Asp salariales",
+        "api-name": "asp-salariales",
+        "field-type": "CustomField::Text",
+        "owner-type": "Candidate",
+        "is-hidden": false,
+        "is-private": true,
+        "is-searchable": true,
+        "is-featured": false,
+        "is-external": false,
+        "is-required": false,
+        "created-at": "2024-02-26T11:46:31-03:00",
+        "updated-at": "2024-02-26T11:46:31-03:00"
+      }
+    },
+    {
+      "id": "1458",
+      "type": "custom-fields",
+      "attributes": {
+        "name": "Último seguimiento",
+        "api-name": "ltimo-seguimiento",
+        "field-type": "CustomField::Date",
+        "owner-type": "Candidate",
+        "is-hidden": false,
+        "is-private": false,
+        "is-searchable": true,
+        "is-featured": false,
+        "is-external": false,
+        "is-required": false,
+        "created-at": "2024-07-05T14:59:17-03:00",
+        "updated-at": "2024-07-05T14:59:17-03:00"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://tt.test/v1/custom-fields?page%5Bnumber%5D=1"
+  }
+}
