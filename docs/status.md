@@ -5,12 +5,43 @@
 > el git log).
 
 **Última actualización**: 2026-04-18
-**Última sesión**: 2026-04-18 — F1-009e Playwright e2e smoke suite
+**Última sesión**: 2026-04-18 — ADR-010 core: custom-fields catálogo + sideload en candidates
 **Fase activa**: **Fase 1 — Fundación**
 
 ---
 
 ## ✅ Completado
+
+- **F1-006b** ✅ done — 2026-04-18 — ADR-010 core ingest de custom fields.
+  - `docs/adr/adr-010-teamtailor-custom-fields.md` — decisión: EAV
+    por owner con columnas tipadas (`custom_fields` catálogo +
+    `candidate_custom_field_values` con `value_text/date/number/boolean`
+    - `raw_value` siempre); sideload via `paginateWithIncluded`; orden
+      `… → custom-fields → candidates → applications`.
+  - Migrations 20260418154329..32: tablas nuevas + RLS + seed
+    `sync_state` para `custom-fields`. Tipos DB regenerados.
+  - `src/lib/teamtailor/paginate-with-included.ts` — async iterator
+    que preserva `included` por página junto a cada recurso primario
+    (5 unit tests).
+  - `src/lib/teamtailor/client.ts` — método `paginateWithIncluded()`
+    expuesto usando el mismo pipeline de retry/rate-limit.
+  - `src/lib/sync/custom-fields.ts` + `customFieldsSyncer` registrado
+    en `SYNCERS` entre `jobs` y `candidates`. 3 integration tests.
+  - `src/lib/sync/run.ts` — `EntitySyncer.includesSideloads` flag;
+    cuando está activa, el runner itera via `paginateWithIncluded` y
+    pasa `included` a `mapResource(resource, included)`. Los 4
+    syncers existentes siguen andando sin tocar (reciben `[]`).
+  - `src/lib/sync/candidates.ts` — ahora emite
+    `{ candidate, customFieldValues[] }`. En `upsert()` hace: (1)
+    upsert de candidates con `.select()` para recuperar UUIDs locales,
+    (2) lookup batched del catálogo, (3) cast `raw_value` → columna
+    tipada según `field_type` (Text/Date/Number/Boolean; raw_value
+    siempre preservado), (4) upsert idempotente por
+    `teamtailor_value_id`. 2 integration tests.
+  - **Pendiente asociado**: UI del profile `/candidates/[id]` no muestra
+    los custom fields todavía (sección "Metadata VAIRIX" por implementar).
+  - **NOTA**: full resync queda documentado pero **no corrido**. Validar
+    mapeo con muestras de ~10 candidates antes de escalar.
 
 - **F1-009e** ✅ done — 2026-04-18 — Playwright e2e smoke suite.
   - `playwright.config.ts` — `webServer` arranca `next dev` en
@@ -308,6 +339,24 @@ formal, solo memoria de trabajo)_
   modelo "small" al momento de F3-001.
 - Al arrancar F1-004, confirmar rate limit real contra tenant de
   prueba (la doc dice ~50 req/10s; verificar).
+- **[2026-04-18] Auditoría de muestra (900 candidates, 1 job, 10
+  stages/users) sobre tenant productivo**: el syncer actual NO usa
+  `?include=...` en las llamadas a TT. `raw_data.relationships`
+  trae sólo links (`self`/`related`) pero no los recursos sideloaded.
+  Consecuencia: `custom-field-values`, `form-answers`, `uploads`
+  (CVs), `interviews`, `answers`, `questions` quedan sin persistir.
+  Antes de full sync hay que:
+  1. Listar los custom fields del tenant (`/custom-fields`) y
+     decidir cuáles mapear a columnas vs dejar en `raw_data`.
+  2. Decidir si los adjuntos de `uploads` se descargan al bucket
+     `candidate-cvs` como parte del ETL o vía worker separado.
+  3. Definir cómo entran los formularios de entrevista técnica que
+     hoy viven en Google Docs (ADR nuevo: integración con Drive).
+  4. Extender syncers con `include` params + sideload handling en
+     `client.paginate` si aún no lo soporta.
+- **Full sync DIFERIDO**: no correr `pnpm sync:full` hasta validar
+  puntos 1–4 de arriba. Usar muestras capeadas vía cap temporal o
+  `page[size]` bajo mientras se audita.
 
 ---
 
