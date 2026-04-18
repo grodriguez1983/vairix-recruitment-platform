@@ -174,17 +174,15 @@ export const candidatesSyncer: EntitySyncer<CandidateWithValues> = {
       const customFieldId = getSingleRelationshipId(inc, 'custom-field', 'custom-fields');
       if (!customFieldId) continue;
       // `custom-field-values` resources in TT expose the value under
-      // attributes.value (string-ish). Cast is resilient to null/any.
+      // attributes.value (string-ish). The typed column cast happens
+      // in upsert() once we have the catalog field_type resolved;
+      // here we only capture raw_value and the FK teamtailor ids.
       const rawValue = (inc.attributes as Record<string, unknown>).value;
-      const cast = castValue('', rawValue); // field_type filled below after catalog lookup? No — see mapping note.
-      void cast; // placeholder, overwritten below
       values.push({
         teamtailor_value_id: inc.id,
         candidate_teamtailor_id: resource.id,
         custom_field_teamtailor_id: customFieldId,
-        // field_type is NOT on the value itself in TT; it's on the
-        // catalog entry. We carry a sentinel here and overwrite it in
-        // upsert() where we have the catalog map.
+        // Sentinel — overwritten in upsert() from the catalog lookup.
         field_type: '',
         value_text: null,
         value_date: null,
