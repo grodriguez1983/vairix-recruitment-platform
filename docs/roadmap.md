@@ -466,7 +466,17 @@ expandidos acá para no inflar el documento.)
   9 tests nuevos (5 unit + 4 integration). API endpoint
   `POST /api/search/semantic` disponible (`6b27af4`). Pendiente: UI
   para UC-02 y hydration de candidate cards en la respuesta.
-- F3-003 — Búsqueda híbrida (structured + vector).
+- F3-003 — Búsqueda híbrida (structured + vector). ✅ **DONE (base)**
+  (2026-04-18, `1f14e69`..`a98b743`). Extiende la RPC
+  `semantic_search_embeddings` con `candidate_id_filter uuid[]` para
+  empujar el filtro al planner (ivfflat puede prunear cuando el set
+  es chico). Servicio `hybridSearchCandidates` con 3 modos: `hybrid`
+  (query + filtros → rerank restringido al filter set), `structured`
+  (sin query → devuelve ids sin ranking), `empty` (intersección
+  vacía). Endpoint `POST /api/search/hybrid` con provider lazy
+  (structured-only no requiere `OPENAI_API_KEY`). Garantía core de
+  UC-01 verificada en tests: candidatos fuera del filtro nunca
+  aparecen en el output ranqueado. Pendiente: UI.
 - F3-004 — OCR opt-in para CVs escaneados.
 
 ## Fase 4 — Inteligencia

@@ -5,12 +5,39 @@
 > el git log).
 
 **Última actualización**: 2026-04-18
-**Última sesión**: 2026-04-18 — F1-006 notes, F1-008 CV parser, F1-012 tags, F1-013 shortlists, F2-002 rejection normalizer (ready-to-run), F2-004 sync_errors admin, F3-001 profile+notes embeddings, F3-002 semantic search
-**Fase activa**: **Fase 1 — Fundación** (+ F2-002/F2-004 adelantadas, F3-001 profile+notes slices, F3-002 base)
+**Última sesión**: 2026-04-18 — F1-006 notes, F1-008 CV parser, F1-012 tags, F1-013 shortlists, F2-002 rejection normalizer (ready-to-run), F2-004 sync_errors admin, F3-001 profile+notes embeddings, F3-002 semantic search, F3-003 hybrid search
+**Fase activa**: **Fase 1 — Fundación** (+ F2-002/F2-004 adelantadas, F3-001 profile+notes slices, F3-002 y F3-003 base)
 
 ---
 
 ## ✅ Completado
+
+- **F3-003** ✅ done (base, sin UI) — 2026-04-18 — Hybrid search
+  (UC-01), rango de commits `1f14e69..a98b743`.
+  - Migración `20260418210000_hybrid_search_fn.sql` — extiende
+    `semantic_search_embeddings` con parámetro `candidate_id_filter
+uuid[] default null` para empujar el filtro al RPC y que el
+    planner prune el scan ivfflat a la intersección con el set
+    pre-filtrado. PostgREST resuelve tanto llamadas con 3 args
+    (pure semantic) como 4 args (hybrid).
+  - `src/lib/rag/hybrid-search.ts` — `hybridSearchCandidates`:
+    resuelve filtros estructurales → candidate_ids, y después
+    elige entre 3 modos: `hybrid` (query + filtros → rerank
+    restringido), `structured` (sin query → devuelve ids sin
+    ranking), `empty` (intersección vacía o input totalmente
+    vacío). Garantiza que candidatos fuera del filtro **nunca**
+    aparecen en el output ranqueado (propiedad core de UC-01).
+  - `src/lib/rag/semantic-search.ts` — extendido con opción
+    `candidateIds` que se propaga al RPC; backward-compat (default
+    undefined ⇒ comportamiento previo).
+  - `src/app/api/search/hybrid/route.ts` — `POST /api/search/hybrid`
+    con Zod validando query nullable + filtros estructurados + limit
+    - sourceTypes. Provider se resuelve **lazy**: structured-only
+      no requiere `OPENAI_API_KEY`.
+  - Tests: 4 integration (hybrid/structured/empty/date-filter).
+    Los 9 tests previos de F3-002 siguen verdes (no regresión).
+  - Pendiente: UI (cómo integrar esto al `/search` existente o como
+    página separada).
 
 - **F3-002** ✅ done (base, sin UI) — 2026-04-18 — Query de búsqueda
   semántica (ADR-005 §Consumo), rango de commits `26c8e53..9461dc4`.
