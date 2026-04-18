@@ -16,6 +16,9 @@ import { notFound } from 'next/navigation';
 
 import { requireAuth } from '@/lib/auth/require';
 import { createClient } from '@/lib/supabase/server';
+import { listTagsForCandidate, listAllTagNames } from '@/lib/tags/service';
+
+import { CandidateTags } from './candidate-tags';
 
 export const dynamic = 'force-dynamic';
 
@@ -160,6 +163,11 @@ export default async function CandidateProfilePage({ params }: PageProps): Promi
     .filter((v) => v.custom_fields !== null)
     .sort((a, b) => (a.custom_fields?.name ?? '').localeCompare(b.custom_fields?.name ?? ''));
 
+  const [tags, allTagNames] = await Promise.all([
+    listTagsForCandidate(supabase, c.id).catch(() => []),
+    listAllTagNames(supabase).catch(() => [] as string[]),
+  ]);
+
   return (
     <div className="mx-auto max-w-4xl">
       <div className="mb-4">
@@ -289,10 +297,12 @@ export default async function CandidateProfilePage({ params }: PageProps): Promi
         )}
       </section>
 
+      <CandidateTags candidateId={c.id} initialTags={tags} allTagNames={allTagNames} />
+
       <section className="rounded-lg border border-border border-dashed bg-surface p-6">
         <h2 className="font-display text-base font-semibold text-text-primary">More coming soon</h2>
         <p className="mt-2 text-sm text-text-muted">
-          CV viewer, evaluations, notes, and tags land with F1-011 full. See{' '}
+          CV viewer, evaluations, and notes land with F1-011 full. See{' '}
           <code className="font-mono text-xs">docs/roadmap.md</code>.
         </p>
       </section>
