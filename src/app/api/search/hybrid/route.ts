@@ -34,7 +34,7 @@ function emptyToNull(value: unknown): unknown {
   return trimmed.length === 0 ? null : trimmed;
 }
 
-const requestSchema = z.object({
+export const hybridSearchRequestSchema = z.object({
   query: z.preprocess(emptyToNull, z.string().max(2000).nullable().default(null)),
   filters: z
     .object({
@@ -74,7 +74,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   let parsed;
   try {
-    parsed = requestSchema.parse(body);
+    parsed = hybridSearchRequestSchema.parse(body);
   } catch (err) {
     if (err instanceof ZodError) {
       return NextResponse.json({ error: 'invalid_request', issues: err.issues }, { status: 400 });

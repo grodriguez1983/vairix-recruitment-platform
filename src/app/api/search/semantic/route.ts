@@ -31,7 +31,7 @@ const SOURCE_TYPES = [
   'evaluation',
 ] as const satisfies readonly EmbeddingSourceType[];
 
-const requestSchema = z.object({
+export const semanticSearchRequestSchema = z.object({
   query: z.string().trim().min(1).max(2000),
   limit: z.number().int().min(1).max(50).optional(),
   sourceTypes: z.array(z.enum(SOURCE_TYPES)).max(4).optional(),
@@ -52,7 +52,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   let parsed;
   try {
-    parsed = requestSchema.parse(body);
+    parsed = semanticSearchRequestSchema.parse(body);
   } catch (err) {
     if (err instanceof ZodError) {
       return NextResponse.json({ error: 'invalid_request', issues: err.issues }, { status: 400 });
