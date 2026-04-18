@@ -20,7 +20,7 @@
  *   3 — lock busy (another run active)
  *   4 — fatal sync error (TT down, upsert failure, etc.)
  */
-import { createClient } from '@supabase/supabase-js';
+import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
 import { TeamtailorClient } from '../lib/teamtailor/client';
 import { LockBusyError, SyncError, UnknownEntityError } from '../lib/sync/errors';
@@ -33,20 +33,8 @@ import { candidatesSyncer } from '../lib/sync/candidates';
 import { applicationsSyncer } from '../lib/sync/applications';
 import { notesSyncer } from '../lib/sync/notes';
 import { interviewsSyncer } from '../lib/sync/interviews';
-
-const SYNCERS: Record<string, EntitySyncer<unknown>> = {
-  stages: stagesSyncer as EntitySyncer<unknown>,
-  users: usersSyncer as EntitySyncer<unknown>,
-  jobs: jobsSyncer as EntitySyncer<unknown>,
-  'custom-fields': customFieldsSyncer as EntitySyncer<unknown>,
-  candidates: candidatesSyncer as EntitySyncer<unknown>,
-  applications: applicationsSyncer as EntitySyncer<unknown>,
-  notes: notesSyncer as EntitySyncer<unknown>,
-  // `/v1/interviews` → evaluations + evaluation_answers. Keyed as
-  // 'evaluations' to match sync_state.entity.
-  evaluations: interviewsSyncer as EntitySyncer<unknown>,
-  // files: pending F1-007 (needs [VERIFICAR] /v1/uploads shape).
-};
+import { makeUploadsSyncer } from '../lib/sync/uploads';
+import { BUCKET as CV_BUCKET } from '../lib/cv/downloader';
 
 function requireEnv(name: string): string {
   const v = process.env[name];
@@ -68,19 +56,28 @@ function parseIntEnv(name: string, fallback: number): number {
   return n;
 }
 
+// The static syncers don't need per-run config. The uploads syncer
+// is special: it requires a live Storage bucket client, so it's
+// constructed inside main() once `db` exists. We keep entity →
+// syncer lookup lazy via a factory.
+function buildSyncers(db: SupabaseClient): Record<string, EntitySyncer<unknown>> {
+  return {
+    stages: stagesSyncer as EntitySyncer<unknown>,
+    users: usersSyncer as EntitySyncer<unknown>,
+    jobs: jobsSyncer as EntitySyncer<unknown>,
+    'custom-fields': customFieldsSyncer as EntitySyncer<unknown>,
+    candidates: candidatesSyncer as EntitySyncer<unknown>,
+    applications: applicationsSyncer as EntitySyncer<unknown>,
+    notes: notesSyncer as EntitySyncer<unknown>,
+    // `/v1/interviews` → evaluations + evaluation_answers.
+    evaluations: interviewsSyncer as EntitySyncer<unknown>,
+    // `/v1/uploads` → files (binary → candidate-cvs bucket).
+    files: makeUploadsSyncer({ storage: db.storage.from(CV_BUCKET) }) as EntitySyncer<unknown>,
+  };
+}
+
 async function main(): Promise<void> {
   const entity = process.argv[2];
-  if (!entity) {
-    console.error('[sync] usage: pnpm sync:incremental <entity>');
-    console.error(`[sync] available entities: ${Object.keys(SYNCERS).join(', ')}`);
-    process.exit(1);
-  }
-  const syncer = SYNCERS[entity];
-  if (!syncer) {
-    console.error(`[sync] unknown entity: ${entity}`);
-    console.error(`[sync] available entities: ${Object.keys(SYNCERS).join(', ')}`);
-    process.exit(1);
-  }
 
   const supabaseUrl = requireEnv('NEXT_PUBLIC_SUPABASE_URL');
   const supabaseKey = requireEnv('SUPABASE_SECRET_KEY');
@@ -91,6 +88,20 @@ async function main(): Promise<void> {
   const db = createClient(supabaseUrl, supabaseKey, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
+
+  const syncers = buildSyncers(db);
+
+  if (!entity) {
+    console.error('[sync] usage: pnpm sync:incremental <entity>');
+    console.error(`[sync] available entities: ${Object.keys(syncers).join(', ')}`);
+    process.exit(1);
+  }
+  const syncer = syncers[entity];
+  if (!syncer) {
+    console.error(`[sync] unknown entity: ${entity}`);
+    console.error(`[sync] available entities: ${Object.keys(syncers).join(', ')}`);
+    process.exit(1);
+  }
 
   const client = new TeamtailorClient({
     apiKey: ttToken,
