@@ -106,7 +106,7 @@ describe('runIncremental + notesSyncer', () => {
 
     await db.from('users').insert({
       teamtailor_id: USER_TT_ID,
-      name: 'Grace Hopper',
+      full_name: 'Grace Hopper',
       email: 'grace@example.test',
       raw_data: {},
     });

@@ -31,6 +31,7 @@ import { jobsSyncer } from '../lib/sync/jobs';
 import { customFieldsSyncer } from '../lib/sync/custom-fields';
 import { candidatesSyncer } from '../lib/sync/candidates';
 import { applicationsSyncer } from '../lib/sync/applications';
+import { notesSyncer } from '../lib/sync/notes';
 
 const SYNCERS: Record<string, EntitySyncer<unknown>> = {
   stages: stagesSyncer as EntitySyncer<unknown>,
@@ -39,7 +40,9 @@ const SYNCERS: Record<string, EntitySyncer<unknown>> = {
   'custom-fields': customFieldsSyncer as EntitySyncer<unknown>,
   candidates: candidatesSyncer as EntitySyncer<unknown>,
   applications: applicationsSyncer as EntitySyncer<unknown>,
-  // evaluations, notes, files se agregan en el resto de F1-006.
+  notes: notesSyncer as EntitySyncer<unknown>,
+  // evaluations: no documented Teamtailor endpoint (VAIRIX sources externally).
+  // files: pending F1-007 (needs [VERIFICAR] /v1/uploads shape).
 };
 
 function requireEnv(name: string): string {
