@@ -448,16 +448,16 @@ expandidos acá para no inflar el documento.)
 
 ## Fase 3 — Semántica
 
-- F3-001 — Embeddings worker (ADR-005). 🏃 **PARCIAL — profile + notes**
-  (2026-04-18, `adae0c2`..`e6bd61e`). Provider abstraction
+- F3-001 — Embeddings worker (ADR-005). 🏃 **PARCIAL — profile + notes + cv**
+  (2026-04-18, `adae0c2`..`83996a7`). Provider abstraction
   (`EmbeddingProvider` + OpenAI impl + stub determinístico), helper de
-  hash (SHA-256 con model como sal), source builders `profile` y
-  `notes`, workers `runProfileEmbeddings` y `runNotesEmbeddings`
+  hash (SHA-256 con model como sal), source builders `profile`,
+  `notes` y `cv` (más reciente parsed, trunca a 30k chars), workers
+  `runProfileEmbeddings`, `runNotesEmbeddings` y `runCvEmbeddings`
   (idempotentes vía content_hash, invalidan caché cuando cambia
-  content o model), CLIs `pnpm embed:profiles` y `pnpm embed:notes`.
-  25 tests nuevos en total. Pendiente: source `cv` (bloqueado por
-  F1-007/F1-008), source `evaluation` (bloqueado por F1-006
-  evaluations ingest).
+  content o model), CLIs `pnpm embed:profiles`, `pnpm embed:notes` y
+  `pnpm embed:cv`. 37 tests nuevos en total. Pendiente: source
+  `evaluation` (bloqueado por F1-006 evaluations ingest).
 - F3-002 — Query de búsqueda con embeddings. ✅ **DONE (base)**
   (2026-04-18, `26c8e53`..`9461dc4`). Migración con función RPC
   `semantic_search_embeddings` (cosine similarity sobre embeddings,

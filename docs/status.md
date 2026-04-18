@@ -5,12 +5,32 @@
 > el git log).
 
 **Última actualización**: 2026-04-18
-**Última sesión**: 2026-04-18 — F1-006 notes, F1-008 CV parser, F1-012 tags, F1-013 shortlists, F2-002 rejection normalizer (ready-to-run), F2-004 sync_errors admin, F3-001 profile+notes embeddings, F3-002 semantic search, F3-003 hybrid search
-**Fase activa**: **Fase 1 — Fundación** (+ F2-002/F2-004 adelantadas, F3-001 profile+notes slices, F3-002 y F3-003 base)
+**Última sesión**: 2026-04-18 — F1-006 notes, F1-008 CV parser, F1-012 tags, F1-013 shortlists, F2-002 rejection normalizer (ready-to-run), F2-004 sync_errors admin, F3-001 profile+notes+cv embeddings, F3-002 semantic search, F3-003 hybrid search
+**Fase activa**: **Fase 1 — Fundación** (+ F2-002/F2-004 adelantadas, F3-001 profile+notes+cv slices, F3-002 y F3-003 base)
 
 ---
 
 ## ✅ Completado
+
+- **F3-001 cv slice** ✅ done — 2026-04-18 — CV source para el
+  embeddings worker (ADR-005 §Fuentes a embeber), rango de commits
+  `11965ca..83996a7`.
+  - `src/lib/embeddings/sources/cv.ts` — `buildCvContent` elige el
+    CV más reciente por candidato (parsed_at desc, tie-break por
+    id), ignora files soft-deleted y files sin parsed_text, colapsa
+    whitespace y trunca a `CV_CONTENT_MAX_CHARS=30000` (margen
+    sobre el límite de 8192 tokens del modelo, Fase 1 trunca al
+    primer chunk).
+  - `src/lib/embeddings/cv-worker.ts` — `runCvEmbeddings` mirrors
+    el notes-worker: una fila por candidate
+    (`source_type='cv'`, `source_id=null`), idempotente vía
+    `content_hash` (sal=provider.model). Invalida la caché cuando
+    se agrega un CV más nuevo o cambia el parsed_text del último.
+  - `src/scripts/embed-cv.ts` + `pnpm embed:cv` (flag `--stub`).
+  - Tests: 8 unit (`sources/cv.test.ts`) + 4 integration
+    (`cv-worker.test.ts`). Total del repo: 270.
+  - Pendiente de F3-001: source `evaluation` (bloqueado por F1-006
+    evaluations ingest).
 
 - **F3-003** ✅ done (base, sin UI) — 2026-04-18 — Hybrid search
   (UC-01), rango de commits `1f14e69..a98b743`.
