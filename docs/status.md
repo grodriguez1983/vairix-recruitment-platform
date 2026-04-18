@@ -5,7 +5,7 @@
 > el git log).
 
 **Última actualización**: 2026-04-18
-**Última sesión**: 2026-04-18 — ADR-010 core: custom-fields catálogo + sideload en candidates
+**Última sesión**: 2026-04-18 — ADR-010 core + UI: custom-fields ingest completo end-to-end
 **Fase activa**: **Fase 1 — Fundación**
 
 ---
@@ -38,8 +38,11 @@
     tipada según `field_type` (Text/Date/Number/Boolean; raw_value
     siempre preservado), (4) upsert idempotente por
     `teamtailor_value_id`. 2 integration tests.
-  - **Pendiente asociado**: UI del profile `/candidates/[id]` no muestra
-    los custom fields todavía (sección "Metadata VAIRIX" por implementar).
+  - **F1-011b** ✅ — `/candidates/[id]` renderiza la sección
+    "Metadata VAIRIX" con los valores del candidato; display por
+    `field_type` (Text/Date/Number/Boolean) con fallback a
+    `raw_value`; badge "private" visible cuando el catálogo lo marca.
+    Sección se oculta cuando no hay valores.
   - **NOTA**: full resync queda documentado pero **no corrido**. Validar
     mapeo con muestras de ~10 candidates antes de escalar.
 
