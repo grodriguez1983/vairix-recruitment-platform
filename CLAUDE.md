@@ -247,9 +247,27 @@ Antes de considerar una sesión "cerrada", Claude Code debe:
 6. ✅ `docs/status.md` actualizado con lo hecho y lo siguiente
 7. ✅ Commits en Conventional Commits, atómicos
 8. ✅ No quedó código muerto, imports sin usar, `console.log`
+9. ✅ **Chronicle actualizado** con lo que deba sobrevivir compaction:
+   descubrimientos no obvios, decisiones con cita del usuario,
+   schema invariants, blockers con gate de desbloqueo, workflow
+   gotchas. **No duplicar** git log ni `status.md`.
 
 Si algo de esto no pasa: la sesión no cerró. Documentar en
 `status.md` qué quedó abierto.
+
+### 📒 Persistencia (3 capas)
+
+- **git log** — qué cambió, cuándo, por quién. Fuente de verdad del
+  código.
+- **docs/status.md** — narrativa por sesión (hecho / bloqueado /
+  siguiente). Actualizar al cierre.
+- **Chronicle MCP** — memorias que sobreviven entre sesiones:
+  descubrimientos (ej. endpoints undocumented de TT), decisiones
+  diferidas con cita del usuario, schema invariants, blockers,
+  triggers de operación crítica. Al abrir sesión:
+  `mcp__chronicle__session action=start project=recruitment-platform`.
+  Al cerrar: `action=end` con summary. `recall` antes de arrancar
+  trabajo nuevo para detectar si hay decisiones previas aplicables.
 
 ---
 
