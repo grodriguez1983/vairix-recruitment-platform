@@ -1,0 +1,52 @@
+/* Design tokens per docs/ui-style-guide.md §11. */
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --radius-sm: 6px;
+  --radius-md: 12px;
+  --radius-lg: 20px;
+  --radius-xl: 32px;
+
+  /* --font-display and --font-body are injected by next/font in
+     layout.tsx. --font-mono stays here because we're not loading a
+     Google mono font yet. */
+  --font-mono: 'JetBrains Mono', ui-monospace, monospace;
+}
+
+[data-theme='dark'] {
+  --color-bg: #071013;
+  --color-surface: #0f1a1f;
+  --color-border: #5e6472;
+  --color-text-primary: #ebebeb;
+  --color-text-muted: #9aa0a6;
+  --color-accent-primary: #73d4b0;
+  --color-accent-secondary: #d8c7fa;
+  --color-danger: #f28b82;
+  --color-warning: #fbbc04;
+  --color-info: #8ab4f8;
+}
+
+[data-theme='light'] {
+  --color-bg: #f8f7f9;
+  --color-surface: #ffffff;
+  --color-border: #6e6a6f;
+  --color-text-primary: #071013;
+  --color-text-muted: #6e6a6f;
+  --color-accent-primary: #39b98a;
+  --color-accent-secondary: #af8bf5;
+  --color-danger: #d93025;
+  --color-warning: #b06000;
+  --color-info: #1967d2;
+}
+
+html,
+body {
+  background-color: var(--color-bg);
+  color: var(--color-text-primary);
+  font-family: var(--font-body);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
