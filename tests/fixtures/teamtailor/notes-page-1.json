@@ -1,0 +1,59 @@
+{
+  "data": [
+    {
+      "id": "20001",
+      "type": "notes",
+      "attributes": {
+        "body": "Strong Postgres background; referred by Ada.",
+        "created-at": "2026-02-01T10:00:00Z",
+        "updated-at": "2026-02-01T10:00:00Z"
+      },
+      "relationships": {
+        "candidate": { "data": { "id": "9001", "type": "candidates" } },
+        "job-application": { "data": { "id": "10001", "type": "job-applications" } },
+        "user": { "data": { "id": "5001", "type": "users" } }
+      }
+    },
+    {
+      "id": "20002",
+      "type": "notes",
+      "attributes": {
+        "body": "Follow up after tech interview.",
+        "created-at": "2026-02-05T10:00:00Z",
+        "updated-at": "2026-02-05T10:00:00Z"
+      },
+      "relationships": {
+        "candidate": { "data": { "id": "9001", "type": "candidates" } },
+        "job-application": { "data": null },
+        "user": { "data": null }
+      }
+    },
+    {
+      "id": "20003",
+      "type": "notes",
+      "attributes": {
+        "body": "",
+        "created-at": "2026-02-05T10:00:00Z",
+        "updated-at": "2026-02-05T10:00:00Z"
+      },
+      "relationships": {
+        "candidate": { "data": { "id": "9001", "type": "candidates" } }
+      }
+    },
+    {
+      "id": "20004",
+      "type": "notes",
+      "attributes": {
+        "body": "Orphan note — candidate not yet synced.",
+        "created-at": "2026-02-05T10:00:00Z",
+        "updated-at": "2026-02-05T10:00:00Z"
+      },
+      "relationships": {
+        "candidate": { "data": { "id": "99999", "type": "candidates" } }
+      }
+    }
+  ],
+  "links": {
+    "self": "https://tt.test/v1/notes?page%5Bnumber%5D=1"
+  }
+}
