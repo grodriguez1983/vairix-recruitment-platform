@@ -169,12 +169,18 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 ### F1-006 — Syncers por entidad (users, jobs, candidates, applications, evaluations, notes) 🏃 PARTIAL (2026-04-18, `1f8ef78`)
 
 > ✅ stages, users, jobs, candidates (+ custom-field-values sideload),
-> applications, notes, **evaluations (F1-006a)**.
-> 🔜 **F1-006b VAIRIX CV Sheet ingestor** pendiente: la URL al Google Sheet
-> por candidato llega intacta en `evaluation_answers.value_text`
-> (question_tt_id=24016, "Información para CV"). Falta un worker que
-> descargue esas planillas. Requiere auth a Google Drive/Sheets (usuario
-> autorizará cuando llegue el turno).
+> applications, notes, **evaluations (F1-006a)**, **VAIRIX CV Sheet
+> filter + profile section (F1-006b)** (2026-04-18, `6f4fbff`).
+>
+> **F1-006b scope simplificado**: en lugar de integrar Google Drive/Sheets,
+> se expone (a) un filtro `has_vairix_cv_sheet` en `/candidates` que
+> encuentra candidatos con planilla asociada (URL en `evaluation_answers`
+> para question_tt_id=24016 "Información para CV", o archivo subido en
+> `files.kind='vairix_cv_sheet'`), y (b) una sección "Planilla VAIRIX"
+> en el perfil del candidato que muestra la URL clickeable y el archivo
+> subido (si lo hay). **La integración con Google Drive/Sheets queda
+> diferida** hasta terminar el resto del roadmap. La subida manual del
+> xlsx depende de F1-007 (creación del bucket `candidate-cvs`).
 
 **Depende de**: F1-005.
 

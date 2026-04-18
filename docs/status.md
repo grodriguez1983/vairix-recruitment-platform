@@ -5,12 +5,39 @@
 > el git log).
 
 **Última actualización**: 2026-04-18
-**Última sesión**: 2026-04-18 — F1-006a interviews/evaluations ingest (unbloquea F1-006 desde TT; ver nota), F1-006 notes, F1-008 CV parser, F1-012 tags, F1-013 shortlists, F2-002 rejection normalizer (ready-to-run), F2-004 sync_errors admin, F3-001 profile+notes+cv embeddings, F3-002 semantic search, F3-003 hybrid search
+**Última sesión**: 2026-04-18 — F1-006b VAIRIX CV Sheet filter + profile section (alcance simplificado: sin integración con Google Drive/Sheets), F1-006a interviews/evaluations ingest (unbloquea F1-006 desde TT; ver nota), F1-006 notes, F1-008 CV parser, F1-012 tags, F1-013 shortlists, F2-002 rejection normalizer (ready-to-run), F2-004 sync_errors admin, F3-001 profile+notes+cv embeddings, F3-002 semantic search, F3-003 hybrid search
 **Fase activa**: **Fase 1 — Fundación** (+ F2-002/F2-004 adelantadas, F3-001 profile+notes+cv slices, F3-002 y F3-003 base)
 
 ---
 
 ## ✅ Completado
+
+- **F1-006b VAIRIX CV Sheet filter + profile section** ✅ done —
+  2026-04-18 — commits `2604b7c` (migration files.kind) → `c0d0418`
+  (RED search) → `2582a9a` (GREEN search filter) → `6f4fbff` (UI:
+  list toggle + profile section).
+  - **Alcance simplificado a pedido del usuario**: se difiere la
+    integración con Google Drive/Sheets hasta terminar el resto del
+    roadmap. En su lugar esta iteración entrega dos cosas concretas:
+    (a) filtro `has_vairix_cv_sheet` en `/candidates` que matchea por
+    `evaluation_answers.value_text` con `question_tt_id='24016'`
+    ("Información para CV") **o** por `files.kind='vairix_cv_sheet'`
+    no soft-deleted, y (b) sección "Planilla VAIRIX" en
+    `/candidates/[id]` que muestra la URL clickeable de TT y el
+    nombre del archivo subido (si lo hay).
+  - Migration `20260418230000_files_kind.sql`: agrega `kind` a
+    `files` (`cv | vairix_cv_sheet`) + partial unique index por
+    candidato + índice en `kind`.
+  - Backend `src/lib/search/search.ts`: `candidateIdsWithVairixCvSheet()`
+    une los dos orígenes (TT URL + archivo) y se intersecta con los
+    filtros de applications ya existentes. 3 tests adversariales
+    nuevos (URL match, file match, `hasVairixCvSheet=false` tratado
+    como sin filtro).
+  - UI: `SearchForm` agrega un checkbox "Only candidates with a VAIRIX
+    CV sheet"; el perfil muestra la URL cuando existe y un placeholder
+    "Carga manual disponible en F1-007 (bucket de Storage)" porque el
+    endpoint de upload depende de que F1-007 cree el bucket
+    `candidate-cvs` con RLS. Esa parte queda para F1-007.
 
 - **F1-006a interviews/evaluations ingest** ✅ done — 2026-04-18 —
   commits `ab61d0b` (migration) → `7b346e9` (RED) → `1f8ef78` (GREEN).
