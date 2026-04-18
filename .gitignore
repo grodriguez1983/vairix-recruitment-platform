@@ -50,3 +50,4 @@ Thumbs.db
 .cache/
 .turbo/
 *.tsbuildinfo
+playwright/
