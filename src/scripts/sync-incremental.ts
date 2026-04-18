@@ -32,6 +32,7 @@ import { customFieldsSyncer } from '../lib/sync/custom-fields';
 import { candidatesSyncer } from '../lib/sync/candidates';
 import { applicationsSyncer } from '../lib/sync/applications';
 import { notesSyncer } from '../lib/sync/notes';
+import { interviewsSyncer } from '../lib/sync/interviews';
 
 const SYNCERS: Record<string, EntitySyncer<unknown>> = {
   stages: stagesSyncer as EntitySyncer<unknown>,
@@ -41,7 +42,9 @@ const SYNCERS: Record<string, EntitySyncer<unknown>> = {
   candidates: candidatesSyncer as EntitySyncer<unknown>,
   applications: applicationsSyncer as EntitySyncer<unknown>,
   notes: notesSyncer as EntitySyncer<unknown>,
-  // evaluations: no documented Teamtailor endpoint (VAIRIX sources externally).
+  // `/v1/interviews` → evaluations + evaluation_answers. Keyed as
+  // 'evaluations' to match sync_state.entity.
+  evaluations: interviewsSyncer as EntitySyncer<unknown>,
   // files: pending F1-007 (needs [VERIFICAR] /v1/uploads shape).
 };
 

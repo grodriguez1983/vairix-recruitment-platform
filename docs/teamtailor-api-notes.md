@@ -194,6 +194,32 @@ para poblar el campo `evaluator` en `evaluations`.
 
 Comentarios asociados a un candidate.
 
+### 5.6b `GET /v1/interviews` (🕵️ descubierto 2026-04-18)
+
+**No figura en la docs pública** pero responde 200 y retorna las
+evaluaciones completas del tenant (1908 en VAIRIX). Cada `interview`:
+
+- `attributes`: `note` (free-text → `evaluations.notes`), `status`
+  (`published | draft`), `created-at`, `updated-at`.
+- `relationships`: `candidate` (REQUIRED), `job`, `user`
+  (evaluador), `answers` (array).
+
+Con `?include=answers,answers.question` cada página sideloada trae
+los `answer` y las `question` referenciadas. Cada answer carga
+`attributes` con los cinco posibles slots tipados según
+`question-type`: `text | range | boolean | number | date`
+(lower-case en el answer; PascalCase en la question).
+
+**Custom questions del tenant**: Teamtailor admite plantillas de
+interview-kit con questions custom. En VAIRIX,
+`question_id=24016` es el campo `"Información para CV"` (Text) que
+guarda una URL a un Google Sheet con la normalización del CV al
+formato VAIRIX. El syncer no bakea IDs de tenant: cada answer cae
+en `evaluation_answers` con `question_tt_id` + columna tipada.
+
+Cursor incremental: `filter[updated-at][from]=<iso>`. Paginación y
+rate-limit se comportan igual que el resto de endpoints.
+
 ### 5.7 `GET /v1/uploads` o resumes
 
 **[VERIFICAR]** El endpoint exacto y estructura de descarga de CVs.

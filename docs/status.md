@@ -5,12 +5,33 @@
 > el git log).
 
 **Última actualización**: 2026-04-18
-**Última sesión**: 2026-04-18 — F1-006 notes, F1-008 CV parser, F1-012 tags, F1-013 shortlists, F2-002 rejection normalizer (ready-to-run), F2-004 sync_errors admin, F3-001 profile+notes+cv embeddings, F3-002 semantic search, F3-003 hybrid search
+**Última sesión**: 2026-04-18 — F1-006a interviews/evaluations ingest (unbloquea F1-006 desde TT; ver nota), F1-006 notes, F1-008 CV parser, F1-012 tags, F1-013 shortlists, F2-002 rejection normalizer (ready-to-run), F2-004 sync_errors admin, F3-001 profile+notes+cv embeddings, F3-002 semantic search, F3-003 hybrid search
 **Fase activa**: **Fase 1 — Fundación** (+ F2-002/F2-004 adelantadas, F3-001 profile+notes+cv slices, F3-002 y F3-003 base)
 
 ---
 
 ## ✅ Completado
+
+- **F1-006a interviews/evaluations ingest** ✅ done — 2026-04-18 —
+  commits `ab61d0b` (migration) → `7b346e9` (RED) → `1f8ef78` (GREEN).
+  - **Descubrimiento clave**: `/v1/interviews` está expuesto por TT
+    (1908 registros en el tenant VAIRIX) a pesar de no estar en la
+    docs pública. Carga `note`, `status`, relationships candidate/
+    job/user y sideload `answers`/`questions`. Esto **unbloquea F1-006
+    desde TT** sin depender de Google Docs. La planilla CV por
+    candidato sigue externa (F1-006b pendiente, pide auth a Google).
+  - Migration `20260418220000_evaluation_answers.sql` +
+    `20260418220001_rls_evaluation_answers.sql`: scorecard Q&A con
+    columnas tipadas (`value_text|number|boolean|date|range`) keyed
+    by `question_tt_id`. Evita bakear IDs custom del tenant en schema.
+    Policies espejan `evaluations` (recruiter R, admin R/W).
+  - `src/lib/sync/interviews.ts`: syncer con `includesSideloads=true`
+    y `include=answers,answers.question`. Candidate requerido →
+    orphan a `sync_errors`. Resuelve `application_id` por
+    `(candidate_id, job_id)` lookup. Idempotente.
+  - Wired a CLI como `pnpm sync:incremental evaluations`.
+  - 2 integration tests (happy path + idempotencia) + fixture con
+    la URL real de "Información para CV" (q=24016) intacta.
 
 - **Embeddings worker hardening** ✅ done — 2026-04-18 — rango de
   commits `28181bc..6d2e4f6`.

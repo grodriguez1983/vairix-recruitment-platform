@@ -27,8 +27,9 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 
 ## Fase 1 — Fundación
 
-> **Estado al 2026-04-18**: 11 / 15 items ✅ done; 2 🏃 parcial
-> (F1-006 evaluations, F1-008 full wiring), 1 🚫 bloqueado (F1-007),
+> **Estado al 2026-04-18**: 12 / 15 items ✅ done (F1-006a ingest de
+> evaluations desde TT cerrado); 2 🏃 parcial (F1-006b CV Sheet worker
+> pendiente, F1-008 full wiring), 1 🚫 bloqueado (F1-007),
 > 1 🏃 parcial derivado (F1-011 tabs faltantes).
 > Ver `docs/status.md` para detalle por sesión.
 
@@ -165,13 +166,15 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 
 ---
 
-### F1-006 — Syncers por entidad (users, jobs, candidates, applications, evaluations, notes) 🏃 PARTIAL (2026-04-18, `1b208ff`)
+### F1-006 — Syncers por entidad (users, jobs, candidates, applications, evaluations, notes) 🏃 PARTIAL (2026-04-18, `1f8ef78`)
 
-> ✅ stages, users, jobs, candidates (+ custom-field-values sideload), applications, **notes**.
-> 🚫 **evaluations bloqueado**: Teamtailor no expone `/v1/evaluations`. Las
-> evaluaciones reales viven en Google Docs por llamado (ver auto-memory
-> `project_custom_data_sources.md`). Requiere decisión de ingest strategy
-> antes de implementar.
+> ✅ stages, users, jobs, candidates (+ custom-field-values sideload),
+> applications, notes, **evaluations (F1-006a)**.
+> 🔜 **F1-006b VAIRIX CV Sheet ingestor** pendiente: la URL al Google Sheet
+> por candidato llega intacta en `evaluation_answers.value_text`
+> (question_tt_id=24016, "Información para CV"). Falta un worker que
+> descargue esas planillas. Requiere auth a Google Drive/Sheets (usuario
+> autorizará cuando llegue el turno).
 
 **Depende de**: F1-005.
 
