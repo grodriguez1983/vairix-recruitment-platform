@@ -1,0 +1,55 @@
+{
+  "data": [
+    {
+      "id": "7001",
+      "type": "jobs",
+      "attributes": {
+        "title": "Senior Backend Engineer",
+        "status": "open",
+        "pitch": "Build the payments core.",
+        "body": "We are looking for a seasoned backend engineer...",
+        "created-at": "2026-01-10T10:00:00Z",
+        "updated-at": "2026-02-20T10:00:00Z"
+      }
+    },
+    {
+      "id": "7002",
+      "type": "jobs",
+      "attributes": {
+        "title": "Product Designer",
+        "status": "draft",
+        "pitch": null,
+        "body": null,
+        "created-at": "2026-01-12T10:00:00Z",
+        "updated-at": "2026-02-21T10:00:00Z"
+      }
+    },
+    {
+      "id": "7003",
+      "type": "jobs",
+      "attributes": {
+        "title": "Legacy Role",
+        "status": "archived",
+        "pitch": null,
+        "body": null,
+        "created-at": "2025-05-01T10:00:00Z",
+        "updated-at": "2025-12-15T10:00:00Z"
+      }
+    },
+    {
+      "id": "7004",
+      "type": "jobs",
+      "attributes": {
+        "title": "Unknown Status Job",
+        "status": "weird-new-status",
+        "pitch": null,
+        "body": null,
+        "created-at": "2026-02-01T10:00:00Z",
+        "updated-at": "2026-02-22T10:00:00Z"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://tt.test/v1/jobs?page%5Bnumber%5D=1"
+  }
+}
