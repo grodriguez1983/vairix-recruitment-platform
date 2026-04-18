@@ -27,7 +27,12 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 
 ## Fase 1 — Fundación
 
-### F1-001 — Bootstrap del repo ⏳ TODO
+> **Estado al 2026-04-18**: 11 / 15 items ✅ done; 2 🏃 parcial
+> (F1-006 evaluations, F1-008 full wiring), 1 🚫 bloqueado (F1-007),
+> 1 🏃 parcial derivado (F1-011 tabs faltantes).
+> Ver `docs/status.md` para detalle por sesión.
+
+### F1-001 — Bootstrap del repo ✅ DONE (2026-04-14, `078f6f2`)
 
 **Prompt**:
 
@@ -48,7 +53,7 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 
 ---
 
-### F1-002 — Supabase local + primera migración ⏳ TODO
+### F1-002 — Supabase local + primera migración ✅ DONE (2026-04-14, `be7d1f9`)
 
 **Depende de**: F1-001.
 
@@ -71,7 +76,7 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 
 ---
 
-### F1-003 — Schema de dominio + RLS base ⏳ TODO
+### F1-003 — Schema de dominio + RLS base ✅ DONE (2026-04-15, `04789fa`..`dbb324f`)
 
 **Depende de**: F1-002.
 
@@ -100,7 +105,7 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 
 ---
 
-### F1-004 — Cliente Teamtailor con rate limit ⏳ TODO
+### F1-004 — Cliente Teamtailor con rate limit ✅ DONE (2026-04-16, `09b52a7` + `f23e30a`)
 
 **Depende de**: F1-001.
 
@@ -128,7 +133,7 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 
 ---
 
-### F1-005 — Skeleton de ETL con sync_state ⏳ TODO
+### F1-005 — Skeleton de ETL con sync_state ✅ DONE (2026-04-17, `4f48cbe` + `956bd17`)
 
 **Depende de**: F1-003, F1-004.
 
@@ -160,7 +165,13 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 
 ---
 
-### F1-006 — Syncers por entidad (users, jobs, candidates, applications, evaluations, notes) ⏳ TODO
+### F1-006 — Syncers por entidad (users, jobs, candidates, applications, evaluations, notes) 🏃 PARTIAL (2026-04-18, `1b208ff`)
+
+> ✅ stages, users, jobs, candidates (+ custom-field-values sideload), applications, **notes**.
+> 🚫 **evaluations bloqueado**: Teamtailor no expone `/v1/evaluations`. Las
+> evaluaciones reales viven en Google Docs por llamado (ver auto-memory
+> `project_custom_data_sources.md`). Requiere decisión de ingest strategy
+> antes de implementar.
 
 **Depende de**: F1-005.
 
@@ -186,7 +197,13 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 
 ---
 
-### F1-007 — CV download + Storage upload ⏳ TODO
+### F1-007 — CV download + Storage upload 🚫 BLOCKED
+
+> **Blocker**: `docs/teamtailor-api-notes.md` marca el shape de `/v1/uploads`
+> como `[VERIFICAR]`. Antes de escribir el downloader hay que confirmar
+> con una llamada real a TT el formato del payload (especialmente si
+> viene como endpoint propio vs. sideloaded en `/v1/candidates`).
+> El parser F1-008 ya está listo para consumir lo que resulte.
 
 **Depende de**: F1-006.
 
@@ -214,7 +231,13 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 
 ---
 
-### F1-008 — CV parser (pdf-parse, mammoth) ⏳ TODO
+### F1-008 — CV parser (pdf-parse, mammoth) 🏃 PARTIAL (2026-04-18, `6f3cd33`)
+
+> ✅ Dispatcher puro en `src/lib/cv/parse.ts` con error codes tipados
+> y 12 unit tests. Deps inyectadas (`parsePdf`, `parseDocx`).
+> ⏳ **Pendiente**: wiring a Storage webhook + worker que haga
+> `download → parseCV → upsert files.text + content_hash`.
+> Depende de F1-007 (ver arriba).
 
 **Depende de**: F1-007.
 
@@ -242,7 +265,7 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 
 ---
 
-### F1-009 — Auth + layout UI base ⏳ TODO
+### F1-009 — Auth + layout UI base ✅ DONE (2026-04-18, `5fa2e07` + `6928c55`)
 
 **Depende de**: F1-003.
 
@@ -271,7 +294,7 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 
 ---
 
-### F1-010 — Búsqueda estructurada ⏳ TODO
+### F1-010 — Búsqueda estructurada ✅ DONE (2026-04-18, `537b0cd`..`593e3f2`)
 
 **Depende de**: F1-006, F1-009.
 
@@ -298,7 +321,12 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 
 ---
 
-### F1-011 — Perfil consolidado del candidate ⏳ TODO
+### F1-011 — Perfil consolidado del candidate 🏃 PARTIAL (2026-04-18, `53ca65c` + `03e20b7`)
+
+> ✅ Identity header, applications list, custom fields ("Metadata VAIRIX"),
+> tags section, "Add to shortlist" form.
+> ⏳ **Pendientes** (dependen de F1-007/F1-008 full y F1-006 evaluations):
+> tabs de CV viewer (iframe de signed URL), Evaluations, Notes.
 
 **Depende de**: F1-010, F1-008.
 
@@ -320,7 +348,7 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 
 ---
 
-### F1-012 — Tags manuales ⏳ TODO
+### F1-012 — Tags manuales ✅ DONE (2026-04-18, `f7036bb`)
 
 **Depende de**: F1-011.
 
@@ -335,7 +363,7 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 
 ---
 
-### F1-013 — Shortlists ⏳ TODO
+### F1-013 — Shortlists ✅ DONE (2026-04-18, `a506e34`..`2e9df5c`)
 
 **Depende de**: F1-011.
 
@@ -352,7 +380,7 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 
 ---
 
-### F1-014 — Hooks + CI pipeline ⏳ TODO
+### F1-014 — Hooks + CI pipeline ✅ DONE (2026-04-17, `1db2e5c` + `.github/workflows/ci.yml`)
 
 **Depende de**: F1-001.
 
@@ -380,7 +408,7 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 
 ---
 
-### F1-015 — Runbook del backfill inicial ⏳ TODO
+### F1-015 — Runbook del backfill inicial ✅ DONE (`docs/runbooks/initial-backfill.md`)
 
 **Depende de**: F1-006, F1-008.
 
