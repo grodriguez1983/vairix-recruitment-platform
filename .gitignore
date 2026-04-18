@@ -27,6 +27,8 @@ reports/
 supabase/.branches
 supabase/.temp/
 supabase/volumes/
+# Studio scratch queries — not part of the repo
+supabase/snippets/
 
 # logs
 *.log
