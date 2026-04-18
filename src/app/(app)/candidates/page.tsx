@@ -125,7 +125,8 @@ export default async function CandidatesPage({ searchParams }: PageProps): Promi
     filters.status !== null ||
     filters.rejectedAfter !== null ||
     filters.rejectedBefore !== null ||
-    filters.jobId !== null;
+    filters.jobId !== null ||
+    filters.hasVairixCvSheet === true;
 
   // Preserve filters across pagination.
   const baseParams = new URLSearchParams();
@@ -134,6 +135,7 @@ export default async function CandidatesPage({ searchParams }: PageProps): Promi
   if (filters.rejectedAfter) baseParams.set('rejected_after', filters.rejectedAfter);
   if (filters.rejectedBefore) baseParams.set('rejected_before', filters.rejectedBefore);
   if (filters.jobId) baseParams.set('job_id', filters.jobId);
+  if (filters.hasVairixCvSheet === true) baseParams.set('has_vairix_cv_sheet', '1');
 
   const initialPanel: PanelFilters = {
     q,
@@ -141,6 +143,7 @@ export default async function CandidatesPage({ searchParams }: PageProps): Promi
     rejectedAfter: isoToDateInput(rejectedAfter),
     rejectedBefore: isoToDateInput(rejectedBefore),
     jobId: jobId ?? '',
+    hasVairixCvSheet: hasVairixCvSheet === true,
   };
 
   return (

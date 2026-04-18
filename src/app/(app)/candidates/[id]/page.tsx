@@ -52,6 +52,52 @@ interface ApplicationWithJob {
   jobs: { id: string; title: string } | null;
 }
 
+interface VairixSheetData {
+  url: string | null;
+  uploadedFileName: string | null;
+}
+
+async function fetchVairixSheet(
+  supabase: ReturnType<typeof createClient>,
+  candidateId: string,
+): Promise<VairixSheetData> {
+  // TT URL: latest non-null answer to custom question 24016 on this
+  // candidate's interviews.
+  const { data: evals } = await supabase
+    .from('evaluations')
+    .select('id')
+    .eq('candidate_id', candidateId);
+  const evalIds = (evals ?? [])
+    .map((e) => (e as { id: string | null }).id)
+    .filter((v): v is string => typeof v === 'string');
+
+  let url: string | null = null;
+  if (evalIds.length > 0) {
+    const { data: answers } = await supabase
+      .from('evaluation_answers')
+      .select('value_text, updated_at')
+      .eq('question_tt_id', '24016')
+      .in('evaluation_id', evalIds)
+      .not('value_text', 'is', null)
+      .order('updated_at', { ascending: false })
+      .limit(1);
+    const first = (answers ?? [])[0] as { value_text: string | null } | undefined;
+    url = first?.value_text ?? null;
+  }
+
+  const { data: files } = await supabase
+    .from('files')
+    .select('storage_path')
+    .eq('candidate_id', candidateId)
+    .eq('kind', 'vairix_cv_sheet')
+    .is('deleted_at', null)
+    .limit(1);
+  const uploadedFileName =
+    ((files ?? [])[0] as { storage_path: string | null } | undefined)?.storage_path ?? null;
+
+  return { url, uploadedFileName };
+}
+
 interface CustomFieldValueRow {
   id: string;
   field_type: string;
@@ -165,10 +211,13 @@ export default async function CandidateProfilePage({ params }: PageProps): Promi
     .filter((v) => v.custom_fields !== null)
     .sort((a, b) => (a.custom_fields?.name ?? '').localeCompare(b.custom_fields?.name ?? ''));
 
-  const [tags, allTagNames, activeShortlists] = await Promise.all([
+  const [tags, allTagNames, activeShortlists, vairixSheet] = await Promise.all([
     listTagsForCandidate(supabase, c.id).catch(() => []),
     listAllTagNames(supabase).catch(() => [] as string[]),
     listActiveShortlists(supabase).catch(() => []),
+    fetchVairixSheet(supabase, c.id).catch(
+      () => ({ url: null, uploadedFileName: null }) as VairixSheetData,
+    ),
   ]);
 
   const shortlistOptions = activeShortlists.map((sl) => ({ id: sl.id, name: sl.name }));
@@ -300,6 +349,49 @@ export default async function CandidateProfilePage({ params }: PageProps): Promi
             ))}
           </ul>
         )}
+      </section>
+
+      <section className="mb-6">
+        <h2 className="mb-3 font-display text-base font-semibold text-text-primary">
+          Planilla VAIRIX
+        </h2>
+        <div className="rounded-lg border border-border bg-surface p-5">
+          {vairixSheet.url || vairixSheet.uploadedFileName ? (
+            <dl className="flex flex-col gap-3 text-sm">
+              {vairixSheet.url && (
+                <div className="flex min-w-0 flex-col gap-1">
+                  <dt className="text-xs text-text-muted">Link (Teamtailor)</dt>
+                  <dd className="break-words">
+                    <a
+                      href={vairixSheet.url}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="font-mono text-xs text-accent hover:underline underline-offset-4"
+                    >
+                      {vairixSheet.url} ↗
+                    </a>
+                  </dd>
+                </div>
+              )}
+              {vairixSheet.uploadedFileName && (
+                <div className="flex min-w-0 flex-col gap-1">
+                  <dt className="text-xs text-text-muted">Archivo subido</dt>
+                  <dd className="break-words font-mono text-xs text-text-primary">
+                    {vairixSheet.uploadedFileName}
+                  </dd>
+                </div>
+              )}
+            </dl>
+          ) : (
+            <p className="text-sm text-text-muted">
+              Sin planilla VAIRIX asociada. Esperá a la sincronización con Teamtailor o subí el
+              archivo manualmente.
+            </p>
+          )}
+          <p className="mt-4 border-t border-border pt-3 text-xs text-text-muted">
+            Carga manual disponible en F1-007 (bucket de Storage).
+          </p>
+        </div>
       </section>
 
       <CandidateTags candidateId={c.id} initialTags={tags} allTagNames={allTagNames} />

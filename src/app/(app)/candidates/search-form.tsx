@@ -32,6 +32,7 @@ export interface PanelFilters {
   rejectedAfter: string;
   rejectedBefore: string;
   jobId: string;
+  hasVairixCvSheet: boolean;
 }
 
 const STATUS_OPTIONS: readonly { value: string; label: string }[] = [
@@ -48,6 +49,7 @@ function activeFilterCount(f: PanelFilters): number {
   if (f.rejectedAfter) n += 1;
   if (f.rejectedBefore) n += 1;
   if (f.jobId) n += 1;
+  if (f.hasVairixCvSheet) n += 1;
   return n;
 }
 
@@ -81,6 +83,7 @@ export function SearchForm({
       rejectedAfter: '',
       rejectedBefore: '',
       jobId: '',
+      hasVairixCvSheet: false,
     };
     setValues(cleared);
     startTransition(() => {
@@ -97,6 +100,7 @@ export function SearchForm({
     if (values.rejectedAfter) params.set('rejected_after', toIsoStart(values.rejectedAfter));
     if (values.rejectedBefore) params.set('rejected_before', toIsoStart(values.rejectedBefore));
     if (values.jobId) params.set('job_id', values.jobId);
+    if (values.hasVairixCvSheet) params.set('has_vairix_cv_sheet', '1');
     const query = params.toString();
     startTransition(() => {
       router.push(query ? `/candidates?${query}` : '/candidates');
@@ -209,6 +213,21 @@ export function SearchForm({
                 </option>
               ))}
             </select>
+          </label>
+
+          <label className="col-span-full flex items-center gap-2 text-xs text-text-primary sm:col-span-2 lg:col-span-4">
+            <input
+              type="checkbox"
+              checked={values.hasVairixCvSheet}
+              onChange={(e) => update('hasVairixCvSheet', e.target.checked)}
+              className="h-4 w-4 rounded-sm border-border bg-bg text-accent focus:ring-accent"
+            />
+            <span>
+              Only candidates with a VAIRIX CV sheet{' '}
+              <span className="text-text-muted">
+                (Google Sheets link from Teamtailor or uploaded xlsx)
+              </span>
+            </span>
           </label>
 
           {count > 0 && (
