@@ -118,7 +118,7 @@ describe('runProfileEmbeddings (profile source)', () => {
   });
 
   it('first run: embeds candidates with usable content, skips empty', async () => {
-    const provider = createStubProvider({ model: 'stub-test', dim: 8 });
+    const provider = createStubProvider({ model: 'stub-test', dim: 1536 });
     const res = await runProfileEmbeddings(db, provider, { candidateIds: Object.values(ids) });
 
     expect(res.processed).toBe(2); // a, b
@@ -139,7 +139,7 @@ describe('runProfileEmbeddings (profile source)', () => {
   });
 
   it('is idempotent: second run with no changes → zero regeneration', async () => {
-    const provider = createStubProvider({ model: 'stub-test', dim: 8 });
+    const provider = createStubProvider({ model: 'stub-test', dim: 1536 });
     await runProfileEmbeddings(db, provider, { candidateIds: Object.values(ids) });
     const res = await runProfileEmbeddings(db, provider, { candidateIds: Object.values(ids) });
 
@@ -149,7 +149,7 @@ describe('runProfileEmbeddings (profile source)', () => {
   });
 
   it('regenerates when content changes (pitch edited)', async () => {
-    const provider = createStubProvider({ model: 'stub-test', dim: 8 });
+    const provider = createStubProvider({ model: 'stub-test', dim: 1536 });
     await runProfileEmbeddings(db, provider, { candidateIds: Object.values(ids) });
 
     await db
@@ -164,10 +164,10 @@ describe('runProfileEmbeddings (profile source)', () => {
   });
 
   it('regenerates everything when the provider model changes', async () => {
-    const v1 = createStubProvider({ model: 'stub-v1', dim: 8 });
+    const v1 = createStubProvider({ model: 'stub-v1', dim: 1536 });
     await runProfileEmbeddings(db, v1, { candidateIds: Object.values(ids) });
 
-    const v2 = createStubProvider({ model: 'stub-v2', dim: 8 });
+    const v2 = createStubProvider({ model: 'stub-v2', dim: 1536 });
     const res = await runProfileEmbeddings(db, v2, { candidateIds: Object.values(ids) });
 
     expect(res.regenerated).toBe(2); // both a and b, since hash includes model
