@@ -12,6 +12,17 @@
 
 ## ✅ Completado
 
+- **F3-001** 🏃 en curso — 2026-04-18 — Pipeline de embeddings
+  (ADR-005). Sources `profile` y `notes` landeados (`adae0c2..e6bd61e`).
+  - Notes slice: `src/lib/embeddings/sources/notes.ts` (concatenación
+    cronológica, whitespace normalizado, `null` cuando no hay nada
+    útil), `src/lib/embeddings/notes-worker.ts` (mismo patrón que el
+    profile worker: hash-based cache, 1 embedding por candidate con
+    `source_id=null`, service-role requerido), `src/scripts/embed-notes.ts`
+    - `pnpm embed:notes`. 11 tests nuevos (7 unit + 4 integration).
+      Cubre first-run, idempotencia, cambio de note (regen) y cambio
+      de modelo.
+
 - **F3-001** ✅ done (profile source slice) — 2026-04-18 — Pipeline de embeddings (ADR-005), rango de commits `adae0c2..d36ba17`.
   - `src/lib/embeddings/provider.ts` — interfaz `EmbeddingProvider`
     ({ model, dim, embed(texts) }). Vendor lock-in confinado a los
