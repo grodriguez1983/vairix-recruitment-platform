@@ -1,0 +1,159 @@
+{
+  "data": [
+    {
+      "id": "30001",
+      "type": "interviews",
+      "attributes": {
+        "note": "Perfil senior RoR + React. Muy buen nivel técnico y comunicación.",
+        "status": "published",
+        "created-at": "2026-03-01T11:48:39Z",
+        "updated-at": "2026-03-01T11:51:31Z"
+      },
+      "relationships": {
+        "candidate": { "data": { "id": "9001", "type": "candidates" } },
+        "job": { "data": { "id": "8001", "type": "jobs" } },
+        "user": { "data": { "id": "5001", "type": "users" } },
+        "answers": {
+          "data": [
+            { "id": "1205701", "type": "answers" },
+            { "id": "1205702", "type": "answers" },
+            { "id": "1205703", "type": "answers" },
+            { "id": "1205704", "type": "answers" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "30002",
+      "type": "interviews",
+      "attributes": {
+        "note": "Primera impresión positiva. Falta validar inglés.",
+        "status": "draft",
+        "created-at": "2026-03-02T10:00:00Z",
+        "updated-at": "2026-03-02T10:00:00Z"
+      },
+      "relationships": {
+        "candidate": { "data": { "id": "9001", "type": "candidates" } },
+        "job": { "data": null },
+        "user": { "data": { "id": "5001", "type": "users" } },
+        "answers": { "data": [] }
+      }
+    },
+    {
+      "id": "30003",
+      "type": "interviews",
+      "attributes": {
+        "note": "Orphan interview — candidate not yet synced.",
+        "status": "published",
+        "created-at": "2026-03-03T10:00:00Z",
+        "updated-at": "2026-03-03T10:00:00Z"
+      },
+      "relationships": {
+        "candidate": { "data": { "id": "99999", "type": "candidates" } },
+        "answers": { "data": [] }
+      }
+    }
+  ],
+  "included": [
+    {
+      "id": "1205701",
+      "type": "answers",
+      "attributes": {
+        "text": "Rails senior, 5 años. Experiencia en microservicios.",
+        "answer": "Rails senior, 5 años. Experiencia en microservicios.",
+        "question-type": "text",
+        "boolean": null,
+        "number": null,
+        "range": null,
+        "date": null,
+        "created-at": "2026-03-01T11:48:39Z",
+        "updated-at": "2026-03-01T11:51:31Z"
+      },
+      "relationships": {
+        "question": { "data": { "id": "24010", "type": "questions" } }
+      }
+    },
+    {
+      "id": "1205702",
+      "type": "answers",
+      "attributes": {
+        "text": null,
+        "answer": null,
+        "question-type": "range",
+        "boolean": null,
+        "number": null,
+        "range": 4,
+        "date": null,
+        "created-at": "2026-03-01T11:48:39Z",
+        "updated-at": "2026-03-01T11:48:39Z"
+      },
+      "relationships": {
+        "question": { "data": { "id": "24011", "type": "questions" } }
+      }
+    },
+    {
+      "id": "1205703",
+      "type": "answers",
+      "attributes": {
+        "text": "https://docs.google.com/spreadsheets/d/1JNQaO8ojJl9On7v8lrzb2xYRlxHYBt1AnUZY-mNvL2k/edit?gid=0#gid=0",
+        "answer": "https://docs.google.com/spreadsheets/d/1JNQaO8ojJl9On7v8lrzb2xYRlxHYBt1AnUZY-mNvL2k/edit?gid=0#gid=0",
+        "question-type": "text",
+        "boolean": null,
+        "number": null,
+        "range": null,
+        "date": null,
+        "created-at": "2026-03-01T11:48:39Z",
+        "updated-at": "2026-03-01T11:48:39Z"
+      },
+      "relationships": {
+        "question": { "data": { "id": "24016", "type": "questions" } }
+      }
+    },
+    {
+      "id": "1205704",
+      "type": "answers",
+      "attributes": {
+        "text": null,
+        "answer": null,
+        "question-type": "boolean",
+        "boolean": true,
+        "number": null,
+        "range": null,
+        "date": null,
+        "created-at": "2026-03-01T11:48:39Z",
+        "updated-at": "2026-03-01T11:48:39Z"
+      },
+      "relationships": {
+        "question": { "data": { "id": "24017", "type": "questions" } }
+      }
+    },
+    {
+      "id": "16830",
+      "type": "questions",
+      "attributes": { "title": "Expectativas con el cambio", "question-type": "Text" }
+    },
+    {
+      "id": "24010",
+      "type": "questions",
+      "attributes": { "title": "Nivel técnico principales tecnologías", "question-type": "Text" }
+    },
+    {
+      "id": "24011",
+      "type": "questions",
+      "attributes": { "title": "Comunicación técnica", "question-type": "Range" }
+    },
+    {
+      "id": "24016",
+      "type": "questions",
+      "attributes": { "title": "Información para CV", "question-type": "Text" }
+    },
+    {
+      "id": "24017",
+      "type": "questions",
+      "attributes": { "title": "Conclusión avance en proceso", "question-type": "Boolean" }
+    }
+  ],
+  "links": {
+    "self": "https://tt.test/v1/interviews?page%5Bnumber%5D=1"
+  }
+}
