@@ -21,6 +21,7 @@ import { listTagsForCandidate, listAllTagNames } from '@/lib/tags/service';
 
 import { AddToShortlist } from './add-to-shortlist';
 import { CandidateTags } from './candidate-tags';
+import { VairixSheetUpload } from './vairix-sheet-upload';
 
 export const dynamic = 'force-dynamic';
 
@@ -173,7 +174,7 @@ export async function generateMetadata({ params }: PageProps): Promise<{ title: 
 }
 
 export default async function CandidateProfilePage({ params }: PageProps): Promise<JSX.Element> {
-  await requireAuth();
+  const auth = await requireAuth();
 
   if (!UUID_REGEX.test(params.id)) {
     notFound();
@@ -388,9 +389,7 @@ export default async function CandidateProfilePage({ params }: PageProps): Promi
               archivo manualmente.
             </p>
           )}
-          <p className="mt-4 border-t border-border pt-3 text-xs text-text-muted">
-            Carga manual disponible en F1-007 (bucket de Storage).
-          </p>
+          {auth.role === 'admin' && <VairixSheetUpload candidateId={c.id} />}
         </div>
       </section>
 
