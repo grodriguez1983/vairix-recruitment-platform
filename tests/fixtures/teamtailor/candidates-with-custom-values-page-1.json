@@ -1,0 +1,73 @@
+{
+  "data": [
+    {
+      "id": "7001",
+      "type": "candidates",
+      "attributes": {
+        "first-name": "Ada",
+        "last-name": "Lovelace",
+        "email": "ada+sideload@example.test",
+        "sourced": true,
+        "created-at": "2026-01-10T09:00:00Z",
+        "updated-at": "2026-02-15T10:00:00Z"
+      },
+      "relationships": {
+        "custom-field-values": {
+          "data": [
+            { "id": "v-1", "type": "custom-field-values" },
+            { "id": "v-2", "type": "custom-field-values" }
+          ]
+        }
+      }
+    },
+    {
+      "id": "7002",
+      "type": "candidates",
+      "attributes": {
+        "first-name": "Alan",
+        "last-name": "Turing",
+        "email": "alan+sideload@example.test",
+        "sourced": false,
+        "created-at": "2026-01-11T09:00:00Z",
+        "updated-at": "2026-02-16T10:00:00Z"
+      },
+      "relationships": {
+        "custom-field-values": {
+          "data": [{ "id": "v-3", "type": "custom-field-values" }]
+        }
+      }
+    }
+  ],
+  "included": [
+    {
+      "id": "v-1",
+      "type": "custom-field-values",
+      "attributes": { "value": "75000" },
+      "relationships": {
+        "custom-field": { "data": { "id": "465", "type": "custom-fields" } },
+        "owner": { "data": { "id": "7001", "type": "candidates" } }
+      }
+    },
+    {
+      "id": "v-2",
+      "type": "custom-field-values",
+      "attributes": { "value": "2026-01-15" },
+      "relationships": {
+        "custom-field": { "data": { "id": "1458", "type": "custom-fields" } },
+        "owner": { "data": { "id": "7001", "type": "candidates" } }
+      }
+    },
+    {
+      "id": "v-3",
+      "type": "custom-field-values",
+      "attributes": { "value": "2026-02-20" },
+      "relationships": {
+        "custom-field": { "data": { "id": "1458", "type": "custom-fields" } },
+        "owner": { "data": { "id": "7002", "type": "candidates" } }
+      }
+    }
+  ],
+  "links": {
+    "self": "https://tt.test/v1/candidates?page%5Bnumber%5D=1"
+  }
+}
