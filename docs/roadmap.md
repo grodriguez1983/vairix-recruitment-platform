@@ -463,8 +463,9 @@ expandidos acá para no inflar el documento.)
   `semantic_search_embeddings` (cosine similarity sobre embeddings,
   RLS aplica vía `security invoker`), servicio `semanticSearchCandidates`
   (embed query + llamada RPC + dedupe opcional por candidate_id).
-  9 tests nuevos (5 unit + 4 integration). Pendiente: UI/API endpoint
-  para UC-02 y hydration de candidate cards.
+  9 tests nuevos (5 unit + 4 integration). API endpoint
+  `POST /api/search/semantic` disponible (`6b27af4`). Pendiente: UI
+  para UC-02 y hydration de candidate cards en la respuesta.
 - F3-003 — Búsqueda híbrida (structured + vector).
 - F3-004 — OCR opt-in para CVs escaneados.
 

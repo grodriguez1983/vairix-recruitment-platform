@@ -29,8 +29,13 @@ max_results int default 20, source_type_filter text[] default null)`
     types matcheados, ordenado score DESC.
   - Tests: 5 unit (dedupe helper) + 4 integration (end-to-end con
     stub provider, source filter, limit, exact-match ≈ 1.0).
-  - Pendiente: UI/API endpoint (UC-02 pure semantic), hydration
-    de candidate cards, hybrid search (F3-003).
+  - `src/app/api/search/semantic/route.ts` — `POST /api/search/semantic`
+    expuesto: body Zod `{query, limit?, sourceTypes?}`, 401 anon,
+    503 si falta `OPENAI_API_KEY`, respuesta `{matches: [{candidateId,
+bestScore, matchedSources}]}`. Comparte `resolveEmbeddingProvider()`
+    con los dos CLIs (refactor que dedup-ea el switch stub/OpenAI).
+  - Pendiente: UI (UC-02), hydration de candidate cards,
+    hybrid search (F3-003).
 
 - **F3-001** 🏃 en curso — 2026-04-18 — Pipeline de embeddings
   (ADR-005). Sources `profile` y `notes` landeados (`adae0c2..e6bd61e`).
