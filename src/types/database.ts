@@ -1179,6 +1179,7 @@ export type Database = {
           }
       semantic_search_embeddings: {
         Args: {
+          candidate_id_filter?: string[]
           source_type_filter?: string[]
           max_results?: number
           query_embedding: number[]
