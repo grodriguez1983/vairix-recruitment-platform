@@ -25,6 +25,12 @@ export interface SemanticSearchOptions {
   query: string;
   limit?: number;
   sourceTypes?: readonly EmbeddingSourceType[];
+  /**
+   * Optional whitelist of candidate_ids. When set, the RPC restricts
+   * similarity to this set — used by hybrid search (UC-01) to rerank
+   * a pre-filtered structured result.
+   */
+  candidateIds?: readonly string[];
 }
 
 export interface SemanticSearchHit {
@@ -66,6 +72,10 @@ export async function semanticSearchCandidates(
     max_results: options.limit ?? DEFAULT_LIMIT,
     source_type_filter:
       options.sourceTypes && options.sourceTypes.length > 0 ? [...options.sourceTypes] : undefined,
+    candidate_id_filter:
+      options.candidateIds && options.candidateIds.length > 0
+        ? [...options.candidateIds]
+        : undefined,
   });
   if (error) throw new Error(`semantic search RPC failed: ${error.message}`);
 

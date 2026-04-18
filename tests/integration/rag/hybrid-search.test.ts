@@ -52,7 +52,7 @@ async function seed(): Promise<Record<string, string>> {
 
   const { data: job, error: jErr } = await db
     .from('jobs')
-    .insert({ teamtailor_id: JOB_TT_ID, title: `${PREFIX}job`, status: 'published' })
+    .insert({ teamtailor_id: JOB_TT_ID, title: `${PREFIX}job`, status: 'open' })
     .select('id')
     .single();
   if (jErr) throw jErr;
@@ -95,18 +95,21 @@ async function seed(): Promise<Record<string, string>> {
   // Two rejected, one active — all on the same job.
   const { error: aErr } = await db.from('applications').insert([
     {
+      teamtailor_id: `${PREFIX}app-rb`,
       candidate_id: ids[`${PREFIX}rejected-backend`]!,
       job_id: jobId,
       status: 'rejected',
       rejected_at: '2024-06-01T10:00:00Z',
     },
     {
+      teamtailor_id: `${PREFIX}app-rf`,
       candidate_id: ids[`${PREFIX}rejected-frontend`]!,
       job_id: jobId,
       status: 'rejected',
       rejected_at: '2024-06-15T10:00:00Z',
     },
     {
+      teamtailor_id: `${PREFIX}app-ab`,
       candidate_id: ids[`${PREFIX}active-backend`]!,
       job_id: jobId,
       status: 'active',
