@@ -16,6 +16,16 @@ create extension if not exists "uuid-ossp";
 create extension if not exists "vector";
 create extension if not exists "pg_trgm";
 
+-- 1.1. Supabase hosted installs extensions into the `extensions`
+-- schema, which is NOT in the default search_path of the `postgres`
+-- role. Without this alter, `uuid_generate_v4()` (and any other
+-- extension function) fails to resolve from migrations that follow.
+-- We pin search_path to `public, extensions` at the database level so
+-- every new connection — including the ones opened by subsequent
+-- migrations — sees both schemas. Idempotent and safe to re-run.
+-- See docs/adr/adr-009-supabase-hosted-search-path.md.
+alter database postgres set search_path = public, extensions;
+
 -- 2. Generic updated_at trigger function.
 -- Used by every domain table via:
 --   create trigger trg_<table>_updated_at
