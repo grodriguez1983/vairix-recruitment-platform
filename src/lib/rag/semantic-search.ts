@@ -39,18 +39,67 @@ export interface SemanticSearchCandidateMatch {
   matchedSources: EmbeddingSourceType[];
 }
 
-// RED stub — real implementation lands in the GREEN commit.
-export async function semanticSearchCandidates(
-  _db: SupabaseClient,
-  _provider: EmbeddingProvider,
-  _options: SemanticSearchOptions,
-): Promise<SemanticSearchHit[]> {
-  throw new Error('not implemented');
+const DEFAULT_LIMIT = 20;
+
+function isSourceType(v: string): v is EmbeddingSourceType {
+  return v === 'profile' || v === 'notes' || v === 'cv' || v === 'evaluation';
 }
 
-// RED stub — real implementation lands in the GREEN commit.
+export async function semanticSearchCandidates(
+  db: SupabaseClient,
+  provider: EmbeddingProvider,
+  options: SemanticSearchOptions,
+): Promise<SemanticSearchHit[]> {
+  const query = options.query.trim();
+  if (query.length === 0) return [];
+
+  const [vector] = await provider.embed([query]);
+  if (!vector) throw new Error('semantic search: provider returned no vector');
+  if (vector.length !== provider.dim) {
+    throw new Error(
+      `semantic search: provider returned vector of length ${vector.length}, expected ${provider.dim}`,
+    );
+  }
+
+  const { data, error } = await db.rpc('semantic_search_embeddings', {
+    query_embedding: vector,
+    max_results: options.limit ?? DEFAULT_LIMIT,
+    source_type_filter:
+      options.sourceTypes && options.sourceTypes.length > 0 ? [...options.sourceTypes] : undefined,
+  });
+  if (error) throw new Error(`semantic search RPC failed: ${error.message}`);
+
+  const hits: SemanticSearchHit[] = [];
+  for (const row of data ?? []) {
+    const sourceType = row.source_type;
+    if (!isSourceType(sourceType)) continue;
+    hits.push({
+      candidateId: row.candidate_id,
+      sourceType,
+      score: Number(row.score),
+    });
+  }
+  return hits;
+}
+
 export function dedupeByCandidate(
-  _hits: readonly SemanticSearchHit[],
+  hits: readonly SemanticSearchHit[],
 ): SemanticSearchCandidateMatch[] {
-  throw new Error('not implemented');
+  const byId = new Map<string, SemanticSearchCandidateMatch>();
+  for (const h of hits) {
+    const existing = byId.get(h.candidateId);
+    if (!existing) {
+      byId.set(h.candidateId, {
+        candidateId: h.candidateId,
+        bestScore: h.score,
+        matchedSources: [h.sourceType],
+      });
+      continue;
+    }
+    if (h.score > existing.bestScore) existing.bestScore = h.score;
+    if (!existing.matchedSources.includes(h.sourceType)) {
+      existing.matchedSources.push(h.sourceType);
+    }
+  }
+  return Array.from(byId.values()).sort((a, b) => b.bestScore - a.bestScore);
 }
