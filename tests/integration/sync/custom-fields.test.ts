@@ -71,10 +71,7 @@ describe('runIncremental + customFieldsSyncer', () => {
   const db = svc();
 
   beforeEach(async () => {
-    await db
-      .from('custom_fields')
-      .delete()
-      .neq('id', '00000000-0000-0000-0000-000000000000');
+    await db.from('custom_fields').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await db
       .from('sync_state')
       .update({
@@ -91,9 +88,7 @@ describe('runIncremental + customFieldsSyncer', () => {
   });
 
   it('upserts custom fields preserving api_name, field_type, is_private', async () => {
-    server.use(
-      http.get(`${BASE_URL}/custom-fields`, () => HttpResponse.json(customFieldsPage1)),
-    );
+    server.use(http.get(`${BASE_URL}/custom-fields`, () => HttpResponse.json(customFieldsPage1)));
 
     const result = await runIncremental(customFieldsSyncer, {
       db,
@@ -106,20 +101,20 @@ describe('runIncremental + customFieldsSyncer', () => {
     const { data: rows, error } = await db
       .from('custom_fields')
       .select('teamtailor_id, api_name, field_type, owner_type, is_private, is_searchable')
-      .in('teamtailor_id', ['465', '1458'])
-      .order('teamtailor_id');
+      .in('teamtailor_id', ['465', '1458']);
     expect(error).toBeNull();
     expect(rows).toHaveLength(2);
+    const byId = Object.fromEntries((rows ?? []).map((r) => [r.teamtailor_id, r]));
     // 465 (Asp salariales) — private text field
-    expect(rows![0]!.api_name).toBe('asp-salariales');
-    expect(rows![0]!.field_type).toBe('CustomField::Text');
-    expect(rows![0]!.owner_type).toBe('Candidate');
-    expect(rows![0]!.is_private).toBe(true);
-    expect(rows![0]!.is_searchable).toBe(true);
+    expect(byId['465']!.api_name).toBe('asp-salariales');
+    expect(byId['465']!.field_type).toBe('CustomField::Text');
+    expect(byId['465']!.owner_type).toBe('Candidate');
+    expect(byId['465']!.is_private).toBe(true);
+    expect(byId['465']!.is_searchable).toBe(true);
     // 1458 (Último seguimiento) — public date field
-    expect(rows![1]!.api_name).toBe('ltimo-seguimiento');
-    expect(rows![1]!.field_type).toBe('CustomField::Date');
-    expect(rows![1]!.is_private).toBe(false);
+    expect(byId['1458']!.api_name).toBe('ltimo-seguimiento');
+    expect(byId['1458']!.field_type).toBe('CustomField::Date');
+    expect(byId['1458']!.is_private).toBe(false);
 
     const state = await readSyncState(db, 'custom-fields');
     expect(state.lastRunStatus).toBe('success');
@@ -127,9 +122,7 @@ describe('runIncremental + customFieldsSyncer', () => {
   });
 
   it('is idempotent: running twice keeps the same 2 rows', async () => {
-    server.use(
-      http.get(`${BASE_URL}/custom-fields`, () => HttpResponse.json(customFieldsPage1)),
-    );
+    server.use(http.get(`${BASE_URL}/custom-fields`, () => HttpResponse.json(customFieldsPage1)));
 
     await runIncremental(customFieldsSyncer, { db, client: makeTeamtailorClient() });
     await runIncremental(customFieldsSyncer, { db, client: makeTeamtailorClient() });

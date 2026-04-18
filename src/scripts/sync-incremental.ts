@@ -28,6 +28,7 @@ import { runIncremental, type EntitySyncer } from '../lib/sync/run';
 import { stagesSyncer } from '../lib/sync/stages';
 import { usersSyncer } from '../lib/sync/users';
 import { jobsSyncer } from '../lib/sync/jobs';
+import { customFieldsSyncer } from '../lib/sync/custom-fields';
 import { candidatesSyncer } from '../lib/sync/candidates';
 import { applicationsSyncer } from '../lib/sync/applications';
 
@@ -35,6 +36,7 @@ const SYNCERS: Record<string, EntitySyncer<unknown>> = {
   stages: stagesSyncer as EntitySyncer<unknown>,
   users: usersSyncer as EntitySyncer<unknown>,
   jobs: jobsSyncer as EntitySyncer<unknown>,
+  'custom-fields': customFieldsSyncer as EntitySyncer<unknown>,
   candidates: candidatesSyncer as EntitySyncer<unknown>,
   applications: applicationsSyncer as EntitySyncer<unknown>,
   // evaluations, notes, files se agregan en el resto de F1-006.
