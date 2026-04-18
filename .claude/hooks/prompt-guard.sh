@@ -8,6 +8,11 @@
 # ===========================================================
 set -u
 
+# Chronicle triggers mirror — dispara warnings deterministas sin
+# depender de que Claude llame a mcp__chronicle__chronicle action=check.
+# shellcheck disable=SC1091
+source "$(dirname "$0")/chronicle-triggers.sh"
+
 input=$(cat)
 
 if command -v jq >/dev/null 2>&1; then
@@ -15,6 +20,9 @@ if command -v jq >/dev/null 2>&1; then
 else
   user_prompt=$(echo "$input" | grep -oE '"prompt"[^}]*' | head -1)
 fi
+
+# Disparar cualquier chronicle trigger cuyo keyword aparezca en el prompt.
+chronicle_run_triggers "$user_prompt"
 
 # Señales de operaciones sensibles → recordatorio al usuario
 sensitive_signals=(

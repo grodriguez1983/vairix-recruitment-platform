@@ -8,6 +8,11 @@
 # ===========================================================
 set -u
 
+# Chronicle triggers mirror — dispara warnings deterministas sobre el
+# comando a ejecutar, sin depender de que Claude llame a chronicle.
+# shellcheck disable=SC1091
+source "$(dirname "$0")/chronicle-triggers.sh"
+
 # Leer input JSON completo
 input=$(cat)
 
@@ -22,6 +27,11 @@ fi
 
 # Solo nos importan comandos Bash
 [[ "$tool_name" != "Bash" ]] && exit 0
+
+# Disparar chronicle triggers cuyo keyword aparezca en el comando.
+# Esto corre ANTES del override CLAUDE_ALLOW_DESTRUCTIVE porque los
+# triggers son informativos — no bloquean, sólo recuerdan el contrato.
+chronicle_run_triggers "$command"
 
 # Si el override está activo, dejar pasar (uso solo local y explícito)
 if [[ "${CLAUDE_ALLOW_DESTRUCTIVE:-}" == "1" ]]; then
