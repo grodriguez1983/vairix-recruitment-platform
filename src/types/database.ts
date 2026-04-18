@@ -588,6 +588,7 @@ export type Database = {
           file_size_bytes: number | null
           file_type: string | null
           id: string
+          is_internal: boolean
           kind: string
           parse_error: string | null
           parsed_at: string | null
@@ -607,6 +608,7 @@ export type Database = {
           file_size_bytes?: number | null
           file_type?: string | null
           id?: string
+          is_internal?: boolean
           kind?: string
           parse_error?: string | null
           parsed_at?: string | null
@@ -626,6 +628,7 @@ export type Database = {
           file_size_bytes?: number | null
           file_type?: string | null
           id?: string
+          is_internal?: boolean
           kind?: string
           parse_error?: string | null
           parsed_at?: string | null
