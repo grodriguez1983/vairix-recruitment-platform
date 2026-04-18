@@ -434,7 +434,10 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 expandidos acá para no inflar el documento.)
 
 - F2-001 — Webhook receiver de Teamtailor.
-- F2-002 — Rejection normalizer job (ADR-007).
+- F2-002 — Rejection normalizer job (ADR-007). ✅ **CÓDIGO LISTO** (2026-04-18,
+  `0a4dbb9`..`1971318`). `src/lib/normalization/{classify,normalizer}.ts` +
+  24 tests verdes. Inactivo en prod hasta que F1-006 evaluations
+  desbloquee datos para procesar.
 - F2-003 — Tags automáticos desde CV.
 - F2-004 — Panel admin para sync errors y needs_review.
 - F2-005 — Observabilidad (logs agregados + métricas Supabase).

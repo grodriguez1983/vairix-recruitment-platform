@@ -5,12 +5,33 @@
 > el git log).
 
 **Última actualización**: 2026-04-18
-**Última sesión**: 2026-04-18 — F1-006 notes, F1-008 CV parser, F1-012 tags, F1-013 shortlists
-**Fase activa**: **Fase 1 — Fundación**
+**Última sesión**: 2026-04-18 — F1-006 notes, F1-008 CV parser, F1-012 tags, F1-013 shortlists, F2-002 rejection normalizer (ready-to-run)
+**Fase activa**: **Fase 1 — Fundación** (+ F2-002 adelantada sin correr en prod)
 
 ---
 
 ## ✅ Completado
+
+- **F2-002** ✅ done (código listo, sin datos en prod) — 2026-04-18 — Rejection normalizer (ADR-007).
+  - `src/lib/normalization/rejection-rules.ts` — tabla versionada
+    de 10 categorías con keywords ES+EN (technical_skills,
+    experience_level, communication, culture_fit,
+    salary_expectations, availability, location, no_show,
+    ghosting, position_filled). Prioridad explícita.
+  - `src/lib/normalization/classify.ts` — función pura
+    `classifyRejectionReason(text)`. Case-insensitive, first-match-wins,
+    fallback a `{ code: 'other', needsReview: true }`. 21 unit tests.
+  - `src/lib/normalization/normalizer.ts` — orquestador
+    `normalizeRejections(db, {force?, batchSize?})`: lee
+    evaluations con `rejection_reason` no-null y category null
+    (a menos que force=true), clasifica, escribe
+    `rejection_category_id` + `needs_review` + `normalization_attempted_at`.
+    Service-role client requerido (es un job interno post-sync,
+    ADR-007 §2). 3 integration tests: batch mixto,
+    idempotencia, force-reclassify.
+  - **No corre en prod aún**: depende de F1-006 evaluations
+    (bloqueado en TT endpoint — ver "Blockers" abajo). El código
+    está listo para activarse apenas haya datos.
 
 - **F1-013** ✅ done — 2026-04-18 — Shortlists CRUD + CSV export (UC-03).
   - `src/lib/shortlists/errors.ts` — `ShortlistError` con codes
