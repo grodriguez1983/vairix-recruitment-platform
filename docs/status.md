@@ -5,12 +5,46 @@
 > el git log).
 
 **Última actualización**: 2026-04-18
-**Última sesión**: 2026-04-18 — F1-006 notes, F1-008 CV parser, F1-012 tags, F1-013 shortlists, F2-002 rejection normalizer (ready-to-run), F2-004 sync_errors admin
-**Fase activa**: **Fase 1 — Fundación** (+ F2-002/F2-004 adelantadas)
+**Última sesión**: 2026-04-18 — F1-006 notes, F1-008 CV parser, F1-012 tags, F1-013 shortlists, F2-002 rejection normalizer (ready-to-run), F2-004 sync_errors admin, F3-001 profile-source embeddings
+**Fase activa**: **Fase 1 — Fundación** (+ F2-002/F2-004 adelantadas, F3-001 profile slice)
 
 ---
 
 ## ✅ Completado
+
+- **F3-001** ✅ done (profile source slice) — 2026-04-18 — Pipeline de embeddings (ADR-005), rango de commits `adae0c2..d36ba17`.
+  - `src/lib/embeddings/provider.ts` — interfaz `EmbeddingProvider`
+    ({ model, dim, embed(texts) }). Vendor lock-in confinado a los
+    archivos de provider (ADR-005 §Consecuencias).
+  - `src/lib/embeddings/hash.ts` — `contentHash(model, content)`:
+    SHA-256 con separador `\x00` entre model y content. El model
+    forma parte del hash → cambiar de modelo invalida todo el caché
+    automáticamente.
+  - `src/lib/embeddings/stub-provider.ts` — provider determinístico
+    para tests y smoke-runs (sin OpenAI). Expande SHA-256 del texto
+    a `dim` floats en [-1, 1). Misma entrada ⇒ mismo vector.
+  - `src/lib/embeddings/openai-provider.ts` — wrapper thin sobre
+    `POST /v1/embeddings`. Realinea la respuesta por `data[].index`.
+    Short-circuit en input vacío. Retries/backoff fuera de acá
+    (worker). 5 unit tests con `globalThis.fetch` stub.
+  - `src/lib/embeddings/sources/profile.ts` —
+    `buildProfileContent({firstName, lastName, headline, summary, tags})`:
+    compone `"<first> <last> — <headline>\n<summary>\nTags: a, b, c"`
+    (tags ordenadas + dedup), normaliza whitespace, devuelve `null`
+    cuando no hay contenido útil ⇒ el worker skipea.
+  - `src/lib/embeddings/profile-worker.ts` —
+    `runProfileEmbeddings(db, provider, {candidateIds?, batchSize?})`:
+    carga candidatos + tags + embeddings existentes en paralelo,
+    compara hash (match ⇒ reuse), regenera solo lo cambiado, upsert
+    manual (read-then-insert/update). Devuelve
+    `{processed, skipped, regenerated, reused}`. 4 integration tests
+    contra Supabase local con stub provider: first-run, idempotencia,
+    content-change, model-change invalida todo.
+  - `src/scripts/embed-profiles.ts` + `pnpm embed:profiles` —
+    CLI con flag `--stub` para smoke. Exit codes 0/2/4.
+  - **Sources pendientes** (mismo patrón, bloqueados por datos):
+    `cv` (depende de F1-007/F1-008), `evaluation` (depende de F1-006
+    evaluations), `notes` (desbloqueado; pendiente de implementar).
 
 - **F2-004** ✅ done (parte sync_errors) — 2026-04-18 — Admin panel de ETL failures.
   - `src/lib/sync-errors/service.ts` — `listSyncErrors` (default

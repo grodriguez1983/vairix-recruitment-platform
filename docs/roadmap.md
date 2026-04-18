@@ -448,7 +448,15 @@ expandidos acá para no inflar el documento.)
 
 ## Fase 3 — Semántica
 
-- F3-001 — Embeddings worker (ADR-005).
+- F3-001 — Embeddings worker (ADR-005). 🏃 **PARCIAL — profile source**
+  (2026-04-18, `adae0c2`..`d36ba17`). Provider abstraction
+  (`EmbeddingProvider` + OpenAI impl + stub determinístico), helper de
+  hash (SHA-256 con model como sal), source builder `profile`, worker
+  `runProfileEmbeddings` (idempotente vía content_hash, invalida caché
+  cuando cambia content o model), CLI `pnpm embed:profiles` con flag
+  `--stub`. 14 tests nuevos (9 unit + 4 integration + 1 CLI metadata).
+  Pendiente: sources `cv` (bloqueado por F1-007/F1-008), `evaluation`
+  (bloqueado por F1-006), `notes` (desbloqueado).
 - F3-002 — Query de búsqueda con embeddings.
 - F3-003 — Búsqueda híbrida (structured + vector).
 - F3-004 — OCR opt-in para CVs escaneados.
