@@ -12,6 +12,33 @@
 
 ## ✅ Completado
 
+- **Embeddings worker hardening** ✅ done — 2026-04-18 — rango de
+  commits `28181bc..6d2e4f6`.
+  - `src/lib/embeddings/worker-runtime.ts` — runtime compartido para
+    los workers por-source. Los tres workers (profile/notes/cv) pasan
+    a ser wrappers de ~80 líneas que sólo aportan su loader
+    `buildContents`. Elimina ~250 líneas duplicadas.
+  - **Bug latente arreglado**: los workers usaban `.limit(batchSize=500)`
+    como tope hard, descartando silenciosamente candidatos >500. El
+    runtime ahora paginea con `.range()` hasta agotar. Test de
+    regresión `worker-pagination.test.ts` (7 candidatos / batchSize=3
+    → 3 páginas, todos embebidos).
+  - **Logs estructurados** (JSON a stderr) en cada `embed.page` y
+    `embed.done`, con pageSize, totales, `reuseRatio`, `durationMs`
+    — base de observabilidad sin decisión de destino (subset de
+    F2-005).
+  - CLI `pnpm embed:all` que corre profile → notes → cv
+    secuencialmente; aborta en la primera falla.
+
+- **Adversarial schema coverage** ✅ done — 2026-04-18 — 35 tests
+  (commit `647d2ab`).
+  - Exporta `semanticSearchRequestSchema` y `hybridSearchRequestSchema`
+    y cubre los bordes de Zod: query vacía/over-sized/non-string,
+    limit fuera de rango/no-entero, sourceTypes desconocidos/excedido,
+    UUID inválido en jobId, datetime no-ISO, status desconocido,
+    coerción empty-string → null, SQL-injection-looking strings
+    (pasan verbatim — parameterization downstream).
+
 - **F3-001 cv slice** ✅ done — 2026-04-18 — CV source para el
   embeddings worker (ADR-005 §Fuentes a embeber), rango de commits
   `11965ca..83996a7`.
