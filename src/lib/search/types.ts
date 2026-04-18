@@ -25,6 +25,14 @@ export interface SearchFilters {
   rejectedAfter: string | null;
   rejectedBefore: string | null;
   jobId: string | null;
+  /**
+   * When `true`, restrict results to candidates with a VAIRIX CV
+   * sheet associated — either the Google Sheets URL stored by
+   * Teamtailor under custom interview question `Información para CV`
+   * (question_tt_id=24016) OR an uploaded xlsx file
+   * (files.kind='vairix_cv_sheet'). `false` / `null` → ignored.
+   */
+  hasVairixCvSheet: boolean | null;
   page: number;
   pageSize: number;
 }

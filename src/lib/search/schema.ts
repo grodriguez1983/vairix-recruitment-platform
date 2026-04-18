@@ -35,6 +35,7 @@ export const searchRequestSchema = z.object({
   rejected_after: nullableIsoDate,
   rejected_before: nullableIsoDate,
   job_id: nullableUuid,
+  has_vairix_cv_sheet: z.boolean().nullable().default(null),
   page: z.coerce.number().int().min(1).max(1000).default(1),
   pageSize: z.coerce.number().int().min(1).max(50).default(20),
 });
@@ -48,6 +49,7 @@ export function requestToFilters(req: SearchRequest): SearchFilters {
     rejectedAfter: req.rejected_after,
     rejectedBefore: req.rejected_before,
     jobId: req.job_id,
+    hasVairixCvSheet: req.has_vairix_cv_sheet,
     page: req.page,
     pageSize: req.pageSize,
   };

@@ -26,6 +26,7 @@ const EMPTY_FILTERS: SearchFilters = {
   rejectedAfter: null,
   rejectedBefore: null,
   jobId: null,
+  hasVairixCvSheet: null,
   page: 1,
   pageSize: 20,
 };
@@ -251,6 +252,93 @@ describe('structured search', () => {
     expect(third.results).toHaveLength(1);
     const allIds = [...first.results, ...second.results, ...third.results].map((r) => r.id);
     expect(new Set(allIds).size).toBe(5);
+  });
+
+  it('hasVairixCvSheet=true: returns candidates whose interviews carry the TT "Información para CV" answer (q=24016)', async () => {
+    const { data: cands } = await svc
+      .from('candidates')
+      .insert([
+        { teamtailor_id: 'tt-with-sheet', first_name: 'WithSheet' },
+        { teamtailor_id: 'tt-without-sheet', first_name: 'WithoutSheet' },
+        { teamtailor_id: 'tt-blank-sheet', first_name: 'BlankSheet' },
+      ])
+      .select('id, teamtailor_id');
+    const withSheet = cands?.find((c) => c.teamtailor_id === 'tt-with-sheet')?.id;
+    const blankSheet = cands?.find((c) => c.teamtailor_id === 'tt-blank-sheet')?.id;
+
+    // Seed evaluations + evaluation_answers. Candidate `withSheet` has
+    // the URL; `blankSheet` has the q=24016 row but value_text is null
+    // (interview existed, field was left empty) → should NOT match.
+    const { data: evals } = await svc
+      .from('evaluations')
+      .insert([
+        { teamtailor_id: 'ev-with', candidate_id: withSheet },
+        { teamtailor_id: 'ev-blank', candidate_id: blankSheet },
+      ])
+      .select('id, teamtailor_id');
+    const evWith = evals?.find((e) => e.teamtailor_id === 'ev-with')?.id;
+    const evBlank = evals?.find((e) => e.teamtailor_id === 'ev-blank')?.id;
+
+    await svc.from('evaluation_answers').insert([
+      {
+        evaluation_id: evWith,
+        teamtailor_answer_id: 'ans-with-sheet',
+        question_tt_id: '24016',
+        question_type: 'text',
+        value_text: 'https://docs.google.com/spreadsheets/d/xyz/edit',
+      },
+      {
+        evaluation_id: evBlank,
+        teamtailor_answer_id: 'ans-blank-sheet',
+        question_tt_id: '24016',
+        question_type: 'text',
+        value_text: null,
+      },
+    ]);
+
+    const { client } = await makeRoleClient('recruiter');
+    const page = await searchCandidates(client, { ...EMPTY_FILTERS, hasVairixCvSheet: true });
+
+    expect(page.total).toBe(1);
+    expect(page.results.map((r) => r.firstName)).toEqual(['WithSheet']);
+  });
+
+  it('hasVairixCvSheet=true: falls back to files.kind=vairix_cv_sheet when the TT URL is absent', async () => {
+    const { data: cands } = await svc
+      .from('candidates')
+      .insert([
+        { teamtailor_id: 'tt-uploaded', first_name: 'Uploaded' },
+        { teamtailor_id: 'tt-nothing', first_name: 'Nothing' },
+      ])
+      .select('id, teamtailor_id');
+    const uploaded = cands?.find((c) => c.teamtailor_id === 'tt-uploaded')?.id;
+
+    await svc.from('files').insert({
+      candidate_id: uploaded,
+      storage_path: `${uploaded}/vairix-sheet.xlsx`,
+      kind: 'vairix_cv_sheet',
+      file_type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    });
+
+    const { client } = await makeRoleClient('recruiter');
+    const page = await searchCandidates(client, { ...EMPTY_FILTERS, hasVairixCvSheet: true });
+
+    expect(page.total).toBe(1);
+    expect(page.results.map((r) => r.firstName)).toEqual(['Uploaded']);
+  });
+
+  it('hasVairixCvSheet=false is ignored (treated as "no filter")', async () => {
+    await svc.from('candidates').insert([
+      { teamtailor_id: 'tt-x', first_name: 'Xavier' },
+      { teamtailor_id: 'tt-y', first_name: 'Yvette' },
+    ]);
+    const { client } = await makeRoleClient('recruiter');
+
+    // Without any other filter, should still return empty (same
+    // invariant as plain `EMPTY_FILTERS`).
+    const page = await searchCandidates(client, { ...EMPTY_FILTERS, hasVairixCvSheet: false });
+
+    expect(page.total).toBe(0);
   });
 
   it('returns empty when application filter matches nothing (short-circuit)', async () => {

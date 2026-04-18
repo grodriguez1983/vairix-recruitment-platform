@@ -42,6 +42,7 @@ interface PageProps {
     rejected_after?: string | string[];
     rejected_before?: string | string[];
     job_id?: string | string[];
+    has_vairix_cv_sheet?: string | string[];
   };
 }
 
@@ -100,6 +101,7 @@ export default async function CandidatesPage({ searchParams }: PageProps): Promi
   const rejectedAfter = parseIsoDatetime(firstOf(searchParams.rejected_after));
   const rejectedBefore = parseIsoDatetime(firstOf(searchParams.rejected_before));
   const jobId = parseUuid(firstOf(searchParams.job_id));
+  const hasVairixCvSheet = firstOf(searchParams.has_vairix_cv_sheet) === '1' ? true : null;
 
   const filters: SearchFilters = {
     q: q.length > 0 ? q : null,
@@ -107,6 +109,7 @@ export default async function CandidatesPage({ searchParams }: PageProps): Promi
     rejectedAfter,
     rejectedBefore,
     jobId,
+    hasVairixCvSheet,
     page,
     pageSize: PAGE_SIZE,
   };
