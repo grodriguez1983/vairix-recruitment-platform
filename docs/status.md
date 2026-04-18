@@ -5,12 +5,97 @@
 > el git log).
 
 **Última actualización**: 2026-04-18
-**Última sesión**: 2026-04-18 — ADR-010 core + UI: custom-fields ingest completo end-to-end
+**Última sesión**: 2026-04-18 — F1-006 notes, F1-008 CV parser, F1-012 tags, F1-013 shortlists
 **Fase activa**: **Fase 1 — Fundación**
 
 ---
 
 ## ✅ Completado
+
+- **F1-013** ✅ done — 2026-04-18 — Shortlists CRUD + CSV export (UC-03).
+  - `src/lib/shortlists/errors.ts` — `ShortlistError` con codes
+    tipados (invalid_name, not_found, already_archived,
+    already_in_shortlist, not_in_shortlist, db_error,
+    app_user_not_found).
+  - `src/lib/shortlists/service.ts` — reglas de dominio:
+    `normalizeShortlistName` (trim, ≤120), `createShortlist`,
+    `listActiveShortlists` (con `candidate_count` via embedded
+    aggregate), `getShortlist`, `addCandidateToShortlist`
+    (idempotente, bloquea en archived), `removeCandidateFromShortlist`
+    (404 on non-member), `archiveShortlist` (rechaza double-archive),
+    `listShortlistCandidates`, `candidatesToCsv` (RFC 4180).
+  - `tests/integration/shortlists/service.test.ts` — 9 tests:
+    normalización, lifecycle (create/list/add/remove/archive),
+    idempotent add, archive-blocks-add, CSV escaping.
+  - `src/app/(app)/shortlists/actions.ts` — server actions
+    (`createShortlistAction`, `createShortlistAndRedirect`,
+    `addCandidateAction`, `removeCandidateAction`,
+    `archiveShortlistAction`) con `requireAuth` + `revalidatePath`.
+  - `src/app/(app)/shortlists/page.tsx` — list + create form.
+  - `src/app/(app)/shortlists/[id]/page.tsx` +
+    `shortlist-detail.tsx` — detail con archive button, export
+    CSV link, per-row remove; archived → read-only.
+  - `src/app/api/shortlists/[id]/export.csv/route.ts` — GET
+    route handler, `text/csv` + `Content-Disposition: attachment`,
+    filename sanitizado.
+  - `src/app/(app)/candidates/[id]/add-to-shortlist.tsx` — client
+    component con `<select>` de active shortlists + input de nota
+    opcional en el perfil del candidato.
+  - Sidebar entry "Shortlists" agregado.
+
+- **F1-012** ✅ done — 2026-04-18 — Tags: servicio + UI con creator-or-admin delete.
+  - `src/lib/tags/errors.ts` — `TagError` con codes.
+  - `src/lib/tags/service.ts` — `normalizeTagName` (trim+lowercase,
+    ≤64), `ensureTag` (upsert race-safe), `addTagToCandidate`
+    (idempotente), `removeTagFromCandidate` con guard
+    **creator-or-admin** (recruiter solo borra sus propios tags),
+    `listTagsForCandidate`, `listAllTagNames`.
+  - `tests/integration/tags/service.test.ts` — 10 tests, incluye
+    auth: recruiter borra su tag, admin borra cualquier tag,
+    recruiter no-creador recibe `forbidden`. Helper
+    `ensureAuthUser` crea usuarios reales en `auth.users` via
+    `auth.admin.createUser` (app_users.auth_user_id tiene FK a
+    auth.users).
+  - UI: `candidate-tags.tsx` client component con datalist
+    autocompletion + chips, optimistic UI via `useTransition`.
+
+- **F1-008** ✅ done — 2026-04-18 — CV parser dispatcher.
+  - `src/lib/cv/parse.ts` — `parseCV(file, deps)` dispatcher por
+    MIME/extension: pdf, docx, txt; codes de error tipados
+    (`unsupported_format`, `parse_failure`, `empty_text`,
+    `likely_scanned`). Threshold `SCANNED_MIN_CHARS=200`.
+    Normaliza CR/LF, colapsa tabs+espacios, tres o más newlines
+    a `\n\n`. Deps inyectadas (`parsePdf`, `parseDocx`) para
+    testear sin binarios reales.
+  - `src/lib/cv/parse.test.ts` — 12 unit tests (happy path por
+    formato, vacíos, scanned detection, unsupported, propagación
+    de errores del provider).
+  - **Pendiente F1-008 full**: wiring a Storage webhook +
+    worker que hace `download → parseCV → upsert files.text +
+content_hash`; ver F1-009 (embeddings pipeline).
+
+- **F1-006** ✅ done — 2026-04-18 — notes syncer (UC-07 slice).
+  - `tests/fixtures/teamtailor/notes-page-1.json` — 4 notes: happy
+    path, FKs nulos (user/application opcionales), body vacío,
+    candidate huérfano.
+  - `src/lib/sync/notes.ts` + `notesSyncer` registrado en
+    `SYNCERS` (post-users/applications). Valida relationship
+    candidate + body no vacío (row-level `ParseError`);
+    reconcilia FKs via `buildIdMap` para candidates/applications/users;
+    orphan candidate → `sync_errors`.
+  - `tests/integration/sync/notes.test.ts` — 2 integration tests.
+
+- **Blockers documentados para el usuario** (requieren decisión humana):
+  - **F1-007 evaluations syncer**: Teamtailor **no expone** el endpoint
+    `/v1/evaluations`. Las evaluaciones reales viven en Google Docs
+    por llamado (ver auto-memory `project_custom_data_sources.md`).
+    Requiere definir la estrategia de ingest (scraping/manual/otro)
+    antes de escribir código.
+  - **F1-010 CV downloader / files syncer**: docs marcan el shape de
+    `/v1/uploads` como `[VERIFICAR]`. Antes de escribir el syncer,
+    confirmar contra una llamada real a TT qué formato viene (ej.
+    vs. `/v1/candidates` with sideload). Una vez verificado, el
+    parser (F1-008) ya está listo para consumir los archivos.
 
 - **F1-006b** ✅ done — 2026-04-18 — ADR-010 core ingest de custom fields.
   - `docs/adr/adr-010-teamtailor-custom-fields.md` — decisión: EAV
