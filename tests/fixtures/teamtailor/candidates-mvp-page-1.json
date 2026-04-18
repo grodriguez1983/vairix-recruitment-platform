@@ -1,0 +1,52 @@
+{
+  "data": [
+    {
+      "id": "9001",
+      "type": "candidates",
+      "attributes": {
+        "first-name": "Ada",
+        "last-name": "Lovelace",
+        "email": "ada@example.test",
+        "phone": "+44 20 7946 0001",
+        "linkedin-url": "https://www.linkedin.com/in/ada-test",
+        "pitch": "Analytical Engine enthusiast.",
+        "sourced": true,
+        "created-at": "2026-01-02T10:00:00Z",
+        "updated-at": "2026-02-15T10:00:00Z"
+      }
+    },
+    {
+      "id": "9002",
+      "type": "candidates",
+      "attributes": {
+        "first-name": "Alan",
+        "last-name": "Turing",
+        "email": "alan@example.test",
+        "phone": null,
+        "linkedin-url": null,
+        "pitch": null,
+        "sourced": false,
+        "created-at": "2026-01-03T10:00:00Z",
+        "updated-at": "2026-02-16T10:00:00Z"
+      }
+    },
+    {
+      "id": "9003",
+      "type": "candidates",
+      "attributes": {
+        "first-name": null,
+        "last-name": null,
+        "email": null,
+        "phone": null,
+        "linkedin-url": null,
+        "pitch": null,
+        "sourced": false,
+        "created-at": "2025-10-01T10:00:00Z",
+        "updated-at": "2025-11-01T10:00:00Z"
+      }
+    }
+  ],
+  "links": {
+    "self": "https://tt.test/v1/candidates?page%5Bnumber%5D=1"
+  }
+}
