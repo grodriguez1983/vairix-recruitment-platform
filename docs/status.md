@@ -5,12 +5,31 @@
 > el git log).
 
 **Última actualización**: 2026-04-18
-**Última sesión**: 2026-04-18 — F1-006 notes, F1-008 CV parser, F1-012 tags, F1-013 shortlists, F2-002 rejection normalizer (ready-to-run)
-**Fase activa**: **Fase 1 — Fundación** (+ F2-002 adelantada sin correr en prod)
+**Última sesión**: 2026-04-18 — F1-006 notes, F1-008 CV parser, F1-012 tags, F1-013 shortlists, F2-002 rejection normalizer (ready-to-run), F2-004 sync_errors admin
+**Fase activa**: **Fase 1 — Fundación** (+ F2-002/F2-004 adelantadas)
 
 ---
 
 ## ✅ Completado
+
+- **F2-004** ✅ done (parte sync_errors) — 2026-04-18 — Admin panel de ETL failures.
+  - `src/lib/sync-errors/service.ts` — `listSyncErrors` (default
+    unresolved-only, filter por entity, paginación offset+limit),
+    `countSyncErrors` (head count con mismos filtros),
+    `resolveSyncError` (guard not_found + already_resolved, setea
+    `resolved_at`). Error class `SyncErrorAdminError` con codes
+    tipados. 8 integration tests verdes.
+  - `src/app/(app)/admin/sync-errors/page.tsx` — Server Component
+    admin-only (`requireRole('admin')`): filtros por entity +
+    includeResolved (GET form), tabla paginada (50/página) con
+    badges de entity/error_code/resolved, payload colapsable en
+    `<details>`. Inline `ResolveButton` vía server action +
+    `useTransition` + `revalidatePath`.
+  - `src/app/(app)/admin/page.tsx` — ya no es stub: tile que
+    linkea a `/admin/sync-errors` con contador de unresolved.
+  - **Pendiente (parte `needs_review`)**: la admin queue de
+    rejections clasificadas como `other` depende de F2-002 corriendo
+    sobre datos reales — bloqueado por F1-006 evaluations.
 
 - **F2-002** ✅ done (código listo, sin datos en prod) — 2026-04-18 — Rejection normalizer (ADR-007).
   - `src/lib/normalization/rejection-rules.ts` — tabla versionada

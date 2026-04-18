@@ -439,7 +439,11 @@ expandidos acá para no inflar el documento.)
   24 tests verdes. Inactivo en prod hasta que F1-006 evaluations
   desbloquee datos para procesar.
 - F2-003 — Tags automáticos desde CV.
-- F2-004 — Panel admin para sync errors y needs_review.
+- F2-004 — Panel admin para sync errors y needs_review. 🏃 **PARCIAL**
+  (2026-04-18, `5e1450f`..`9ac52cb`). Parte `sync_errors` lista:
+  `src/lib/sync-errors/service.ts` + `/admin/sync-errors` (filtros +
+  paginación + resolve action) + 8 integration tests. Parte
+  `needs_review` bloqueada por F1-006 evaluations.
 - F2-005 — Observabilidad (logs agregados + métricas Supabase).
 
 ## Fase 3 — Semántica
