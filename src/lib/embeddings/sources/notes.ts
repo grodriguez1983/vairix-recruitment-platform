@@ -25,7 +25,28 @@ export interface NotesSourceInput {
   notes: readonly NoteInput[];
 }
 
-// RED stub — real implementation lands in the GREEN commit.
-export function buildNotesContent(_input: NotesSourceInput): string | null {
-  throw new Error('not implemented');
+function toTimestamp(v: string | Date | null): number {
+  if (v === null) return 0;
+  if (v instanceof Date) return v.getTime();
+  const parsed = Date.parse(v);
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+function cleanBody(body: string | null): string {
+  if (body === null) return '';
+  return body.replace(/\s+/g, ' ').trim();
+}
+
+export function buildNotesContent(input: NotesSourceInput): string | null {
+  const sorted = [...input.notes].sort(
+    (a, b) => toTimestamp(a.createdAt) - toTimestamp(b.createdAt),
+  );
+  const bodies: string[] = [];
+  for (const n of sorted) {
+    const body = cleanBody(n.body);
+    if (body.length === 0) continue;
+    bodies.push(body);
+  }
+  if (bodies.length === 0) return null;
+  return bodies.join('\n\n');
 }
