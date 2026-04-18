@@ -17,10 +17,10 @@ export type Database = {
     Functions: {
       graphql: {
         Args: {
-          extensions?: Json
           operationName?: string
           query?: string
           variables?: Json
+          extensions?: Json
         }
         Returns: Json
       }
@@ -415,6 +415,71 @@ export type Database = {
             columns: ["candidate_id"]
             isOneToOne: false
             referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      evaluation_answers: {
+        Row: {
+          created_at: string
+          evaluation_id: string
+          id: string
+          question_title: string | null
+          question_tt_id: string
+          question_type: string | null
+          raw_data: Json | null
+          synced_at: string
+          teamtailor_answer_id: string
+          tenant_id: string | null
+          updated_at: string
+          value_boolean: boolean | null
+          value_date: string | null
+          value_number: number | null
+          value_range: number | null
+          value_text: string | null
+        }
+        Insert: {
+          created_at?: string
+          evaluation_id: string
+          id?: string
+          question_title?: string | null
+          question_tt_id: string
+          question_type?: string | null
+          raw_data?: Json | null
+          synced_at?: string
+          teamtailor_answer_id: string
+          tenant_id?: string | null
+          updated_at?: string
+          value_boolean?: boolean | null
+          value_date?: string | null
+          value_number?: number | null
+          value_range?: number | null
+          value_text?: string | null
+        }
+        Update: {
+          created_at?: string
+          evaluation_id?: string
+          id?: string
+          question_title?: string | null
+          question_tt_id?: string
+          question_type?: string | null
+          raw_data?: Json | null
+          synced_at?: string
+          teamtailor_answer_id?: string
+          tenant_id?: string | null
+          updated_at?: string
+          value_boolean?: boolean | null
+          value_date?: string | null
+          value_number?: number | null
+          value_range?: number | null
+          value_text?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "evaluation_answers_evaluation_id_fkey"
+            columns: ["evaluation_id"]
+            isOneToOne: false
+            referencedRelation: "evaluations"
             referencedColumns: ["id"]
           },
         ]
@@ -1179,15 +1244,15 @@ export type Database = {
           }
       semantic_search_embeddings: {
         Args: {
-          candidate_id_filter?: string[]
-          source_type_filter?: string[]
-          max_results?: number
           query_embedding: number[]
+          max_results?: number
+          source_type_filter?: string[]
+          candidate_id_filter?: string[]
         }
         Returns: {
-          score: number
           candidate_id: string
           source_type: string
+          score: number
         }[]
       }
       set_limit: {
