@@ -310,14 +310,14 @@ empty_text | likely_scanned`) siempre con `parsed_at` sellado.
 
 ---
 
-### F1-011 — Perfil consolidado del candidate 🏃 PARTIAL (2026-04-18, `53ca65c` + `03e20b7` + CV viewer tab)
+### F1-011 — Perfil consolidado del candidate ✅ DONE (2026-04-18)
 
-> ✅ Identity header, applications list, custom fields ("Metadata VAIRIX"),
-> tags section, "Add to shortlist" form, **CV viewer tab**
-> (signed-url endpoint + OpenFileButton + Currículums section + VAIRIX
-> sheet open button).
-> ⏳ **Pendientes** (dependen de F1-006 evaluations sideload completo):
-> tabs de Evaluations y Notes.
+> ✅ Identity header, applications list, custom fields
+> ("Metadata VAIRIX"), VAIRIX sheet, **CV viewer** (signed-url
+> endpoint + OpenFileButton + Currículums), **Evaluations**
+> (scorecard answers + decision), **Notes** (TT free-form),
+> tags, "Add to shortlist" form.
+> Page refactored into one file per section (all ≤ 300 LOC).
 
 **Depende de**: F1-010, F1-008.
 

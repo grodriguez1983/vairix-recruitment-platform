@@ -40,6 +40,25 @@ route.test.ts` (401 unauth, 400 invalid_id, 400 SQL-injection
   - Downstream: el parser marca `parse_error` y se muestra inline en
     la lista; el operador puede abrir el binario para diagnosticar.
 
+- **F1-011 Evaluations + Notes sections** ✅ done — 2026-04-18.
+  - `evaluations-section.tsx`: lista cada `evaluations` (candidate
+    interview scorecard) con decisión + score + evaluator + notes +
+    las `evaluation_answers` estructuradas (scorecard custom
+    questions). Typed-column picker para answer values (value_text /
+    value_number / value_range / value_boolean / value_date).
+  - `notes-section.tsx`: lista cada `notes` (Teamtailor free-form)
+    con author + body + fecha. Read-only — la creación sigue en TT.
+  - Ambos fetchs son server-side bajo RLS, dispatcheados en el
+    `Promise.all` del page para paralelizar.
+  - **Refactor**: page.tsx bajó de 507 → 127 líneas extrayendo 6
+    secciones a archivos propios (`applications-section.tsx`,
+    `metadata-vairix-section.tsx`, `vairix-sheet-section.tsx`,
+    `profile-header.tsx`, + las dos nuevas). Todos los archivos ≤ 300
+    líneas cumpliendo `CLAUDE.md §Code Standards`. 262/262 tests verdes.
+  - Removido el placeholder "More coming soon" — todas las tabs de
+    F1-011 están implementadas (identity, metadata, applications,
+    VAIRIX sheet, CVs, evaluations, notes, tags, shortlists).
+
 - **F1-008 CV parser worker** ✅ done — 2026-04-18 — commits
   `6f3cd33` (dispatcher previo) → `d50c26c` (RED) → `5de9156`
   (GREEN) → `cab9bfe` (CLI + integration test).
