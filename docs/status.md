@@ -101,11 +101,6 @@
        triggers de reevaluación. Commit `c0746ac`.
     4. Chronicle: 3 memorias persistidas (vitest script gotcha,
        pattern architectural, TDD-gap insight).
-  - Deuda pendiente: `pnpm test:integration` y `pnpm test:unit` en
-    `package.json` usan el flag `--dir` deprecado de vitest 1.x y
-    fallan silenciosamente con "No test files found". Workaround:
-    `pnpm vitest run tests/integration/`. Arreglar en chore commit
-    separado.
 
 - **F1-011 CV viewer tab** ✅ done — 2026-04-18.
   - `src/app/api/files/[id]/signed-url/route.ts`: `GET` que mintea un

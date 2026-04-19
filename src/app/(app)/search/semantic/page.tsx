@@ -20,6 +20,7 @@ import {
   type SemanticSearchCandidateMatch,
 } from '@/lib/rag/semantic-search';
 import { hydrateCandidatesByIds } from '@/lib/search/hydrate';
+import { MAX_QUERY_LENGTH, parseQuery } from '@/lib/search/search-params';
 import { createClient } from '@/lib/supabase/server';
 
 import { CandidateCard } from '../../candidates/candidate-card';
@@ -34,10 +35,6 @@ const RESULT_LIMIT = 30;
 
 interface PageProps {
   searchParams: { q?: string | string[] };
-}
-
-function firstOf(v: string | string[] | undefined): string | undefined {
-  return Array.isArray(v) ? v[0] : v;
 }
 
 function formatScore(score: number): string {
@@ -62,8 +59,7 @@ export default async function SemanticSearchPage({
 }: PageProps): Promise<JSX.Element> {
   await requireAuth();
 
-  const rawQ = firstOf(searchParams.q)?.trim() ?? '';
-  const q = rawQ.slice(0, 2000);
+  const q = parseQuery(searchParams.q);
   const supabase = createClient();
 
   let matches: SemanticSearchCandidateMatch[] = [];
@@ -110,7 +106,7 @@ export default async function SemanticSearchPage({
           name="q"
           type="search"
           defaultValue={q}
-          maxLength={2000}
+          maxLength={MAX_QUERY_LENGTH}
           placeholder="e.g. backend engineer with kafka and aws experience"
           className="flex-1 rounded-md border border-border bg-surface px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent"
         />

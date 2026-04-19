@@ -122,15 +122,12 @@ externos (CLI, scripts, e2e) pero la UI no lo usa.
 
 ### Negativas
 
-- Los helpers de parsing (`parseStatus`, `parseUuid`,
-  `parseDateInputToIso`) viven inline en cada page. Si aparece
-  una tercera página de búsqueda, habrá que extraerlos a
-  `lib/search/search-params.ts` para no duplicar.
 - La página no es testeable aislada sin mockear `requireAuth` y
   `next/navigation`. Hoy la cobertura viene por composición
-  (servicio + hidratador + structured-search tests). Si la lógica
-  de la página crece más allá de "parse + llamar servicio +
-  renderizar", habrá que refactorizar para testabilidad directa.
+  (servicio + hidratador + parsers puros unit-tested +
+  structured-search tests). Si la lógica de la página crece más
+  allá de "parse + llamar servicio + renderizar", habrá que
+  refactorizar para testabilidad directa.
 - Cada submit es una navegación full-page. Aceptable para 5–15
   users; no aceptable para un caso de público general.
 
@@ -156,12 +153,14 @@ Esta decisión vuelve a la mesa si:
 
 ## Notas de implementación
 
-- Los parsers inline en las páginas (`parseStatus`, `parseUuid`,
-  `parseDateInputToIso`, `firstOf`) son deliberadamente permisivos:
-  input inválido vuelve `null` en lugar de 400, y la UI trata `null`
-  como "sin filtro". Esto mantiene las URLs compartibles aunque se
-  editen a mano — no se rompe si alguien deja un `status=foo` viejo
-  en la URL.
+- Los parsers (`parseQuery`, `parseStatus`, `parseUuid`,
+  `parseDateInputToIso`, `firstOf`) viven en
+  `src/lib/search/search-params.ts` — compartidos por ambas pages
+  y unit-tested (`search-params.test.ts`, 27 tests adversariales).
+  Son deliberadamente permisivos: input inválido vuelve `null` en
+  lugar de 400, y la UI trata `null` como "sin filtro". Esto mantiene
+  las URLs compartibles aunque se editen a mano — no se rompe si
+  alguien deja un `status=foo` viejo en la URL.
 - `hydrateCandidatesByIds` preserva el orden de ids recibidos; el
   ranking viene del servicio. Cambiar ese contrato rompería la
   semántica de relevancia en la UI. Cubierto por

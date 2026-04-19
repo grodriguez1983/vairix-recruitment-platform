@@ -20,7 +20,13 @@ import {
   type SemanticSearchCandidateMatch,
 } from '@/lib/rag/semantic-search';
 import { hydrateCandidatesByIds } from '@/lib/search/hydrate';
-import type { SearchFilters } from '@/lib/search/types';
+import {
+  MAX_QUERY_LENGTH,
+  parseDateInputToIso,
+  parseQuery,
+  parseStatus,
+  parseUuid,
+} from '@/lib/search/search-params';
 import { createClient } from '@/lib/supabase/server';
 
 import { CandidateCard } from '../../candidates/candidate-card';
@@ -32,8 +38,6 @@ export const metadata = {
 export const dynamic = 'force-dynamic';
 
 const RESULT_LIMIT = 30;
-const APP_STATUSES = new Set(['active', 'rejected', 'hired', 'withdrawn']);
-const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 interface PageProps {
   searchParams: {
@@ -43,26 +47,6 @@ interface PageProps {
     rejected_before?: string | string[];
     job_id?: string | string[];
   };
-}
-
-function firstOf(v: string | string[] | undefined): string | undefined {
-  return Array.isArray(v) ? v[0] : v;
-}
-
-function parseStatus(raw: string | undefined): SearchFilters['status'] {
-  if (!raw || !APP_STATUSES.has(raw)) return null;
-  return raw as SearchFilters['status'];
-}
-
-function parseUuid(raw: string | undefined): string | null {
-  if (!raw || !UUID_REGEX.test(raw)) return null;
-  return raw;
-}
-
-function parseDateInputToIso(raw: string | undefined): string | null {
-  // Accepts a `YYYY-MM-DD` from `<input type=date>` and lifts it to ISO.
-  if (!raw || !/^\d{4}-\d{2}-\d{2}$/.test(raw)) return null;
-  return `${raw}T00:00:00Z`;
 }
 
 function formatScore(score: number): string {
@@ -90,11 +74,11 @@ export default async function HybridSearchPage({ searchParams }: PageProps): Pro
   await requireAuth();
   const supabase = createClient();
 
-  const q = (firstOf(searchParams.q)?.trim() ?? '').slice(0, 2000);
-  const status = parseStatus(firstOf(searchParams.status));
-  const rejectedAfter = parseDateInputToIso(firstOf(searchParams.rejected_after));
-  const rejectedBefore = parseDateInputToIso(firstOf(searchParams.rejected_before));
-  const jobId = parseUuid(firstOf(searchParams.job_id));
+  const q = parseQuery(searchParams.q);
+  const status = parseStatus(searchParams.status);
+  const rejectedAfter = parseDateInputToIso(searchParams.rejected_after);
+  const rejectedBefore = parseDateInputToIso(searchParams.rejected_before);
+  const jobId = parseUuid(searchParams.job_id);
 
   const filters = { status, rejectedAfter, rejectedBefore, jobId };
   const hasFilter =
@@ -163,7 +147,7 @@ export default async function HybridSearchPage({ searchParams }: PageProps): Pro
           name="q"
           type="search"
           defaultValue={q}
-          maxLength={2000}
+          maxLength={MAX_QUERY_LENGTH}
           placeholder="natural language query (optional if filters are set)"
           className="rounded-md border border-border bg-bg px-3 py-2 text-sm text-text-primary placeholder:text-text-muted focus:outline-none focus:ring-1 focus:ring-accent"
         />
