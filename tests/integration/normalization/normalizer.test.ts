@@ -164,6 +164,40 @@ describe('normalizeRejections', () => {
     expect(second.processed).toBe(0);
   });
 
+  it('dry-run: counts and samples but writes nothing', async () => {
+    await db.from('evaluations').insert([
+      {
+        teamtailor_id: `${PREFIX}dry1`,
+        candidate_id: candidateIds[0],
+        decision: 'reject',
+        rejection_reason: 'Salary out of budget',
+        raw_data: {},
+      },
+      {
+        teamtailor_id: `${PREFIX}dry2`,
+        candidate_id: candidateIds[1],
+        decision: 'reject',
+        rejection_reason: 'No tenemos categoría para esto',
+        raw_data: {},
+      },
+    ]);
+
+    const res = await normalizeRejections(db, { dryRun: true });
+    expect(res.processed).toBe(2);
+    expect(res.matched + res.unmatched).toBe(2);
+    expect(res.samples.length).toBe(2);
+    expect(res.samples.every((s) => typeof s.code === 'string' && s.reason.length > 0)).toBe(true);
+
+    const { data: after } = await db
+      .from('evaluations')
+      .select('teamtailor_id, rejection_category_id, normalization_attempted_at')
+      .like('teamtailor_id', `${PREFIX}dry%`);
+    for (const row of after ?? []) {
+      expect(row.rejection_category_id).toBeNull();
+      expect(row.normalization_attempted_at).toBeNull();
+    }
+  });
+
   it('reclassifies a row when force=true', async () => {
     const { data: ins } = await db
       .from('evaluations')

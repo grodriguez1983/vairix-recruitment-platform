@@ -23,15 +23,27 @@ export interface NormalizeOptions {
   force?: boolean;
   /** Upper bound on rows fetched in one run (default 500). */
   batchSize?: number;
+  /**
+   * When true, classify every candidate row but skip all writes. Used by
+   * the operator CLI to preview the impact (count + samples) before
+   * applying. Counts are still populated; `samples` is filled with up to
+   * 10 representative classifications.
+   */
+  dryRun?: boolean;
 }
 
 export interface NormalizeResult {
-  /** Rows that had a non-null reason and were updated. */
+  /** Rows that had a non-null reason and would be / were updated. */
   processed: number;
   /** Subset of `processed` where a keyword rule matched. */
   matched: number;
   /** Subset of `processed` that fell through to 'other' + needs_review. */
   unmatched: number;
+  /**
+   * Up to 10 (reason → category) samples. Populated on every run; in
+   * dry-run mode it's the only signal the operator can act on.
+   */
+  samples: Array<{ id: string; reason: string; code: string; needsReview: boolean }>;
 }
 
 interface PendingRow {
@@ -56,7 +68,7 @@ export async function normalizeRejections(
   db: SupabaseClient,
   options: NormalizeOptions = {},
 ): Promise<NormalizeResult> {
-  const { force = false, batchSize = 500 } = options;
+  const { force = false, batchSize = 500, dryRun = false } = options;
   const categories = await loadCategoryIds(db);
 
   let query = db
@@ -74,6 +86,7 @@ export async function normalizeRejections(
   const now = new Date().toISOString();
   let matched = 0;
   let unmatched = 0;
+  const samples: NormalizeResult['samples'] = [];
 
   for (const row of rows) {
     const result = classifyRejectionReason(row.rejection_reason);
@@ -82,20 +95,30 @@ export async function normalizeRejections(
     if (!categoryId) {
       throw new Error(`classifier returned unknown category code: ${result.code}`);
     }
-    const { error: updateError } = await db
-      .from('evaluations')
-      .update({
-        rejection_category_id: categoryId,
-        needs_review: result.needsReview,
-        normalization_attempted_at: now,
-      })
-      .eq('id', row.id);
-    if (updateError) {
-      throw new Error(`failed to update evaluation ${row.id}: ${updateError.message}`);
+    if (!dryRun) {
+      const { error: updateError } = await db
+        .from('evaluations')
+        .update({
+          rejection_category_id: categoryId,
+          needs_review: result.needsReview,
+          normalization_attempted_at: now,
+        })
+        .eq('id', row.id);
+      if (updateError) {
+        throw new Error(`failed to update evaluation ${row.id}: ${updateError.message}`);
+      }
+    }
+    if (samples.length < 10) {
+      samples.push({
+        id: row.id,
+        reason: row.rejection_reason ?? '',
+        code: result.code,
+        needsReview: result.needsReview,
+      });
     }
     if (result.needsReview) unmatched += 1;
     else matched += 1;
   }
 
-  return { processed: matched + unmatched, matched, unmatched };
+  return { processed: matched + unmatched, matched, unmatched, samples };
 }
