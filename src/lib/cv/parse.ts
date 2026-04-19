@@ -50,11 +50,17 @@ async function loadDefaultDeps(): Promise<CvParserDeps> {
 const SCANNED_MIN_CHARS = 200;
 
 export function normalize(raw: string): string {
-  return raw
-    .replace(/\r\n/g, '\n')
-    .replace(/\n{3,}/g, '\n\n')
-    .replace(/[ \t]+/g, ' ')
-    .trim();
+  return (
+    raw
+      .replace(/\r\n/g, '\n')
+      // Postgres text/jsonb cannot store NUL bytes. PDF parsers often
+      // leak them; strip plus other C0 control chars except tab/newline.
+      // eslint-disable-next-line no-control-regex
+      .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
+      .replace(/\n{3,}/g, '\n\n')
+      .replace(/[ \t]+/g, ' ')
+      .trim()
+  );
 }
 
 export async function parseCvBuffer(
