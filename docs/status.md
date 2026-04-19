@@ -5,12 +5,54 @@
 > el git log).
 
 **Última actualización**: 2026-04-18
-**Última sesión**: 2026-04-18 — F1-006b VAIRIX CV Sheet filter + profile section (alcance simplificado: sin integración con Google Drive/Sheets), F1-006a interviews/evaluations ingest (unbloquea F1-006 desde TT; ver nota), F1-006 notes, F1-008 CV parser, F1-012 tags, F1-013 shortlists, F2-002 rejection normalizer (ready-to-run), F2-004 sync_errors admin, F3-001 profile+notes+cv embeddings, F3-002 semantic search, F3-003 hybrid search
+**Última sesión**: 2026-04-18 — F1-007 CV download + Storage (migration + downloader + uploads syncer + CLI wiring), F1-006b manual upload endpoint + admin UI form, F1-006b VAIRIX CV Sheet filter + profile section (alcance simplificado: sin integración con Google Drive/Sheets), F1-006a interviews/evaluations ingest (unbloquea F1-006 desde TT; ver nota), F1-006 notes, F1-008 CV parser, F1-012 tags, F1-013 shortlists, F2-002 rejection normalizer (ready-to-run), F2-004 sync_errors admin, F3-001 profile+notes+cv embeddings, F3-002 semantic search, F3-003 hybrid search
 **Fase activa**: **Fase 1 — Fundación** (+ F2-002/F2-004 adelantadas, F3-001 profile+notes+cv slices, F3-002 y F3-003 base)
 
 ---
 
 ## ✅ Completado
+
+- **F1-007 CV download + Storage** ✅ done — 2026-04-18 — commits
+  `f53955a` (migration + bucket) → `480077a` (RED downloader) →
+  `413f1ba` (GREEN downloader) → `f823860` (uploads syncer + CLI) →
+  `ef9bc30` (F1-006b upload endpoint) → `8b2cacc` (F1-006b admin UI).
+  - Migration `20260418235000_candidate_cvs_bucket.sql`: crea el
+    bucket privado `candidate-cvs` (10 MB cap, MIME whitelist
+    pdf/doc/docx/xls/xlsx/csv/txt/rtf), agrega `files.is_internal
+boolean not null default false`, y dos policies `storage.objects`
+    (recruiter+admin SELECT por bucket_id, admin ALL). Idempotente
+    (`on conflict (id) do update`).
+  - `src/lib/cv/downloader.ts`: `downloadAndStore(args)` hace fetch
+    del URL firmado de TT, SHA-256, y sube a
+    `<candidate_uuid>/<file_uuid>.<ext>` con `upsert: true`. Si
+    `existingHash === contentHash`, salta el upload y devuelve
+    `uploadedFresh: false` (skip idempotente del binario — ADR-006
+    §2). 10 tests adversariales (HTTP !== 2xx, hash match/mismatch,
+    storage error, content-type inference).
+  - `src/lib/sync/uploads.ts`: syncer factory
+    `makeUploadsSyncer({ storage, fetch?, randomUuid? })` que
+    consume `/v1/uploads?include=candidate`. Reusa `files.id` cuando
+    el `teamtailor_id` ya existe, pasa `existingHash` al downloader,
+    y si `uploadedFresh` inserta fila con `parsed_text/parsed_at/
+parse_error = null` (invalida el parser — ADR-006). Row-level
+    errors (orphan FK, download failure) → `sync_errors`; batch no
+    aborta. Entity key es `files` (matches seed de `sync_state`).
+  - `src/scripts/sync-incremental.ts`: registra
+    `files: makeUploadsSyncer({ storage: db.storage.from('candidate-cvs') })`.
+    Ejecutable con `pnpm sync:incremental files`.
+  - **F1-006b upload manual (admin-only)**: endpoint POST
+    `/api/candidates/[id]/vairix-sheet` acepta multipart/form-data
+    (xlsx/xls/csv/pdf, ≤10 MB) y hace soft-delete del
+    `vairix_cv_sheet` activo anterior antes de insertar la nueva
+    fila (satisface el partial unique index de `20260418230000`).
+    `is_internal=true`. UI: `VairixSheetUpload` client component
+    renderizado sólo cuando `auth.role === 'admin'` en el profile.
+  - **Pendiente para próxima sesión**: integration test real del
+    uploads syncer (MSW para TT + Supabase local + Storage) —
+    hoy sólo hay unit tests de mapResource/buildInitialRequest.
+    Probe manual del sync completo contra el tenant VAIRIX (dry-run
+    con `page[size]=5` antes de un run completo). Regenerar
+    tipos DB tras la migration (`pnpm supabase:types`).
 
 - **F1-007 desbloqueado** ✅ 2026-04-18 — probe en
   `src/scripts/probe-uploads.ts` confirmó que `/v1/uploads` existe

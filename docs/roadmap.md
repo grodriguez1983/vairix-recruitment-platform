@@ -27,10 +27,11 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 
 ## Fase 1 — Fundación
 
-> **Estado al 2026-04-18**: 12 / 15 items ✅ done (F1-006a ingest de
-> evaluations desde TT cerrado); 2 🏃 parcial (F1-006b CV Sheet worker
-> pendiente, F1-008 full wiring), 1 🚫 bloqueado (F1-007),
-> 1 🏃 parcial derivado (F1-011 tabs faltantes).
+> **Estado al 2026-04-18**: 13 / 15 items ✅ done (F1-007 CV download +
+> Storage cerrado, F1-006b upload manual admin-only cerrado); 2 🏃
+> parcial (F1-006b CV Sheet worker pendiente, F1-008 full wiring
+> pendiente de webhook + worker), 1 🏃 parcial derivado (F1-011 tabs
+> faltantes).
 > Ver `docs/status.md` para detalle por sesión.
 
 ### F1-001 — Bootstrap del repo ✅ DONE (2026-04-14, `078f6f2`)
@@ -206,49 +207,31 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 
 ---
 
-### F1-007 — CV download + Storage upload 🔓 UNBLOCKED (2026-04-18)
+### F1-007 — CV download + Storage upload ✅ DONE (2026-04-18)
 
-> **Blocker resuelto** (probe en `src/scripts/probe-uploads.ts`,
-> resultado documentado en `docs/teamtailor-api-notes.md` §5.7):
-> `/v1/uploads` existe top-level, con `include=candidate` poblando
-> la relationship. Atributos: `url` (S3 signed, expira), `fileName`,
-> `internal` (bool), `createdAt`, `updatedAt`. Sin `size`/`mimeType`
-> — derivar de la extensión.
+> Commits: `f53955a` (migration + bucket + is_internal + storage RLS)
+> → `480077a` (RED downloader) → `413f1ba` (GREEN downloader) →
+> `f823860` (uploads syncer + CLI) → `ef9bc30` (F1-006b upload
+> endpoint) → `8b2cacc` (F1-006b admin UI form).
 >
-> **Pendiente para arrancar la implementación** (requiere input del
-> usuario):
+> Bucket `candidate-cvs` privado, 10 MB cap, MIME whitelist
+> (pdf/doc/docx/xls/xlsx/csv/txt/rtf). RLS: recruiter+admin SELECT,
+> admin ALL. Paths: `<candidate_uuid>/<file_uuid>.<ext>`.
+> Content-addressed: si `existingHash === contentHash` se salta el
+> upload (ADR-006 §2). El syncer invalida `parsed_text/parsed_at/
+parse_error` cuando re-sube, así F1-008 re-parsea sólo lo cambiado.
+> Row-level errors (orphan FK, download failure) → `sync_errors`.
 >
-> - Decisión sobre bucket `candidate-cvs` (tamaño máx, MIME
->   whitelist, política RLS).
-> - Decisión: ¿guardamos sólo `internal=true` o también `false`
->   (cover letters de candidatos)? ¿Separamos en `kind='cv'` vs
->   `kind='cv_public'`?
-> - Heurística de clasificación `.pdf/.docx → cv`,
->   `.xlsx/.xls/.csv → vairix_cv_sheet` ya consensuada con F1-006b.
-
-**Depende de**: F1-006.
-
-**Prompt**:
-
-> Implementá `src/lib/cv/downloader.ts` que:
+> CLI: `pnpm sync:incremental files`.
 >
-> - Toma un `file` entity de Teamtailor, descarga el binario con
->   la URL presignada (que expira) dentro de su ventana.
-> - Calcula SHA-256 del binario.
-> - Si el hash matchea `files.content_hash` persistido, skip.
-> - Si no, sube a Supabase Storage en path
->   `<candidate_uuid>/<file_uuid>.<ext>`, persiste metadata en
->   `files` (incluyendo `content_hash`).
-> - Rechaza archivos > 10 MB con log warning.
->   Tests integration con Storage local + MSW.
->   Commit: `feat(cv): add downloader and storage upload`.
-
-**DoD**:
-
-- Tests de UC-07 acceptance criteria verdes.
-- Un archivo re-descargado sin cambios NO se re-sube.
-
-**Estimación**: 6 h.
+> **Pendiente** (no bloqueante, próxima sesión):
+>
+> - Integration test real del uploads syncer (MSW para TT +
+>   Supabase local + Storage). Hoy sólo unit tests de
+>   mapResource/buildInitialRequest.
+> - Dry-run contra el tenant VAIRIX con `page[size]=5` antes de
+>   un run completo.
+> - Regenerar tipos DB (`pnpm supabase:types`).
 
 ---
 
