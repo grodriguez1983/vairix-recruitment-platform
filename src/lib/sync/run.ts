@@ -35,6 +35,24 @@ export interface SyncerDeps {
   now?: () => number;
   /** Minimal logger. Falls back to no-op. */
   logger?: Pick<Console, 'info' | 'warn' | 'error'>;
+  /**
+   * Hard cap on resources consumed from Teamtailor in this run. When
+   * set, pagination stops after this many resources have been yielded
+   * (regardless of whether they map successfully). Undefined = drain
+   * every page. Intended for smoke-test seeding — production
+   * incremental runs should leave this unset.
+   */
+  maxRecords?: number;
+  /**
+   * Scope filter for child syncers (applications, notes, interviews,
+   * uploads). When present, rows whose `candidate_tt_id` is not in
+   * this set are silently skipped during upsert — no `sync_errors`
+   * entry is written. Intended for partial backfills seeded by a
+   * capped `candidates` run; the set should be the teamtailor_ids of
+   * the candidates already present locally. Undefined = preserve the
+   * default behavior (unresolved candidate → orphan log).
+   */
+  scopeCandidateTtIds?: ReadonlySet<string>;
 }
 
 export interface EntitySyncer<Row = unknown> {
@@ -147,13 +165,19 @@ export async function runIncremental<Row>(
       }
     };
 
+    const cap = deps.maxRecords ?? Infinity;
+    let yielded = 0;
     if (syncer.includesSideloads) {
       for await (const { resource, included } of deps.client.paginateWithIncluded(path, params)) {
         await pushOrRecord(resource, included);
+        yielded += 1;
+        if (yielded >= cap) break;
       }
     } else {
       for await (const resource of deps.client.paginate(path, params)) {
         await pushOrRecord(resource, []);
+        yielded += 1;
+        if (yielded >= cap) break;
       }
     }
     if (batch.length > 0) {
