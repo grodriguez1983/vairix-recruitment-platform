@@ -425,49 +425,51 @@ empty_text | likely_scanned`) siempre con `parsed_at` sellado.
 expandidos acá para no inflar el documento.)
 
 - F2-001 — Webhook receiver de Teamtailor.
-- F2-002 — Rejection normalizer job (ADR-007). ✅ **CÓDIGO LISTO** (2026-04-18,
-  `0a4dbb9`..`1971318`). `src/lib/normalization/{classify,normalizer}.ts` +
-  24 tests verdes. Inactivo en prod hasta que F1-006 evaluations
-  desbloquee datos para procesar.
+- F2-002 — Rejection normalizer job (ADR-007). ✅ **DONE** (2026-04-18,
+  `0a4dbb9`..`1971318`; CLI 2026-04-19, `4b06e3f`).
+  `src/lib/normalization/{classify,normalizer}.ts` + 24 tests.
+  Operator CLI `pnpm normalize:rejections [--dry-run] [--force]
+[--batch=N]` imprime samples + counts; dry-run skippea writes.
 - F2-003 — Tags automáticos desde CV.
-- F2-004 — Panel admin para sync errors y needs_review. 🏃 **PARCIAL**
-  (2026-04-18, `5e1450f`..`9ac52cb`). Parte `sync_errors` lista:
+- F2-004 — Panel admin para sync errors y needs_review. ✅ **DONE**
+  (2026-04-18 `5e1450f`..`9ac52cb` para sync_errors; 2026-04-19
+  `c0479b5` para needs_review). Parte `sync_errors`:
   `src/lib/sync-errors/service.ts` + `/admin/sync-errors` (filtros +
   paginación + resolve action) + 8 integration tests. Parte
-  `needs_review` bloqueada por F1-006 evaluations.
+  `needs_review`: `src/lib/needs-review/service.ts` +
+  `/admin/needs-review` (categoría picker + dismiss, rechaza
+  categorías deprecated o rows ya clearadas) + 8 integration tests.
 - F2-005 — Observabilidad (logs agregados + métricas Supabase).
 
 ## Fase 3 — Semántica
 
-- F3-001 — Embeddings worker (ADR-005). 🏃 **PARCIAL — profile + notes + cv**
-  (2026-04-18, `adae0c2`..`83996a7`). Provider abstraction
-  (`EmbeddingProvider` + OpenAI impl + stub determinístico), helper de
-  hash (SHA-256 con model como sal), source builders `profile`,
-  `notes` y `cv` (más reciente parsed, trunca a 30k chars), workers
-  `runProfileEmbeddings`, `runNotesEmbeddings` y `runCvEmbeddings`
-  (idempotentes vía content_hash, invalidan caché cuando cambia
-  content o model), CLIs `pnpm embed:profiles`, `pnpm embed:notes` y
-  `pnpm embed:cv`. 37 tests nuevos en total. Pendiente: source
-  `evaluation` (bloqueado por F1-006 evaluations ingest).
-- F3-002 — Query de búsqueda con embeddings. ✅ **DONE (base)**
-  (2026-04-18, `26c8e53`..`9461dc4`). Migración con función RPC
-  `semantic_search_embeddings` (cosine similarity sobre embeddings,
-  RLS aplica vía `security invoker`), servicio `semanticSearchCandidates`
-  (embed query + llamada RPC + dedupe opcional por candidate_id).
-  9 tests nuevos (5 unit + 4 integration). API endpoint
-  `POST /api/search/semantic` disponible (`6b27af4`). Pendiente: UI
-  para UC-02 y hydration de candidate cards en la respuesta.
-- F3-003 — Búsqueda híbrida (structured + vector). ✅ **DONE (base)**
-  (2026-04-18, `1f14e69`..`a98b743`). Extiende la RPC
-  `semantic_search_embeddings` con `candidate_id_filter uuid[]` para
-  empujar el filtro al planner (ivfflat puede prunear cuando el set
-  es chico). Servicio `hybridSearchCandidates` con 3 modos: `hybrid`
-  (query + filtros → rerank restringido al filter set), `structured`
-  (sin query → devuelve ids sin ranking), `empty` (intersección
-  vacía). Endpoint `POST /api/search/hybrid` con provider lazy
-  (structured-only no requiere `OPENAI_API_KEY`). Garantía core de
-  UC-01 verificada en tests: candidatos fuera del filtro nunca
-  aparecen en el output ranqueado. Pendiente: UI.
+- F3-001 — Embeddings worker (ADR-005). ✅ **DONE — 4 sources**
+  (2026-04-18 `adae0c2`..`83996a7` para profile+notes+cv;
+  2026-04-19 `f307b3a` para evaluation). Provider abstraction
+  (`EmbeddingProvider` + OpenAI impl + stub determinístico), helper
+  de hash (SHA-256 con model como sal), source builders `profile`,
+  `notes`, `cv` (más reciente parsed, trunca a 30k chars) y
+  `evaluation` (agrega `evaluations` + `evaluation_answers` por
+  candidate), workers `runProfileEmbeddings`, `runNotesEmbeddings`,
+  `runCvEmbeddings` y `runEvaluationEmbeddings` (idempotentes vía
+  content_hash). CLIs `pnpm embed:{profiles,notes,cv,evaluations}`
+  y `pnpm embed:all` (orden: profile → notes → cv → evaluation).
+  46 tests nuevos en total.
+- F3-002 — Query de búsqueda con embeddings. ✅ **DONE**
+  (2026-04-18 `26c8e53`..`9461dc4` para servicio + API; 2026-04-19
+  `8d47297` para UI). Migración RPC `semantic_search_embeddings`
+  (cosine similarity, RLS vía `security invoker`), servicio
+  `semanticSearchCandidates`, endpoint `POST /api/search/semantic`,
+  UI server-rendered en `/search/semantic` con score badges +
+  source badges + hydration RLS-scoped.
+- F3-003 — Búsqueda híbrida (structured + vector). ✅ **DONE**
+  (2026-04-18 `1f14e69`..`a98b743` para servicio + API; 2026-04-19
+  `8d47297` para UI). RPC extendida con `candidate_id_filter
+uuid[]`. Servicio `hybridSearchCandidates` con 3 modos: `hybrid`,
+  `structured`, `empty`. Endpoint `POST /api/search/hybrid` con
+  provider lazy. UI server-rendered en `/search/hybrid` con
+  filtros (status, rejected dates, job) + query opcional, muestra
+  modo efectivo. Sidebar incluye entry "Search".
 - F3-004 — OCR opt-in para CVs escaneados.
 
 ## Fase 4 — Inteligencia

@@ -4,13 +4,86 @@
 > del estado; no es un registro histórico completo (para eso está
 > el git log).
 
-**Última actualización**: 2026-04-18
-**Última sesión**: 2026-04-18 — F1-011 CV viewer tab (signed-url endpoint + OpenFileButton + Currículums section), F1-008 CV parser worker (runtime + CLI + integration test), F1-007 CV download + Storage (migration + downloader + uploads syncer + CLI wiring), F1-006b manual upload endpoint + admin UI form, F1-006b VAIRIX CV Sheet filter + profile section (alcance simplificado: sin integración con Google Drive/Sheets), F1-006a interviews/evaluations ingest (unbloquea F1-006 desde TT; ver nota), F1-006 notes, F1-008 CV parser, F1-012 tags, F1-013 shortlists, F2-002 rejection normalizer (ready-to-run), F2-004 sync_errors admin, F3-001 profile+notes+cv embeddings, F3-002 semantic search, F3-003 hybrid search
-**Fase activa**: **Fase 1 — Fundación** (+ F2-002/F2-004 adelantadas, F3-001 profile+notes+cv slices, F3-002 y F3-003 base)
+**Última actualización**: 2026-04-19
+**Última sesión**: 2026-04-19 — F3-001 evaluation slice (embeddings worker + CLI + embed-all integrado), RLS tests para `evaluation_answers`, F2-002 dry-run CLI (`pnpm normalize:rejections [--dry-run|--force|--batch=N]`), F2-004 needs_review admin UI (`/admin/needs-review` con reclassify + dismiss), F3-002 `/search/semantic` page, F3-003 `/search/hybrid` page con filtros structured + rerank
+**Fase activa**: **Fase 1 — Fundación** (+ F2-002/F2-004 cerradas, F3-001 4 slices completas, F3-002/F3-003 con UI)
 
 ---
 
 ## ✅ Completado
+
+- **F3-001 evaluation slice** ✅ done — 2026-04-19 — `f307b3a`.
+  - `src/lib/embeddings/sources/evaluation.ts`: source builder que
+    agrega `evaluations` + `evaluation_answers` en un input por
+    candidate. Orden cronológico de evals, orden lexicográfico de
+    answers por `question_tt_id`, typed-column picker para
+    number/boolean/date/range. Devuelve `null` cuando toda la data
+    está vacía — el runtime salta la row.
+  - `src/lib/embeddings/evaluation-worker.ts`: handler del
+    `runEmbeddingsWorker` compartido. `source_type='evaluation'`,
+    `source_id=null` (1 row por candidate).
+  - `src/scripts/embed-evaluations.ts` + `pnpm embed:evaluations`.
+    `embed-all` corre ahora `profile → notes → cv → evaluation`
+    (el aggregate pesado queda último).
+  - 9 tests unitarios en `evaluation.test.ts` (null cuando todo
+    vacío, sort chronological, determinism bajo reshuffling,
+    typed-column fallback, questionTitle→questionTtId fallback,
+    header decision/score, no leaks de "null"/"undefined", collapse
+    de whitespace). 226/226 unit tests verdes.
+
+- **RLS tests para `evaluation_answers`** ✅ done — 2026-04-19 — `cbbc5b5`.
+  - `tests/rls/evaluation-answers.test.ts`: 4 tests (anon SELECT
+    denied, recruiter SELECT ok + INSERT denied, recruiter UPDATE +
+    DELETE denied con re-read de service-role para confirmar que no
+    es un zero-row silent success, admin R/W end-to-end).
+
+- **F2-002 rejection normalizer dry-run CLI** ✅ done — 2026-04-19 — `4b06e3f`.
+  - `src/scripts/normalize-rejections.ts` + `pnpm normalize:rejections`.
+    Flags: `--dry-run` (clasifica + imprime samples, no escribe),
+    `--force` (reclasifica incluso las ya normalizadas), `--batch=N`.
+  - `src/lib/normalization/normalizer.ts`: agregado `dryRun?: boolean`
+    y `samples[]` en el resultado (hasta 10 {reason→code}) para que
+    el operador pueda spot-checkear. Integration test adicional
+    verifica que dry-run NO escribe `rejection_category_id` ni
+    `normalization_attempted_at`.
+  - Workflow: `pnpm normalize:rejections --dry-run` → revisar
+    samples → `pnpm normalize:rejections` para aplicar → revisar
+    la cola `/admin/needs-review` para los fallbacks a `other`.
+
+- **F2-004 needs_review admin UI** ✅ done — 2026-04-19 — `c0479b5`.
+  - Cierra la mitad pendiente de F2-004 (la parte `sync_errors`
+    había aterrizado el 2026-04-18).
+  - `src/lib/needs-review/{service,errors}.ts`: `listNeedsReview` +
+    `countNeedsReview` + `listRejectionCategories` +
+    `reclassifyAndClear` + `dismissAndClear`. El reclassify valida
+    que la categoría exista y no esté `deprecated_at`; bloquea
+    doble-write con guardas `already_cleared`.
+  - `/admin/needs-review/page.tsx` + `ReviewRow` client component:
+    dropdown con categorías activas + botón "save" (reclasifica y
+    limpia flag) + botón "dismiss" (acepta fallback `other`). Links
+    a perfil de candidate desde el header de la row.
+  - Landing `/admin` suma tarjeta "Needs review" con badge de
+    pendientes (warning si >0).
+  - 8 integration tests: lista + join a candidates, count, sort de
+    categorías (other con sort_order=999 → último), reclassify
+    happy, reclassify con UUID inexistente → error
+    `invalid_category`, reclassify sobre row ya clara → error
+    `already_cleared`, dismiss happy, dismiss sobre ya clara → error.
+
+- **F3-002 `/search/semantic` page** ✅ done — 2026-04-19 — `8d47297`.
+  - Server-rendered: form GET sobre `?q=`, llama a
+    `semanticSearchCandidates` directo con client RLS-scoped (no
+    round trip por `/api/search/semantic`), hidrata via nuevo
+    `lib/search/hydrate.ts` (orden-preservante). Render con badge
+    de score + source badges (profile/notes/cv/eval).
+
+- **F3-003 `/search/hybrid` page** ✅ done — 2026-04-19 — `8d47297`.
+  - Misma estrategia: GET form con `q` + filtros structured
+    (status, rejected_after/before, job). Provider se resuelve lazy
+    solo cuando hay query (structured-only no necesita
+    `OPENAI_API_KEY` — mirror de `/api/search/hybrid`). Status line
+    muestra el modo efectivo (`hybrid` | `structured` | `empty`).
+  - Sidebar suma entry "Search" → `/search/hybrid`.
 
 - **F1-011 CV viewer tab** ✅ done — 2026-04-18.
   - `src/app/api/files/[id]/signed-url/route.ts`: `GET` que mintea un
