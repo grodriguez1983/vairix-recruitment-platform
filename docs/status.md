@@ -47,12 +47,18 @@ parse_error = null` (invalida el parser — ADR-006). Row-level
     fila (satisface el partial unique index de `20260418230000`).
     `is_internal=true`. UI: `VairixSheetUpload` client component
     renderizado sólo cuando `auth.role === 'admin'` en el profile.
-  - **Pendiente para próxima sesión**: integration test real del
-    uploads syncer (MSW para TT + Supabase local + Storage) —
-    hoy sólo hay unit tests de mapResource/buildInitialRequest.
-    Probe manual del sync completo contra el tenant VAIRIX (dry-run
-    con `page[size]=5` antes de un run completo). Regenerar
-    tipos DB tras la migration (`pnpm supabase:types`).
+  - **Integration test cerrado** `3e05bd4` — 3 tests E2E contra
+    Supabase local + Storage con TT y binary URLs mockeados por MSW:
+    happy path (2 files subidos + orphan en sync_errors + bytes en
+    bucket), idempotencia (re-run con mismos binarios preserva
+    parsed_text), binary change (nuevo hash + parsed_text reset a
+    null). Lockea el contrato content-addressed contra regresiones.
+  - **Tipos DB regenerados** — `pnpm supabase:types` no produjo
+    cambios: `is_internal` ya estaba en `src/types/database.ts`.
+  - **Pendiente para próxima sesión**: probe manual del sync
+    completo contra el tenant VAIRIX (dry-run con `page[size]=5`
+    antes de un run completo, siguiendo la regla de validación
+    incremental).
 
 - **F1-007 desbloqueado** ✅ 2026-04-18 — probe en
   `src/scripts/probe-uploads.ts` confirmó que `/v1/uploads` existe

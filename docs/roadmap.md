@@ -226,12 +226,8 @@ parse_error` cuando re-sube, así F1-008 re-parsea sólo lo cambiado.
 >
 > **Pendiente** (no bloqueante, próxima sesión):
 >
-> - Integration test real del uploads syncer (MSW para TT +
->   Supabase local + Storage). Hoy sólo unit tests de
->   mapResource/buildInitialRequest.
 > - Dry-run contra el tenant VAIRIX con `page[size]=5` antes de
 >   un run completo.
-> - Regenerar tipos DB (`pnpm supabase:types`).
 
 ---
 
