@@ -1,0 +1,49 @@
+{
+  "data": [
+    {
+      "id": "30001",
+      "type": "uploads",
+      "attributes": {
+        "url": "https://binaries.test/cvs/30001.pdf",
+        "fileName": "ada-cv.pdf",
+        "internal": true,
+        "created-at": "2026-04-01T09:00:00Z",
+        "updated-at": "2026-04-01T09:00:00Z"
+      },
+      "relationships": {
+        "candidate": { "data": { "id": "9001", "type": "candidates" } }
+      }
+    },
+    {
+      "id": "30002",
+      "type": "uploads",
+      "attributes": {
+        "url": "https://binaries.test/cvs/30002.docx",
+        "fileName": "ada-cover.docx",
+        "internal": false,
+        "created-at": "2026-04-02T09:00:00Z",
+        "updated-at": "2026-04-02T09:00:00Z"
+      },
+      "relationships": {
+        "candidate": { "data": { "id": "9001", "type": "candidates" } }
+      }
+    },
+    {
+      "id": "30003",
+      "type": "uploads",
+      "attributes": {
+        "url": "https://binaries.test/cvs/30003.pdf",
+        "fileName": "orphan.pdf",
+        "internal": true,
+        "created-at": "2026-04-03T09:00:00Z",
+        "updated-at": "2026-04-03T09:00:00Z"
+      },
+      "relationships": {
+        "candidate": { "data": { "id": "9999", "type": "candidates" } }
+      }
+    }
+  ],
+  "included": [],
+  "links": {},
+  "meta": {}
+}
