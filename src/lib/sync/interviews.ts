@@ -218,12 +218,19 @@ export const interviewsSyncer: EntitySyncer<InterviewStaging> = {
   async upsert(stagings: InterviewStaging[], deps: SyncerDeps): Promise<number> {
     if (stagings.length === 0) return 0;
 
-    const candidateTtIds = Array.from(new Set(stagings.map((s) => s.candidate_tt_id)));
+    // Scope-by-candidates: silently drop out-of-scope interviews (and
+    // their answers) before orphan bookkeeping. See
+    // SyncerDeps.scopeCandidateTtIds.
+    const scope = deps.scopeCandidateTtIds;
+    const scoped = scope ? stagings.filter((s) => scope.has(s.candidate_tt_id)) : stagings;
+    if (scoped.length === 0) return 0;
+
+    const candidateTtIds = Array.from(new Set(scoped.map((s) => s.candidate_tt_id)));
     const jobTtIds = Array.from(
-      new Set(stagings.map((s) => s.job_tt_id).filter((v): v is string => v !== null)),
+      new Set(scoped.map((s) => s.job_tt_id).filter((v): v is string => v !== null)),
     );
     const userTtIds = Array.from(
-      new Set(stagings.map((s) => s.user_tt_id).filter((v): v is string => v !== null)),
+      new Set(scoped.map((s) => s.user_tt_id).filter((v): v is string => v !== null)),
     );
 
     const [candidateMap, jobMap, userMap] = await Promise.all([
@@ -266,7 +273,7 @@ export const interviewsSyncer: EntitySyncer<InterviewStaging> = {
     // evaluation UUID is known.
     const answersByInterviewTtId = new Map<string, AnswerStaging[]>();
 
-    for (const s of stagings) {
+    for (const s of scoped) {
       const candidateId = candidateMap.get(s.candidate_tt_id);
       if (!candidateId) {
         await recordOrphan(deps, s);

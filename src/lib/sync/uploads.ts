@@ -163,8 +163,15 @@ export function makeUploadsSyncer(
     async upsert(stagings: UploadStaging[], deps: SyncerDeps): Promise<number> {
       if (stagings.length === 0) return 0;
 
-      const candidateTtIds = Array.from(new Set(stagings.map((s) => s.candidate_tt_id)));
-      const uploadTtIds = stagings.map((s) => s.teamtailor_id);
+      // Scope-by-candidates: silently drop uploads whose candidate
+      // isn't in the caller scope. Avoids downloading binaries that
+      // we'd immediately discard.
+      const scope = deps.scopeCandidateTtIds;
+      const scoped = scope ? stagings.filter((s) => scope.has(s.candidate_tt_id)) : stagings;
+      if (scoped.length === 0) return 0;
+
+      const candidateTtIds = Array.from(new Set(scoped.map((s) => s.candidate_tt_id)));
+      const uploadTtIds = scoped.map((s) => s.teamtailor_id);
 
       const [candidateMap, existingByTtId] = await Promise.all([
         buildCandidateMap(deps, candidateTtIds),
@@ -188,7 +195,7 @@ export function makeUploadsSyncer(
       const rows: FileRow[] = [];
       let upserted = 0;
 
-      for (const s of stagings) {
+      for (const s of scoped) {
         const candidateId = candidateMap.get(s.candidate_tt_id);
         if (!candidateId) {
           await recordOrphan(deps, s);

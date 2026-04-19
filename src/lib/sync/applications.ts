@@ -134,12 +134,19 @@ export const applicationsSyncer: EntitySyncer<ApplicationStaging> = {
   async upsert(stagings: ApplicationStaging[], deps: SyncerDeps): Promise<number> {
     if (stagings.length === 0) return 0;
 
-    const candidateIds = Array.from(new Set(stagings.map((s) => s.candidate_tt_id)));
+    // Scope-by-candidates mode: silently drop rows whose candidate_tt_id
+    // is not in the caller-provided scope, before any FK resolution or
+    // orphan bookkeeping. See ADR-003 / SyncerDeps.scopeCandidateTtIds.
+    const scope = deps.scopeCandidateTtIds;
+    const scoped = scope ? stagings.filter((s) => scope.has(s.candidate_tt_id)) : stagings;
+    if (scoped.length === 0) return 0;
+
+    const candidateIds = Array.from(new Set(scoped.map((s) => s.candidate_tt_id)));
     const jobIds = Array.from(
-      new Set(stagings.map((s) => s.job_tt_id).filter((v): v is string => v !== null)),
+      new Set(scoped.map((s) => s.job_tt_id).filter((v): v is string => v !== null)),
     );
     const stageIds = Array.from(
-      new Set(stagings.map((s) => s.stage_tt_id).filter((v): v is string => v !== null)),
+      new Set(scoped.map((s) => s.stage_tt_id).filter((v): v is string => v !== null)),
     );
 
     const [candidateMap, jobMap, stageMap] = await Promise.all([
@@ -161,7 +168,7 @@ export const applicationsSyncer: EntitySyncer<ApplicationStaging> = {
       raw_data: unknown;
     }> = [];
 
-    for (const s of stagings) {
+    for (const s of scoped) {
       const candidateId = candidateMap.get(s.candidate_tt_id);
       if (!candidateId) {
         await recordOrphan(deps, s, 'candidate');

@@ -105,12 +105,18 @@ export const notesSyncer: EntitySyncer<NoteStaging> = {
   async upsert(stagings: NoteStaging[], deps: SyncerDeps): Promise<number> {
     if (stagings.length === 0) return 0;
 
-    const candidateTtIds = Array.from(new Set(stagings.map((s) => s.candidate_tt_id)));
+    // Scope-by-candidates: drop out-of-scope rows silently (no orphan
+    // entry in sync_errors). See SyncerDeps.scopeCandidateTtIds.
+    const scope = deps.scopeCandidateTtIds;
+    const scoped = scope ? stagings.filter((s) => scope.has(s.candidate_tt_id)) : stagings;
+    if (scoped.length === 0) return 0;
+
+    const candidateTtIds = Array.from(new Set(scoped.map((s) => s.candidate_tt_id)));
     const appTtIds = Array.from(
-      new Set(stagings.map((s) => s.application_tt_id).filter((v): v is string => v !== null)),
+      new Set(scoped.map((s) => s.application_tt_id).filter((v): v is string => v !== null)),
     );
     const userTtIds = Array.from(
-      new Set(stagings.map((s) => s.user_tt_id).filter((v): v is string => v !== null)),
+      new Set(scoped.map((s) => s.user_tt_id).filter((v): v is string => v !== null)),
     );
 
     const [candidateMap, appMap, userMap] = await Promise.all([
@@ -128,7 +134,7 @@ export const notesSyncer: EntitySyncer<NoteStaging> = {
       raw_data: unknown;
     }> = [];
 
-    for (const s of stagings) {
+    for (const s of scoped) {
       const candidateId = candidateMap.get(s.candidate_tt_id);
       if (!candidateId) {
         await recordOrphan(deps, s);
