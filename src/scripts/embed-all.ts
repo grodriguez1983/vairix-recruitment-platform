@@ -6,6 +6,10 @@
  * and to give each source a clean structured-log section. Each worker
  * is already idempotent, so re-running is safe.
  *
+ * Order: profile → notes → cv → evaluation — evaluation last because
+ * it's the heaviest aggregate (1 row per candidate combining N
+ * evaluations × M answers).
+ *
  * Usage:
  *   pnpm embed:all              # run against OpenAI
  *   pnpm embed:all --stub       # smoke test, no API calls
@@ -23,6 +27,7 @@
 import { createClient } from '@supabase/supabase-js';
 
 import { runCvEmbeddings } from '../lib/embeddings/cv-worker';
+import { runEvaluationEmbeddings } from '../lib/embeddings/evaluation-worker';
 import { runNotesEmbeddings } from '../lib/embeddings/notes-worker';
 import { runProfileEmbeddings } from '../lib/embeddings/profile-worker';
 import { resolveEmbeddingProvider } from '../lib/embeddings/provider-factory';
@@ -67,6 +72,7 @@ async function main(): Promise<void> {
     { name: 'profile', run: () => runProfileEmbeddings(db, provider) },
     { name: 'notes', run: () => runNotesEmbeddings(db, provider) },
     { name: 'cv', run: () => runCvEmbeddings(db, provider) },
+    { name: 'evaluation', run: () => runEvaluationEmbeddings(db, provider) },
   ];
 
   for (const { name, run } of sources) {
