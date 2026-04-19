@@ -6,6 +6,7 @@
 import Link from 'next/link';
 
 import { requireRole } from '@/lib/auth/require';
+import { countNeedsReview } from '@/lib/needs-review/service';
 import { createClient } from '@/lib/supabase/server';
 import { countSyncErrors } from '@/lib/sync-errors/service';
 
@@ -18,7 +19,10 @@ export const dynamic = 'force-dynamic';
 export default async function AdminPage(): Promise<JSX.Element> {
   await requireRole('admin');
   const supabase = createClient();
-  const unresolvedSyncErrors = await countSyncErrors(supabase).catch(() => 0);
+  const [unresolvedSyncErrors, pendingNeedsReview] = await Promise.all([
+    countSyncErrors(supabase).catch(() => 0),
+    countNeedsReview(supabase).catch(() => 0),
+  ]);
 
   return (
     <div className="mx-auto max-w-4xl">
@@ -50,6 +54,28 @@ export default async function AdminPage(): Promise<JSX.Element> {
               }
             >
               {unresolvedSyncErrors} open
+            </span>
+          </div>
+        </Link>
+        <Link
+          href="/admin/needs-review"
+          className="rounded-lg border border-border bg-surface p-5 transition-colors hover:border-accent/40"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="font-display text-sm font-semibold text-text-primary">Needs review</h2>
+              <p className="mt-1 text-xs text-text-muted">
+                Rejection reasons the normalizer couldn&apos;t classify.
+              </p>
+            </div>
+            <span
+              className={
+                pendingNeedsReview > 0
+                  ? 'rounded-full bg-warning/10 px-2 py-0.5 font-mono text-[10px] font-medium text-warning'
+                  : 'rounded-full bg-bg px-2 py-0.5 font-mono text-[10px] text-text-muted'
+              }
+            >
+              {pendingNeedsReview} pending
             </span>
           </div>
         </Link>
