@@ -27,10 +27,10 @@ Status: `⏳ TODO` / `🏃 IN PROGRESS` / `✅ DONE` / `🚫 BLOCKED`.
 
 ## Fase 1 — Fundación
 
-> **Estado al 2026-04-18**: 13 / 15 items ✅ done (F1-007 CV download +
-> Storage cerrado, F1-006b upload manual admin-only cerrado); 2 🏃
-> parcial (F1-006b CV Sheet worker pendiente, F1-008 full wiring
-> pendiente de webhook + worker), 1 🏃 parcial derivado (F1-011 tabs
+> **Estado al 2026-04-18**: 14 / 15 items ✅ done (F1-008 CV parser
+> worker cerrado, F1-007 CV download + Storage cerrado, F1-006b
+> upload manual admin-only cerrado); 1 🏃 parcial (F1-006b CV Sheet
+> worker externo pendiente), 1 🏃 parcial derivado (F1-011 tabs
 > faltantes).
 > Ver `docs/status.md` para detalle por sesión.
 
@@ -231,37 +231,26 @@ parse_error` cuando re-sube, así F1-008 re-parsea sólo lo cambiado.
 
 ---
 
-### F1-008 — CV parser (pdf-parse, mammoth) 🏃 PARTIAL (2026-04-18, `6f3cd33`)
+### F1-008 — CV parser (pdf-parse, mammoth) ✅ DONE (2026-04-18)
 
-> ✅ Dispatcher puro en `src/lib/cv/parse.ts` con error codes tipados
-> y 12 unit tests. Deps inyectadas (`parsePdf`, `parseDocx`).
-> ⏳ **Pendiente**: wiring a Storage webhook + worker que haga
-> `download → parseCV → upsert files.text + content_hash`.
-> Depende de F1-007 (ver arriba).
-
-**Depende de**: F1-007.
-
-**Prompt**:
-
-> Implementá `src/lib/cv/parser.ts` que:
+> Commits: `6f3cd33` (dispatcher `parseCvBuffer` + 12 tests) →
+> `d50c26c` (RED worker) → `5de9156` (GREEN worker) → `cab9bfe`
+> (CLI + integration test).
 >
-> - Recibe un `file` recién subido.
-> - Descarga desde Storage (service role).
-> - Elige parser según `file_type`: `pdf-parse` para pdf,
->   `mammoth` para docx, `fs.readFile` para txt.
-> - Persiste `files.parsed_text`, setea `parsed_at`.
-> - En caso de error, setea `parse_error` con código:
->   `unsupported_format`, `parse_failure`, `empty_text`,
->   `likely_scanned` (si PDF y texto útil < 200 chars).
->   Tests: parseo de CV válido, scanned PDF detectado, DOCX parsea.
->   Commit: `feat(cv): add parser with pdf, docx, txt support`.
-
-**DoD**:
-
-- Tests de UC-07 pasan.
-- CVs escaneados marcados correctamente.
-
-**Estimación**: 6 h.
+> Pipeline: `files` filas que llegan via F1-007 con `parsed_text=null`
+> y `parse_error=null` → worker las toma, descarga de Storage, llama
+> `parseCvBuffer(file_type, buffer, deps)` → escribe `parsed_text`
+> (éxito) o `parse_error` (`unsupported_format | parse_failure |
+empty_text | likely_scanned`) siempre con `parsed_at` sellado.
+> Las filas terminales no se reprocesan — para reintentar un error
+> hay que limpiar `parse_error`. Errores de descarga se clasifican
+> como `parse_failure`. Integration test cubre 4 rows (2 pending,
+> 1 parseado, 1 errored) contra Supabase + Storage locales.
+>
+> CLI: `pnpm parse:cvs [--batch=N]` (default 50).
+>
+> Downstream: F3-001 cv embeddings ya levanta `parsed_text` via
+> `cvSourceHandler` — no requiere cambios.
 
 ---
 

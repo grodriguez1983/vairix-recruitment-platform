@@ -5,12 +5,33 @@
 > el git log).
 
 **Última actualización**: 2026-04-18
-**Última sesión**: 2026-04-18 — F1-007 CV download + Storage (migration + downloader + uploads syncer + CLI wiring), F1-006b manual upload endpoint + admin UI form, F1-006b VAIRIX CV Sheet filter + profile section (alcance simplificado: sin integración con Google Drive/Sheets), F1-006a interviews/evaluations ingest (unbloquea F1-006 desde TT; ver nota), F1-006 notes, F1-008 CV parser, F1-012 tags, F1-013 shortlists, F2-002 rejection normalizer (ready-to-run), F2-004 sync_errors admin, F3-001 profile+notes+cv embeddings, F3-002 semantic search, F3-003 hybrid search
+**Última sesión**: 2026-04-18 — F1-008 CV parser worker (runtime + CLI + integration test), F1-007 CV download + Storage (migration + downloader + uploads syncer + CLI wiring), F1-006b manual upload endpoint + admin UI form, F1-006b VAIRIX CV Sheet filter + profile section (alcance simplificado: sin integración con Google Drive/Sheets), F1-006a interviews/evaluations ingest (unbloquea F1-006 desde TT; ver nota), F1-006 notes, F1-008 CV parser, F1-012 tags, F1-013 shortlists, F2-002 rejection normalizer (ready-to-run), F2-004 sync_errors admin, F3-001 profile+notes+cv embeddings, F3-002 semantic search, F3-003 hybrid search
 **Fase activa**: **Fase 1 — Fundación** (+ F2-002/F2-004 adelantadas, F3-001 profile+notes+cv slices, F3-002 y F3-003 base)
 
 ---
 
 ## ✅ Completado
+
+- **F1-008 CV parser worker** ✅ done — 2026-04-18 — commits
+  `6f3cd33` (dispatcher previo) → `d50c26c` (RED) → `5de9156`
+  (GREEN) → `cab9bfe` (CLI + integration test).
+  - `src/lib/cv/parse-worker.ts`: runtime puro (I/O inyectado) que
+    pulla filas pendientes (`deleted_at IS NULL AND parsed_text IS
+NULL AND parse_error IS NULL`), descarga por `storage_path`,
+    dispatcha a `parseCvBuffer`, y escribe el resultado. Las filas
+    terminales (parseadas o con error) no se reprocesan; para
+    reintentar un error hay que poner `parse_error=null` a mano.
+    Errores de descarga se clasifican como `parse_failure`.
+  - `src/scripts/parse-cvs.ts`: CLI `pnpm parse:cvs [--batch=N]`
+    (default 50). pdf-parse + mammoth se importan lazy así los
+    scripts de sync/embeddings no pagan el costo.
+  - 6 unit tests (`src/lib/cv/parse-worker.test.ts`) + 1 integration
+    test (`tests/integration/cv/parse-worker.test.ts`) que seedea
+    Supabase + Storage locales con 2 pending + 1 parseada + 1 errored,
+    corre el worker, verifica que sólo tocó las pendings, y prueba
+    que un segundo run es no-op. 348/348 tests verdes.
+  - Downstream: F3-001 cv embeddings ya consume `parsed_text` via
+    `cvSourceHandler` — no requiere cambios.
 
 - **F1-007 CV download + Storage** ✅ done — 2026-04-18 — commits
   `f53955a` (migration + bucket) → `480077a` (RED downloader) →
