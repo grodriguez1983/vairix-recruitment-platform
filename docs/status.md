@@ -5,7 +5,7 @@
 > el git log).
 
 **Última actualización**: 2026-04-19
-**Última sesión**: 2026-04-19 — F3-001 evaluation slice (embeddings worker + CLI + embed-all integrado), RLS tests para `evaluation_answers`, F2-002 dry-run CLI (`pnpm normalize:rejections [--dry-run|--force|--batch=N]`), F2-004 needs_review admin UI (`/admin/needs-review` con reclassify + dismiss), F3-002 `/search/semantic` page, F3-003 `/search/hybrid` page con filtros structured + rerank
+**Última sesión**: 2026-04-19 — F3-001 evaluation slice (embeddings worker + CLI + embed-all integrado), RLS tests para `evaluation_answers`, F2-002 dry-run CLI (`pnpm normalize:rejections [--dry-run|--force|--batch=N]`), F2-004 needs_review admin UI (`/admin/needs-review` con reclassify + dismiss), F3-002 `/search/semantic` page, F3-003 `/search/hybrid` page con filtros structured + rerank, `SYNC_MAX_RECORDS` + `SYNC_SCOPE_BY_CANDIDATES` knobs para smoke-test seeding
 **Fase activa**: **Fase 1 — Fundación** (+ F2-002/F2-004 cerradas, F3-001 4 slices completas, F3-002/F3-003 con UI)
 
 ---
@@ -84,6 +84,38 @@
     `OPENAI_API_KEY` — mirror de `/api/search/hybrid`). Status line
     muestra el modo efectivo (`hybrid` | `structured` | `empty`).
   - Sidebar suma entry "Search" → `/search/hybrid`.
+
+- **Smoke-test seeding knobs (`SYNC_MAX_RECORDS` + `SYNC_SCOPE_BY_CANDIDATES`)** ✅ done — 2026-04-19.
+  - Motivador: traer 50 candidatos con data completa a local para
+    smoke-test manual sin un full backfill.
+  - `SyncerDeps.maxRecords?: number` en `src/lib/sync/run.ts`: runner
+    corta pagination al llegar al cap. Undefined = sin cap. Cuenta
+    resources yielded desde TT, no solo los que upsertan ok.
+  - `SyncerDeps.scopeCandidateTtIds?: ReadonlySet<string>` consumido
+    por applications/notes/interviews/uploads: filtra staging antes
+    de FK resolution. Rows fuera de scope se descartan silenciosa­
+    mente — **no** van a `sync_errors`. Uploads además skippea el
+    download del binario (no pagamos bytes que íbamos a tirar).
+  - CLI (`src/scripts/sync-incremental.ts`) lee `SYNC_MAX_RECORDS`
+    (positive int) y `SYNC_SCOPE_BY_CANDIDATES` (1/true), y cuando
+    scope está activo carga los teamtailor_id de `candidates` en un
+    Set y los pasa via deps.
+  - TDD full: commits `f302016` (RED cap) → `bcd195e` (GREEN cap) →
+    `69f863e` (RED scope) → `8ff73c7` (GREEN scope) → `5ce5103` (CLI
+    wiring). `.env.example` actualizado.
+  - Workflow smoke-test:
+    ```
+    pnpm sync:incremental stages
+    pnpm sync:incremental users
+    pnpm sync:incremental jobs
+    pnpm sync:incremental custom-fields
+    SYNC_MAX_RECORDS=50 pnpm sync:incremental candidates
+    SYNC_SCOPE_BY_CANDIDATES=1 pnpm sync:incremental applications
+    SYNC_SCOPE_BY_CANDIDATES=1 pnpm sync:incremental notes
+    SYNC_SCOPE_BY_CANDIDATES=1 pnpm sync:incremental evaluations
+    SYNC_SCOPE_BY_CANDIDATES=1 pnpm sync:incremental files
+    ```
+  - 415/415 tests verdes (244 unit + 113 integration + 58 RLS).
 
 - **Remediación F3-002/F3-003 (audit de procedimiento)** ✅ done — 2026-04-19.
   - Usuario cuestionó el bundle anterior por bypass de TDD
