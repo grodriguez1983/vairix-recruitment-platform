@@ -101,7 +101,15 @@ export const applicationsSyncer: EntitySyncer<ApplicationStaging> = {
   entity: 'applications',
 
   buildInitialRequest(cursor: string | null) {
-    const params: Record<string, string> = { 'page[size]': '30' };
+    // `?include=candidate,job,stage` is REQUIRED: by default TT returns
+    // relationships as link-only stubs (no `data.id`), so mapResource
+    // would throw "missing required relationship candidate" for every
+    // row. Including the relationships populates `relationships.X.data`
+    // on the primary resource. We ignore the sideloaded bodies.
+    const params: Record<string, string> = {
+      'page[size]': '30',
+      include: 'candidate,job,stage',
+    };
     if (cursor) params['filter[updated-at][from]'] = cursor;
     return { path: '/job-applications', params };
   },

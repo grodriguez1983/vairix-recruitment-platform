@@ -9,7 +9,9 @@
  * Row-level validation: empty body (NOT NULL in schema) → row error.
  *
  * Attribute key normalization: parseDocument returns camelCased
- * attributes, so `created-at` → `createdAt`. `body` stays as is.
+ * attributes, so `created-at` → `createdAt`. TT exposes the note
+ * content under the `note` attribute (not `body`); we map it to
+ * `body` (the local column name).
  */
 import type { TTParsedResource } from '../teamtailor/types';
 import type { EntitySyncer, SyncerDeps } from './run';
@@ -73,7 +75,12 @@ export const notesSyncer: EntitySyncer<NoteStaging> = {
   entity: 'notes',
 
   buildInitialRequest(cursor: string | null) {
-    const params: Record<string, string> = { 'page[size]': '30' };
+    // Populate relationships.{candidate,job-application,user}.data
+    // (TT returns link-only stubs by default).
+    const params: Record<string, string> = {
+      'page[size]': '30',
+      include: 'candidate,job-application,user',
+    };
     if (cursor) params['filter[updated-at][from]'] = cursor;
     return { path: '/notes', params };
   },
@@ -86,7 +93,8 @@ export const notesSyncer: EntitySyncer<NoteStaging> = {
         teamtailorId: resource.id,
       });
     }
-    const body = typeof attrs['body'] === 'string' ? attrs['body'] : '';
+    const rawBody = attrs['note'] ?? attrs['body'];
+    const body = typeof rawBody === 'string' ? rawBody : '';
     if (body.length === 0) {
       throw new ParseError(`notes[${resource.id}]: body is empty (NOT NULL in schema)`, {
         teamtailorId: resource.id,

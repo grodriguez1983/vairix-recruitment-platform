@@ -156,9 +156,12 @@ export const interviewsSyncer: EntitySyncer<InterviewStaging> = {
   includesSideloads: true,
 
   buildInitialRequest(cursor: string | null) {
+    // Include `candidate`, `job`, `user` alongside answers so the
+    // primary resource carries populated `relationships.X.data`
+    // (otherwise TT returns link-only stubs → mapResource throws).
     const params: Record<string, string> = {
       'page[size]': '30',
-      include: 'answers,answers.question',
+      include: 'candidate,job,user,answers,answers.question',
     };
     if (cursor) params['filter[updated-at][from]'] = cursor;
     return { path: '/interviews', params };
