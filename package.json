@@ -30,6 +30,7 @@
     "embed:notes": "tsx src/scripts/embed-notes.ts",
     "embed:cv": "tsx src/scripts/embed-cv.ts",
     "embed:all": "tsx src/scripts/embed-all.ts",
+    "parse:cvs": "tsx src/scripts/parse-cvs.ts",
     "supabase:types": "supabase gen types typescript --local > src/types/database.ts",
     "prepare": "husky install",
     "bootstrap": "bash scripts/bootstrap.sh"
