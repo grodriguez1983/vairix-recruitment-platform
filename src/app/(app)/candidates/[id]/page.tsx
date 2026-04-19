@@ -21,6 +21,7 @@ import { listTagsForCandidate, listAllTagNames } from '@/lib/tags/service';
 
 import { AddToShortlist } from './add-to-shortlist';
 import { CandidateTags } from './candidate-tags';
+import { OpenFileButton } from './open-file-button';
 import { VairixSheetUpload } from './vairix-sheet-upload';
 
 export const dynamic = 'force-dynamic';
@@ -55,7 +56,31 @@ interface ApplicationWithJob {
 
 interface VairixSheetData {
   url: string | null;
+  uploadedFileId: string | null;
   uploadedFileName: string | null;
+}
+
+interface CvFileRow {
+  id: string;
+  storage_path: string;
+  file_type: string;
+  parsed_text: string | null;
+  parse_error: string | null;
+  raw_data: Record<string, unknown> | null;
+  created_at: string;
+}
+
+function fileNameFromRow(row: CvFileRow): string {
+  const raw = (row.raw_data ?? {}) as Record<string, unknown>;
+  const attrs = ((raw['attributes'] as Record<string, unknown> | undefined) ?? {}) as Record<
+    string,
+    unknown
+  >;
+  const fromManual = raw['originalFileName'];
+  if (typeof fromManual === 'string' && fromManual.length > 0) return fromManual;
+  const fromTt = attrs['fileName'];
+  if (typeof fromTt === 'string' && fromTt.length > 0) return fromTt;
+  return row.storage_path.split('/').pop() ?? row.storage_path;
 }
 
 async function fetchVairixSheet(
@@ -88,15 +113,42 @@ async function fetchVairixSheet(
 
   const { data: files } = await supabase
     .from('files')
-    .select('storage_path')
+    .select('id, storage_path, raw_data')
     .eq('candidate_id', candidateId)
     .eq('kind', 'vairix_cv_sheet')
     .is('deleted_at', null)
     .limit(1);
-  const uploadedFileName =
-    ((files ?? [])[0] as { storage_path: string | null } | undefined)?.storage_path ?? null;
+  const sheet = (files ?? [])[0] as
+    | { id: string; storage_path: string; raw_data: Record<string, unknown> | null }
+    | undefined;
+  const uploadedFileId = sheet?.id ?? null;
+  const uploadedFileName = sheet
+    ? fileNameFromRow({
+        id: sheet.id,
+        storage_path: sheet.storage_path,
+        file_type: '',
+        parsed_text: null,
+        parse_error: null,
+        raw_data: sheet.raw_data,
+        created_at: '',
+      })
+    : null;
 
-  return { url, uploadedFileName };
+  return { url, uploadedFileId, uploadedFileName };
+}
+
+async function fetchCvFiles(
+  supabase: ReturnType<typeof createClient>,
+  candidateId: string,
+): Promise<CvFileRow[]> {
+  const { data } = await supabase
+    .from('files')
+    .select('id, storage_path, file_type, parsed_text, parse_error, raw_data, created_at')
+    .eq('candidate_id', candidateId)
+    .eq('kind', 'cv')
+    .is('deleted_at', null)
+    .order('created_at', { ascending: false });
+  return (data ?? []) as unknown as CvFileRow[];
 }
 
 interface CustomFieldValueRow {
@@ -212,13 +264,14 @@ export default async function CandidateProfilePage({ params }: PageProps): Promi
     .filter((v) => v.custom_fields !== null)
     .sort((a, b) => (a.custom_fields?.name ?? '').localeCompare(b.custom_fields?.name ?? ''));
 
-  const [tags, allTagNames, activeShortlists, vairixSheet] = await Promise.all([
+  const [tags, allTagNames, activeShortlists, vairixSheet, cvFiles] = await Promise.all([
     listTagsForCandidate(supabase, c.id).catch(() => []),
     listAllTagNames(supabase).catch(() => [] as string[]),
     listActiveShortlists(supabase).catch(() => []),
     fetchVairixSheet(supabase, c.id).catch(
-      () => ({ url: null, uploadedFileName: null }) as VairixSheetData,
+      () => ({ url: null, uploadedFileId: null, uploadedFileName: null }) as VairixSheetData,
     ),
+    fetchCvFiles(supabase, c.id).catch(() => [] as CvFileRow[]),
   ]);
 
   const shortlistOptions = activeShortlists.map((sl) => ({ id: sl.id, name: sl.name }));
@@ -377,8 +430,13 @@ export default async function CandidateProfilePage({ params }: PageProps): Promi
               {vairixSheet.uploadedFileName && (
                 <div className="flex min-w-0 flex-col gap-1">
                   <dt className="text-xs text-text-muted">Archivo subido</dt>
-                  <dd className="break-words font-mono text-xs text-text-primary">
-                    {vairixSheet.uploadedFileName}
+                  <dd className="flex flex-wrap items-center gap-3">
+                    <span className="break-words font-mono text-xs text-text-primary">
+                      {vairixSheet.uploadedFileName}
+                    </span>
+                    {vairixSheet.uploadedFileId && (
+                      <OpenFileButton fileId={vairixSheet.uploadedFileId} label="Abrir" />
+                    )}
                   </dd>
                 </div>
               )}
@@ -393,6 +451,46 @@ export default async function CandidateProfilePage({ params }: PageProps): Promi
         </div>
       </section>
 
+      <section className="mb-6">
+        <h2 className="mb-3 font-display text-base font-semibold text-text-primary">
+          Currículums{' '}
+          <span className="font-mono text-xs font-normal text-text-muted">({cvFiles.length})</span>
+        </h2>
+        {cvFiles.length === 0 ? (
+          <div className="rounded-lg border border-border border-dashed bg-surface p-6 text-center">
+            <p className="text-sm text-text-muted">
+              Sin CVs cargados. Se sincronizan automáticamente desde Teamtailor.
+            </p>
+          </div>
+        ) : (
+          <ul className="flex flex-col gap-2">
+            {cvFiles.map((f) => {
+              const name = fileNameFromRow(f);
+              return (
+                <li
+                  key={f.id}
+                  className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-border bg-surface p-4"
+                >
+                  <div className="min-w-0 flex-1">
+                    <p className="break-words font-mono text-sm text-text-primary">{name}</p>
+                    <p className="mt-0.5 text-xs text-text-muted">
+                      {f.file_type} · cargado {formatDate(f.created_at)}
+                      {f.parse_error && (
+                        <span className="ml-2 text-danger">· parse error: {f.parse_error}</span>
+                      )}
+                      {!f.parse_error && f.parsed_text === null && (
+                        <span className="ml-2 text-warning">· pending parse</span>
+                      )}
+                    </p>
+                  </div>
+                  <OpenFileButton fileId={f.id} label="Abrir" />
+                </li>
+              );
+            })}
+          </ul>
+        )}
+      </section>
+
       <CandidateTags candidateId={c.id} initialTags={tags} allTagNames={allTagNames} />
 
       <AddToShortlist candidateId={c.id} shortlists={shortlistOptions} />
@@ -400,7 +498,7 @@ export default async function CandidateProfilePage({ params }: PageProps): Promi
       <section className="rounded-lg border border-border border-dashed bg-surface p-6">
         <h2 className="font-display text-base font-semibold text-text-primary">More coming soon</h2>
         <p className="mt-2 text-sm text-text-muted">
-          CV viewer, evaluations, and notes land with F1-011 full. See{' '}
+          Evaluations and notes tabs land later in F1-011. See{' '}
           <code className="font-mono text-xs">docs/roadmap.md</code>.
         </p>
       </section>

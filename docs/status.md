@@ -5,12 +5,40 @@
 > el git log).
 
 **Última actualización**: 2026-04-18
-**Última sesión**: 2026-04-18 — F1-008 CV parser worker (runtime + CLI + integration test), F1-007 CV download + Storage (migration + downloader + uploads syncer + CLI wiring), F1-006b manual upload endpoint + admin UI form, F1-006b VAIRIX CV Sheet filter + profile section (alcance simplificado: sin integración con Google Drive/Sheets), F1-006a interviews/evaluations ingest (unbloquea F1-006 desde TT; ver nota), F1-006 notes, F1-008 CV parser, F1-012 tags, F1-013 shortlists, F2-002 rejection normalizer (ready-to-run), F2-004 sync_errors admin, F3-001 profile+notes+cv embeddings, F3-002 semantic search, F3-003 hybrid search
+**Última sesión**: 2026-04-18 — F1-011 CV viewer tab (signed-url endpoint + OpenFileButton + Currículums section), F1-008 CV parser worker (runtime + CLI + integration test), F1-007 CV download + Storage (migration + downloader + uploads syncer + CLI wiring), F1-006b manual upload endpoint + admin UI form, F1-006b VAIRIX CV Sheet filter + profile section (alcance simplificado: sin integración con Google Drive/Sheets), F1-006a interviews/evaluations ingest (unbloquea F1-006 desde TT; ver nota), F1-006 notes, F1-008 CV parser, F1-012 tags, F1-013 shortlists, F2-002 rejection normalizer (ready-to-run), F2-004 sync_errors admin, F3-001 profile+notes+cv embeddings, F3-002 semantic search, F3-003 hybrid search
 **Fase activa**: **Fase 1 — Fundación** (+ F2-002/F2-004 adelantadas, F3-001 profile+notes+cv slices, F3-002 y F3-003 base)
 
 ---
 
 ## ✅ Completado
+
+- **F1-011 CV viewer tab** ✅ done — 2026-04-18.
+  - `src/app/api/files/[id]/signed-url/route.ts`: `GET` que mintea un
+    URL firmado de 1h al bucket privado `candidate-cvs`. Auth: cualquier
+    usuario autenticado (recruiter o admin); RLS sobre `files` ya
+    enforce el matriz de visibilidad — `maybeSingle()` null = 404 sin
+    distinguir "no existe" de "RLS lo escondió". Soft-deleted → 410.
+    Resuelve `fileName` desde `raw_data.originalFileName` (uploads
+    manuales) o `raw_data.attributes.fileName` (TT-synced) con
+    fallback al basename del `storage_path`. URL no se persiste; se
+    mintea on-click para que no quede en el HTML rendered.
+  - `src/app/(app)/candidates/[id]/open-file-button.tsx`: client
+    component que hace fetch del signed-url y `window.open` con
+    `noopener,noreferrer`. Estado de loading con `useTransition` y
+    error inline.
+  - `src/app/(app)/candidates/[id]/page.tsx`: nueva sección
+    "Currículums" lista los `files` con `kind='cv'` (no
+    soft-deleted), muestra nombre + tipo + estado de parseo, y un
+    botón "Abrir" por archivo. La sección "Planilla VAIRIX" ahora
+    también renderiza un botón "Abrir" cuando hay archivo subido. El
+    placeholder "More coming soon" queda solo para evaluations + notes.
+  - 9 tests adversariales en `src/app/api/files/[id]/signed-url/
+route.test.ts` (401 unauth, 400 invalid_id, 400 SQL-injection
+    shape, 404 not visible, 410 soft-deleted, 500 sign failure,
+    happy path con TTL ~1h, fallback `attributes.fileName` para
+    TT-synced, fallback al basename). 271/271 unit tests verdes.
+  - Downstream: el parser marca `parse_error` y se muestra inline en
+    la lista; el operador puede abrir el binario para diagnosticar.
 
 - **F1-008 CV parser worker** ✅ done — 2026-04-18 — commits
   `6f3cd33` (dispatcher previo) → `d50c26c` (RED) → `5de9156`
