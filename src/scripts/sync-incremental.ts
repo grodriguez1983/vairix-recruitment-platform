@@ -56,6 +56,54 @@ function parseIntEnv(name: string, fallback: number): number {
   return n;
 }
 
+function parseOptionalPositiveInt(name: string): number | undefined {
+  const v = process.env[name];
+  if (!v) return undefined;
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0 || !Number.isInteger(n)) {
+    console.error(`[sync] invalid ${name}="${v}" (expected positive integer)`);
+    process.exit(2);
+  }
+  return n;
+}
+
+function parseBoolEnv(name: string): boolean {
+  const v = process.env[name];
+  if (!v) return false;
+  return v === '1' || v.toLowerCase() === 'true';
+}
+
+/**
+ * Partial-backfill helper: reads every `candidates.teamtailor_id`
+ * currently in local DB into a Set. Callers pass the result via
+ * `SyncerDeps.scopeCandidateTtIds` so child syncers silently drop
+ * rows whose candidate is out of scope. For a ~50-candidate smoke
+ * test the set is tiny and the query is fast.
+ */
+async function loadScopeCandidateTtIds(db: SupabaseClient): Promise<Set<string>> {
+  const ids = new Set<string>();
+  const pageSize = 1000;
+  let from = 0;
+  for (;;) {
+    const { data, error } = await db
+      .from('candidates')
+      .select('teamtailor_id')
+      .not('teamtailor_id', 'is', null)
+      .range(from, from + pageSize - 1);
+    if (error) {
+      console.error(`[sync] failed to load scope candidate tt_ids: ${error.message}`);
+      process.exit(4);
+    }
+    const rows = data ?? [];
+    for (const row of rows) {
+      if (typeof row.teamtailor_id === 'string') ids.add(row.teamtailor_id);
+    }
+    if (rows.length < pageSize) break;
+    from += pageSize;
+  }
+  return ids;
+}
+
 // The static syncers don't need per-run config. The uploads syncer
 // is special: it requires a live Storage bucket client, so it's
 // constructed inside main() once `db` exists. We keep entity →
@@ -113,8 +161,24 @@ async function main(): Promise<void> {
     },
   });
 
+  const maxRecords = parseOptionalPositiveInt('SYNC_MAX_RECORDS');
+  const scopeByCandidates = parseBoolEnv('SYNC_SCOPE_BY_CANDIDATES');
+  let scopeCandidateTtIds: Set<string> | undefined;
+  if (scopeByCandidates) {
+    scopeCandidateTtIds = await loadScopeCandidateTtIds(db);
+    // eslint-disable-next-line no-console
+    console.log(
+      `[sync] scope-by-candidates enabled: ${scopeCandidateTtIds.size} teamtailor_ids in scope`,
+    );
+  }
+
   try {
-    const result = await runIncremental(syncer, { db, client });
+    const result = await runIncremental(syncer, {
+      db,
+      client,
+      ...(maxRecords !== undefined ? { maxRecords } : {}),
+      ...(scopeCandidateTtIds !== undefined ? { scopeCandidateTtIds } : {}),
+    });
     // CLI success output; `no-console` is off here because this is a
     // script, not a library module.
     // eslint-disable-next-line no-console
