@@ -85,6 +85,28 @@
     muestra el modo efectivo (`hybrid` | `structured` | `empty`).
   - Sidebar suma entry "Search" → `/search/hybrid`.
 
+- **Remediación F3-002/F3-003 (audit de procedimiento)** ✅ done — 2026-04-19.
+  - Usuario cuestionó el bundle anterior por bypass de TDD
+    ([GREEN] sin [RED] previo) y falta de ADR para el patrón
+    server-rendered. Remediación en 4 pasos:
+    1. `tests/integration/search/hydrate.test.ts` — 6 tests
+       retro-cobertura de `hydrateCandidatesByIds` (order
+       preservation, RLS drop, empty input, dedupe, ids
+       inexistentes, mapeo full de card fields). Commit `11a2421`.
+    2. Full suite verde: 217 unit + 110 integration + 58 RLS = 385
+       tests. Sin regresiones del bundle.
+    3. `docs/adr/adr-011-server-rendered-search-pages.md` — pattern
+       documentado (form GET + server render + service call directo +
+       lazy provider + RLS hydration), alternativas descartadas,
+       triggers de reevaluación. Commit `c0746ac`.
+    4. Chronicle: 3 memorias persistidas (vitest script gotcha,
+       pattern architectural, TDD-gap insight).
+  - Deuda pendiente: `pnpm test:integration` y `pnpm test:unit` en
+    `package.json` usan el flag `--dir` deprecado de vitest 1.x y
+    fallan silenciosamente con "No test files found". Workaround:
+    `pnpm vitest run tests/integration/`. Arreglar en chore commit
+    separado.
+
 - **F1-011 CV viewer tab** ✅ done — 2026-04-18.
   - `src/app/api/files/[id]/signed-url/route.ts`: `GET` que mintea un
     URL firmado de 1h al bucket privado `candidate-cvs`. Auth: cualquier
