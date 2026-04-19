@@ -183,6 +183,35 @@ describe('runIncremental + applicationsSyncer', () => {
     expect(errs![0]!.teamtailor_id).toBe('10003');
   });
 
+  it('scopeCandidateTtIds silently drops out-of-scope orphans (no sync_errors row)', async () => {
+    // Same fixture as the orphan test: 10001 + 10002 reference candidate
+    // 9001 (seeded), 10003 references 99999 (unseeded). Without scope,
+    // 10003 → sync_errors. With scope = {9001}, 10003 is silently
+    // dropped: zero sync_errors rows for this entity.
+    server.use(
+      http.get(`${BASE_URL}/job-applications`, () => HttpResponse.json(applicationsPage1)),
+    );
+    const result = await runIncremental(applicationsSyncer, {
+      db,
+      client: makeTeamtailorClient(),
+      scopeCandidateTtIds: new Set([CANDIDATE_TT_ID]),
+    });
+    expect(result.recordsSynced).toBe(2);
+
+    const { data: apps } = await db
+      .from('applications')
+      .select('teamtailor_id')
+      .in('teamtailor_id', APP_IDS)
+      .order('teamtailor_id');
+    expect(apps?.map((r) => r.teamtailor_id)).toEqual(['10001', '10002']);
+
+    const { data: errs } = await db
+      .from('sync_errors')
+      .select('teamtailor_id, error_code')
+      .eq('entity', 'applications');
+    expect(errs).toHaveLength(0);
+  });
+
   it('is idempotent: running twice keeps the same 2 rows', async () => {
     server.use(
       http.get(`${BASE_URL}/job-applications`, () => HttpResponse.json(applicationsPage1)),
