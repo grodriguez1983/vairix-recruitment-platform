@@ -5,12 +5,43 @@
 > el git log).
 
 **Última actualización**: 2026-04-20
-**Última sesión**: 2026-04-20 — **Planning-only**: F4 matching por descomposición documentado end-to-end. UC-11 agregado a `use-cases.md`; `spec.md` §2.6 + §10 Fase 4 + §12 (3 riesgos nuevos); ADRs 012-015 redactadas y **Aceptadas** (extracción CV, catálogo skills, decomposition LLM, matching & ranking); `data-model.md` §16 con 9 tablas F4 + helper SQL `resolve_skill()` + invariantes de inmutabilidad; `roadmap.md` F4-001..F4-009 slices ejecutables; `_pending-decisions-f4.md` eliminado (decisiones consolidadas). **Sin código** — próxima sesión arranca F4-001.
+**Última sesión**: 2026-04-20 — **F4-001 schema + RLS completo** (4 sub-bloques vía TDD RED→GREEN). Migraciones `20260420000000..000007`: skills catalog + resolver SQL, cv_extractions (3 tablas con trigger de inmutabilidad sobre `raw_output`), job_queries (con helper `public.current_app_user_id()` + trigger de inmutabilidad sobre hash/LLM inputs), match_runs + match_results (state machine 'running'→'completed'/'failed' + insert-only trigger en results). Además **ADR-016 Aceptada** (Complementary signals: post-ranker rescue + evidence panel FTS + description_tsv), roadmap actualizado con F4-007bis/F4-008bis. **Full suite 501/501 green**. Siguiente: F4-002 (seed skills catalog + TS resolver).
 **Fase activa**: **Fase 4 — Inteligencia** (eje matching). F1 fundación + F2/F3 slices previas siguen done.
 
 ---
 
 ## ✅ Completado
+
+- **F4-001 schema + RLS** ✅ done — 2026-04-20 — `7fd5663`..`cbbc70e`.
+  - **Sub-bloque 1** (`7fd5663`): `skills`, `skill_aliases`,
+    `skills_blacklist` + `public.resolve_skill(text)` helper con trim
+    regex. RLS: público R, admin W.
+  - **Sub-bloque 2** (`a31a1c5`): `candidate_extractions` +
+    `candidate_experiences` + `experience_skills` con trigger
+    `enforce_raw_output_immutability()` (bloquea hasta service
+    role). `source_variant` (renombrado desde `cv_variant` por
+    drift vs data-model). 21 tests RLS + invariants.
+  - **Sub-bloque 3** (`f959378`): `job_queries` con trigger
+    `enforce_job_queries_immutability()` sobre 6 columnas (decomposed_json,
+    content_hash, normalized_text, model, prompt_version, created_by).
+    Helper nuevo `public.current_app_user_id()` (SECURITY DEFINER,
+    primer consumer de ownership-scoped RLS). 14 tests.
+  - **Sub-bloque 4** (`cbbc70e`): `match_runs` + `match_results`.
+    Trigger `enforce_match_runs_state_machine` (transición única
+    'running' → 'completed'|'failed' con `finished_at` requerido;
+    post-close todo frozen; identity cols siempre frozen). Trigger
+    `enforce_match_results_insert_only` (rechaza UPDATE para todos,
+    incluida service role). PK compuesta (match_run_id, candidate_id).
+    RLS match_runs: recruiter R/W propios via `triggered_by`, DELETE
+    admin-only. RLS match_results: SELECT via join a parent run, no
+    UPDATE policy, INSERT/DELETE admin-only (worker usa service role).
+    22 tests.
+  - **ADR-016 Aceptada** (`78ae009`): complementary signals
+    (estructurado + RAG + FTS) combinados sin corromper el contrato
+    del ranker. 3 integraciones bounded: `match_rescues` post-ranker,
+    evidence panel UI con `hybrid_search_fn`, generated column
+    `candidate_experiences.description_tsv`. Roadmap F4-007bis
+    (3h) + F4-008bis (4h) + F4-009 ajustado a 20h.
 
 - **F4 planning end-to-end** ✅ done — 2026-04-20 — `085c079`..`7a2c1fd`.
   - **use-cases.md**: UC-11 "Matching por descomposición de llamado"
@@ -855,12 +886,12 @@ _(nada todavía)_
 
 ## ⏳ Próximo (top 3 del roadmap)
 
-1. **F4-001** — Schema + RLS de 9 tablas F4 (skills catalog,
-   candidate_extractions, job_queries, match_runs). Incluye
-   `resolve_skill()` helper SQL con test de equivalencia TS↔SQL.
-2. **F4-002** — Skills catalog seed (~50-80 curados) + resolver TS.
-3. **F4-003** — CV variant classifier determinístico (sin LLM) con
+1. **F4-002** — Skills catalog seed (~50-80 curados) + resolver TS
+   con test de equivalencia TS↔SQL contra `public.resolve_skill()`.
+2. **F4-003** — CV variant classifier determinístico (sin LLM) con
    fixtures reales anonimizadas.
+3. **F4-004** — Extractor CV-→JSON con `ExtractionProvider`
+   (`gpt-4o-mini`) e idempotencia por `content_hash`.
 
 Ver `docs/roadmap.md` para el plan completo de F4-001..F4-009 con
 prompts listos.
