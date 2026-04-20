@@ -812,6 +812,65 @@ export type Database = {
           },
         ]
       }
+      job_queries: {
+        Row: {
+          content_hash: string
+          created_at: string
+          created_by: string | null
+          decomposed_json: Json
+          id: string
+          model: string
+          normalized_text: string
+          prompt_version: string
+          raw_text: string | null
+          raw_text_retained: boolean
+          resolved_at: string
+          resolved_json: Json
+          tenant_id: string | null
+          unresolved_skills: string[]
+        }
+        Insert: {
+          content_hash: string
+          created_at?: string
+          created_by?: string | null
+          decomposed_json: Json
+          id?: string
+          model: string
+          normalized_text: string
+          prompt_version: string
+          raw_text?: string | null
+          raw_text_retained?: boolean
+          resolved_at?: string
+          resolved_json: Json
+          tenant_id?: string | null
+          unresolved_skills?: string[]
+        }
+        Update: {
+          content_hash?: string
+          created_at?: string
+          created_by?: string | null
+          decomposed_json?: Json
+          id?: string
+          model?: string
+          normalized_text?: string
+          prompt_version?: string
+          raw_text?: string | null
+          raw_text_retained?: boolean
+          resolved_at?: string
+          resolved_json?: Json
+          tenant_id?: string | null
+          unresolved_skills?: string[]
+        }
+        Relationships: [
+          {
+            foreignKeyName: "job_queries_created_by_fkey"
+            columns: ["created_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       jobs: {
         Row: {
           body: string | null
@@ -1352,6 +1411,7 @@ export type Database = {
     }
     Functions: {
       current_app_role: { Args: never; Returns: string }
+      current_app_user_id: { Args: never; Returns: string }
       resolve_skill: { Args: { raw: string }; Returns: string }
       semantic_search_embeddings: {
         Args: {
