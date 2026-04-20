@@ -47,6 +47,19 @@ Construir una aplicación interna que:
 - Motivos de rechazo más comunes
 - Performance de evaluadores
 
+### 2.6 Matching por descomposición de llamado (UC-11)
+
+> "Pegá el llamado del cliente y devolveme quién encaja, con años
+> reales por cada tecnología pedida."
+
+- Entrada: job description en texto libre.
+- Salida: lista ordenada de candidates con score explicable,
+  años calculados por skill desde experiencias laborales reales
+  del CV (no cursos ni side projects), y evidencia textual por match.
+- Requiere extracción estructurada del CV (experiencias + skills por
+  experiencia) y descomposición LLM del llamado en requisitos
+  atómicos. Detalle en ADRs 012–015 (propuestos).
+
 ---
 
 ## 3. 🏗️ Arquitectura Propuesta (POC)
@@ -277,6 +290,11 @@ Principio: el reclutador no debería necesitar entender el modelo de datos.
 
 ### Fase 4 — Inteligencia
 
+- **Matching por descomposición de llamado (UC-11)** — extracción
+  estructurada de CV (experiencias + skills por experiencia) +
+  descomposición LLM del job description + motor de matching
+  híbrido (SQL sobre años/skills + semantic para cualitativo). Ver
+  ADRs 012–015 (propuestos).
 - RAG sobre historial del candidate
 - Insights automáticos de reclutamiento
 - `hiring_manager` como rol (si aplica)
@@ -299,6 +317,18 @@ Principio: el reclutador no debería necesitar entender el modelo de datos.
 - **CVs diversos** (formato, idioma, calidad)
 - **Rate limits** de Teamtailor en sync inicial (full backfill)
 - **Sesgo en embeddings** si el corpus histórico está sesgado
+- **Extracción LLM sobre CVs con PII** (UC-11, Fase 4) — mandar CVs
+  completos a un provider externo es cambio de postura de
+  confidencialidad. A definir en ADR-012: provider, data retention
+  del provider, opción on-prem, y scope de la extracción (solo
+  experiencias + skills, no campos identificatorios).
+- **Costo LLM** del matching — un re-extract masivo de ~1000 CVs
+  tiene costo no trivial; requiere dry-run + budget explícito antes
+  de correr (operación Tier 2).
+- **Deriva entre CV y realidad** — lo que un CV declara no siempre
+  es lo que el candidato sabe hacer. UC-11 rankea por evidencia
+  escrita, no por verdad absoluta; el reclutador sigue siendo el
+  humano en el loop.
 
 ---
 
