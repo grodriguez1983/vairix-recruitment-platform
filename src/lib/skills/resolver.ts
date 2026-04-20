@@ -1,14 +1,25 @@
 /**
  * Skill resolver — TS-side (ADR-013 §2).
  *
- * STUB: GREEN implementation lands in the next commit. This file
- * exists only to make the test file typecheck during the RED phase.
+ * Pure function with injected `CatalogSnapshot`. The SQL mirror is
+ * `public.resolve_skill(text)` (migration 20260420000000). Both
+ * sides share the exact same pipeline; equivalence is enforced by
+ * tests/integration/skills/resolver-equivalence.test.ts.
+ *
+ * Pipeline:
+ *   1. null/undefined/empty/whitespace-only → null (no I/O).
+ *   2. trim any whitespace (spaces, tabs, \r, \n).
+ *   3. lowercase.
+ *   4. collapse internal whitespace to a single space.
+ *   5. strip terminal punctuation (., ,, ;, :) — preserve internal.
+ *   6. exact match against skills.slug (ignoring deprecated).
+ *   7. alias match against skill_aliases.alias_normalized.
+ *   8. no match → null.
+ *
+ * The snapshot is built once per batch from two DB reads. Inside a
+ * batch it's immutable; if the catalog changes the worker rebuilds
+ * on the next batch (ADR-013 §2).
  */
-
-export type CatalogSnapshot = {
-  slugMap: Map<string, string>;
-  aliasMap: Map<string, string>;
-};
 
 export type SkillRow = {
   id: string;
@@ -21,18 +32,91 @@ export type AliasRow = {
   alias_normalized: string;
 };
 
+export type CatalogSnapshot = {
+  /** slug → skill_id, excluding deprecated skills. */
+  slugMap: Map<string, string>;
+  /** alias_normalized → skill_id, regardless of parent deprecation. */
+  aliasMap: Map<string, string>;
+};
+
 export type Resolution = {
   skill_id: string;
   confidence: 'exact' | 'alias';
 };
 
-export function buildCatalogSnapshot(_skills: SkillRow[], _aliases: AliasRow[]): CatalogSnapshot {
-  return { slugMap: new Map(), aliasMap: new Map() };
+/**
+ * Builds the in-memory snapshot used by `resolveSkill`.
+ *
+ * - Deprecated skills are excluded from `slugMap` to mirror the SQL
+ *   helper's `WHERE deprecated_at IS NULL` clause.
+ * - Aliases are indexed unconditionally — the SQL helper does not
+ *   filter alias matches by deprecation, and we mirror that literally.
+ */
+export function buildCatalogSnapshot(skills: SkillRow[], aliases: AliasRow[]): CatalogSnapshot {
+  const slugMap = new Map<string, string>();
+  for (const s of skills) {
+    if (s.deprecated_at !== null) continue;
+    slugMap.set(s.slug, s.id);
+  }
+  const aliasMap = new Map<string, string>();
+  for (const a of aliases) {
+    aliasMap.set(a.alias_normalized, a.skill_id);
+  }
+  return { slugMap, aliasMap };
 }
 
+/**
+ * Normalizes a raw skill string per ADR-013 §2. Returns `null` when
+ * the input is empty after normalization (caller treats as
+ * "uncataloged").
+ *
+ * Exported for the equivalence test and for any caller that needs
+ * the normalized form without resolving (e.g. building
+ * `/admin/skills/uncataloged` groupings).
+ */
+export function normalizeSkillInput(raw: string | null | undefined): string | null {
+  if (raw === null || raw === undefined) return null;
+
+  // Step 1: strip all leading/trailing whitespace (including tabs,
+  // newlines, carriage returns). Mirror of the SQL regex
+  // `regexp_replace(raw, '^\s+|\s+$', '', 'g')`.
+  let s = raw.replace(/^\s+|\s+$/g, '');
+  if (s.length === 0) return null;
+
+  // Step 2: lowercase.
+  s = s.toLowerCase();
+
+  // Step 3: collapse internal whitespace.
+  s = s.replace(/\s+/g, ' ');
+
+  // Step 4: strip terminal punctuation (., ,, ;, :). Internal
+  // punctuation (the dot in "node.js", the + in "c++", the / in
+  // "ci/cd") is preserved.
+  s = s.replace(/[.,;:]+$/, '');
+
+  return s.length === 0 ? null : s;
+}
+
+/**
+ * Resolves a raw skill string to a catalog id using the snapshot.
+ * Returns `null` for empty inputs and for uncataloged strings.
+ */
 export function resolveSkill(
-  _raw: string | null | undefined,
-  _catalog: CatalogSnapshot,
+  raw: string | null | undefined,
+  catalog: CatalogSnapshot,
 ): Resolution | null {
+  const normalized = normalizeSkillInput(raw);
+  if (normalized === null) return null;
+
+  const slugHit = catalog.slugMap.get(normalized);
+  if (slugHit !== undefined) {
+    return { skill_id: slugHit, confidence: 'exact' };
+  }
+
+  const aliasHit = catalog.aliasMap.get(normalized);
+  if (aliasHit !== undefined) {
+    return { skill_id: aliasHit, confidence: 'alias' };
+  }
+
   return null;
 }
