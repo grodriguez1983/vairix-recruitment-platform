@@ -1,6 +1,6 @@
 # ADR-014 — Descomposición LLM de job descriptions
 
-- **Estado**: Propuesto
+- **Estado**: Aceptado
 - **Fecha**: 2026-04-20
 - **Decisores**: Owner VAIRIX + Claude Code
 - **Relacionado con**: `use-cases.md` UC-11, ADR-012 (extracción
