@@ -218,6 +218,126 @@ export type Database = {
           },
         ]
       }
+      candidate_experiences: {
+        Row: {
+          candidate_id: string
+          company: string | null
+          created_at: string
+          description: string | null
+          end_date: string | null
+          extraction_id: string
+          id: string
+          kind: string
+          merged_from_ids: string[] | null
+          source_variant: string
+          start_date: string | null
+          tenant_id: string | null
+          title: string | null
+        }
+        Insert: {
+          candidate_id: string
+          company?: string | null
+          created_at?: string
+          description?: string | null
+          end_date?: string | null
+          extraction_id: string
+          id?: string
+          kind: string
+          merged_from_ids?: string[] | null
+          source_variant: string
+          start_date?: string | null
+          tenant_id?: string | null
+          title?: string | null
+        }
+        Update: {
+          candidate_id?: string
+          company?: string | null
+          created_at?: string
+          description?: string | null
+          end_date?: string | null
+          extraction_id?: string
+          id?: string
+          kind?: string
+          merged_from_ids?: string[] | null
+          source_variant?: string
+          start_date?: string | null
+          tenant_id?: string | null
+          title?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "candidate_experiences_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "candidate_experiences_extraction_id_fkey"
+            columns: ["extraction_id"]
+            isOneToOne: false
+            referencedRelation: "candidate_extractions"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      candidate_extractions: {
+        Row: {
+          candidate_id: string
+          content_hash: string
+          created_at: string
+          extracted_at: string
+          file_id: string
+          id: string
+          model: string
+          prompt_version: string
+          raw_output: Json
+          source_variant: string
+          tenant_id: string | null
+        }
+        Insert: {
+          candidate_id: string
+          content_hash: string
+          created_at?: string
+          extracted_at?: string
+          file_id: string
+          id?: string
+          model: string
+          prompt_version: string
+          raw_output: Json
+          source_variant: string
+          tenant_id?: string | null
+        }
+        Update: {
+          candidate_id?: string
+          content_hash?: string
+          created_at?: string
+          extracted_at?: string
+          file_id?: string
+          id?: string
+          model?: string
+          prompt_version?: string
+          raw_output?: Json
+          source_variant?: string
+          tenant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "candidate_extractions_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "candidate_extractions_file_id_fkey"
+            columns: ["file_id"]
+            isOneToOne: false
+            referencedRelation: "files"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       candidate_tags: {
         Row: {
           candidate_id: string
@@ -575,6 +695,48 @@ export type Database = {
             columns: ["user_id"]
             isOneToOne: false
             referencedRelation: "users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      experience_skills: {
+        Row: {
+          created_at: string
+          experience_id: string
+          id: string
+          resolved_at: string | null
+          skill_id: string | null
+          skill_raw: string
+        }
+        Insert: {
+          created_at?: string
+          experience_id: string
+          id?: string
+          resolved_at?: string | null
+          skill_id?: string | null
+          skill_raw: string
+        }
+        Update: {
+          created_at?: string
+          experience_id?: string
+          id?: string
+          resolved_at?: string | null
+          skill_id?: string | null
+          skill_raw?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "experience_skills_experience_id_fkey"
+            columns: ["experience_id"]
+            isOneToOne: false
+            referencedRelation: "candidate_experiences"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "experience_skills_skill_id_fkey"
+            columns: ["skill_id"]
+            isOneToOne: false
+            referencedRelation: "skills"
             referencedColumns: ["id"]
           },
         ]
