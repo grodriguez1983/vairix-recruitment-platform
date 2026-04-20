@@ -1,6 +1,6 @@
 # ADR-013 — Taxonomía de skills (catálogo + aliases + resolver)
 
-- **Estado**: Propuesto
+- **Estado**: Aceptado
 - **Fecha**: 2026-04-20
 - **Decisores**: Owner VAIRIX + Claude Code
 - **Relacionado con**: ADR-012 (extracción), ADR-015 (matching/
