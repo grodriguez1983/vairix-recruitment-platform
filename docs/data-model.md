@@ -574,27 +574,28 @@ Catálogo canónico de tecnologías y skills.
 ```sql
 create table skills (
   id              uuid primary key default uuid_generate_v4(),
-  canonical_name  text unique not null,       -- "React", "Node.js", "C++"
-  slug            text unique not null,       -- "react", "node-js", "c-plus-plus"
-  category        text not null check (category in (
-                     'language', 'framework', 'database', 'platform',
-                     'tool', 'methodology', 'soft_skill', 'other'
-                  )),
-  description     text,
+  tenant_id       uuid,
+  canonical_name  text not null,              -- "React", "Node.js", "C++"
+  slug            text unique not null,       -- "react", "node-js", "c++"
+  category        text,                       -- "framework", "language", "database", ...
   deprecated_at   timestamptz,
-  created_by      uuid references app_users(id) on delete set null,
   created_at      timestamptz not null default now(),
   updated_at      timestamptz not null default now()
 );
 
-create index idx_skills_slug     on skills(slug);
-create index idx_skills_category on skills(category);
-create index idx_skills_name_trgm on skills using gin (canonical_name gin_trgm_ops);
+create index idx_skills_slug       on skills(slug);
+create index idx_skills_category   on skills(category) where category is not null;
+create index idx_skills_name_trgm  on skills using gin (canonical_name gin_trgm_ops);
+create index idx_skills_tenant     on skills(tenant_id);
 
 create trigger trg_skills_updated_at
   before update on skills
   for each row execute function set_updated_at();
 ```
+
+> `canonical_name` **no** es unique: variantes de display (casing,
+> diacríticos) pueden existir mientras el `slug` sea estable.
+> `category` es plano y nullable — sin jerarquía (ADR-013 §1).
 
 ### 16.2 `skill_aliases` (ADR-013)
 
@@ -605,14 +606,19 @@ Alias no-canónicos ("reactjs", "node", "postgresql") resueltos al
 create table skill_aliases (
   id                uuid primary key default uuid_generate_v4(),
   skill_id          uuid not null references skills(id) on delete cascade,
-  alias_normalized  text unique not null,     -- lowercase + trim + puntuación preservada
-  source            text not null check (source in ('curated', 'cv_derived', 'manual_admin')),
-  created_by        uuid references app_users(id) on delete set null,
+  alias_normalized  text unique not null,     -- lowercase + trim + puntuación interna preservada
+  source            text not null check (source in ('seed', 'admin', 'derived')),
   created_at        timestamptz not null default now()
 );
 
-create index idx_skill_aliases_skill on skill_aliases(skill_id);
+create index idx_skill_aliases_skill  on skill_aliases(skill_id);
+create index idx_skill_aliases_source on skill_aliases(source);
 ```
+
+> `alias_normalized` es unique **globalmente**: dos skills no pueden
+> reclamar el mismo alias; el primero gana y un admin resuelve el
+> conflicto. `source='derived'` marca aliases extraídos de CVs reales
+> por `pnpm skills:derive-aliases-from-cvs` (ADR-013 §4).
 
 ### 16.3 `skills_blacklist` (ADR-013)
 
@@ -622,17 +628,23 @@ Términos que el resolver debe ignorar activamente ("experience",
 ```sql
 create table skills_blacklist (
   id                uuid primary key default uuid_generate_v4(),
-  term_normalized   text unique not null,
+  alias_normalized  text unique not null,
   reason            text,
-  created_by        uuid references app_users(id) on delete set null,
   created_at        timestamptz not null default now()
 );
+
+create index idx_skills_blacklist_alias on skills_blacklist(alias_normalized);
 ```
+
+> Columna `alias_normalized` (misma convención que `skill_aliases`)
+> para que el reporte `/admin/skills/uncataloged` pueda filtrar
+> entradas ya descartadas con un simple join. **El resolver NO la
+> consulta** — sirve solo para UI admin (ADR-013 §5).
 
 ### 16.4 Helper SQL: `public.resolve_skill(text)` (ADR-013)
 
-Mirror de `src/lib/skills/resolver.ts`. Tests de equivalencia
-(ADR-013 §2) garantizan que ambos coinciden.
+Mirror de `src/lib/skills/resolver.ts` (§2). Tests de equivalencia
+TS↔SQL sobre un set de inputs garantizan que ambos coinciden.
 
 ```sql
 create or replace function public.resolve_skill(raw text)
@@ -645,19 +657,22 @@ begin
     return null;
   end if;
 
-  -- lowercase → trim → strip terminal punct → preserve internal
+  -- lowercase → trim → colapso de whitespace interno → strip de
+  -- puntuación terminal (., ,, ;, :). Puntuación interna preservada
+  -- (c++, c#, node.js, ci/cd).
   normalized := lower(trim(raw));
-  normalized := regexp_replace(normalized, '[[:punct:]]+$', '');
+  normalized := regexp_replace(normalized, '\s+', ' ', 'g');
+  normalized := regexp_replace(normalized, '[.,;:]+$', '');
 
-  if exists (select 1 from skills_blacklist where term_normalized = normalized) then
-    return null;
-  end if;
+  -- El resolver NO consulta skills_blacklist (ADR-013 §5). La
+  -- blacklist sirve solo para UI admin.
 
-  select id into result_id from skills where slug = normalized;
+  select id into result_id from skills
+    where slug = normalized and deprecated_at is null;
   if result_id is not null then return result_id; end if;
 
   select skill_id into result_id
-  from skill_aliases where alias_normalized = normalized;
+    from skill_aliases where alias_normalized = normalized;
 
   return result_id;  -- puede ser null (uncataloged)
 end;
