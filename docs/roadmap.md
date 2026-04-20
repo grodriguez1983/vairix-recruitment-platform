@@ -476,9 +476,11 @@ uuid[]`. Servicio `hybridSearchCandidates` con 3 modos: `hybrid`,
 
 > **Eje principal F4**: matching por descomposición de llamado (UC-11).
 > Gobernado por ADRs 012 (extracción CVs), 013 (catálogo skills),
-> 014 (decomposition LLM), 015 (matching & ranking). Sliced en
-> F4-001..F4-009 abajo. Los ex-items F4-010/F4-011 (RAG, insights)
-> quedan como trabajo de Fase 4 fuera del eje matching.
+> 014 (decomposition LLM), 015 (matching & ranking), 016 (señales
+> complementarias FTS/vector). Sliced en F4-001..F4-009 abajo, con
+> F4-007 bis y F4-008 bis agregadas al aceptar ADR-016. Los
+> ex-items F4-010/F4-011 (RAG, insights) quedan como trabajo de Fase
+> 4 fuera del eje matching.
 
 ### F4-001 — Schema + RLS de tablas F4
 
@@ -717,6 +719,37 @@ experience_id = ...`).
 
 ---
 
+### F4-007 bis — `candidate_experiences.description_tsv` (ADR-016 §3)
+
+**Depende de**: F4-001 sub-block 2 (candidate_experiences).
+
+**Prompt**:
+
+> Migración aditiva que agrega columna `description_tsv` a
+> `candidate_experiences`:
+>
+> ```sql
+> alter table candidate_experiences
+>   add column description_tsv tsvector generated always as
+>     (to_tsvector('simple', coalesce(description, ''))) stored;
+> create index idx_candidate_experiences_description_tsv
+>   on candidate_experiences using gin (description_tsv);
+> ```
+>
+> Regenerar types. No requiere cambios en el worker de extracción
+> (la columna es stored-generated).
+
+**DoD**:
+
+- Test que inserta una experience con `description = 'Led a team
+using React and Node.js'` y verifica que
+  `description_tsv @@ plainto_tsquery('simple', 'react')`.
+- `supabase gen types` refleja la nueva columna.
+
+**Estimación**: 3 h.
+
+---
+
 ### F4-008 — API routes + persist match runs
 
 **Depende de**: F4-007.
@@ -747,9 +780,60 @@ experience_id = ...`).
 
 ---
 
+### F4-008 bis — `match_rescues` + complementary-signals module (ADR-016 §1)
+
+**Depende de**: F4-008, F4-007 bis.
+
+**Prompt**:
+
+> Implementá el recall-fallback de ADR-016:
+>
+> - Migración `match_rescues` con shape de ADR-016 §Notas:
+>
+>   ```sql
+>   create table match_rescues (
+>     match_run_id   uuid not null references match_runs(id) on delete cascade,
+>     candidate_id   uuid not null references candidates(id) on delete cascade,
+>     tenant_id      uuid,
+>     missing_skills text[] not null,
+>     fts_snippets   jsonb not null,
+>     fts_max_rank   numeric(6, 4) not null,
+>     primary key (match_run_id, candidate_id)
+>   );
+>   ```
+>
+>   - RLS paralela a `match_results` (recruiter R propios, admin R/W).
+>
+> - `src/lib/rag/complementary-signals.ts`:
+>   - `FTS_RESCUE_THRESHOLD = 0.1`
+>   - `fetchFtsRescues(jobQueryId, runId, gateFailedCandidates)`:
+>     por cada candidato gate-failed, ejecuta `plainto_tsquery` sobre
+>     `files.parsed_text` con los slugs `must_have` ausentes. Si algún
+>     skill supera `FTS_RESCUE_THRESHOLD`, escribe fila en
+>     `match_rescues`.
+>   - `fetchEvidenceSnippets(candidateId, requirementSlugs)`: lectura
+>     ad-hoc para el evidence panel, usa `hybrid_search_fn` existente.
+>     Retorna top-`EVIDENCE_SNIPPET_LIMIT` por slug. NO persiste.
+> - El ranker de F4-008 invoca `fetchFtsRescues()` tras cerrar el run
+>   oficial. `match_results` y `rank` no cambian.
+> - Endpoint: `GET /api/matching/runs/:id/rescues` (paginado).
+
+**DoD**:
+
+- Test: JD con `must_have = ['react']` + candidato sin `react` en
+  `experience_skills` pero con `React` mencionado 3 veces en CV →
+  aparece en `match_rescues`, NO en `match_results`.
+- Test: mismo candidato con `react` estructurado → NO aparece en
+  rescues (ya pasó el gate).
+- Evidence panel snippet devuelve el término con highlight.
+
+**Estimación**: 4 h.
+
+---
+
 ### F4-009 — UI: pegar JD, resultados, admin
 
-**Depende de**: F4-008.
+**Depende de**: F4-008, F4-008 bis.
 
 **Prompt**:
 
@@ -759,7 +843,14 @@ experience_id = ...`).
 >   Muestra `DecompositionResult` parseado + skills unresolved
 >   accionables (link a `/admin/skills`).
 > - `/matching/runs/:id`: ranking con breakdown expandible por
->   candidato, sección aparte "No cumplen must-have".
+>   candidato, sección aparte "No cumplen must-have". Al expandir
+>   un candidato, **evidence panel** (ADR-016 §2): snippets de
+>   `fetchEvidenceSnippets()` con highlight del término, agrupados
+>   por skill del requirement.
+> - `/matching/runs/:id/rescues`: tabla separada del recall-fallback
+>   con `missing_skills`, `fts_snippets` y acción "revisar
+>   manualmente" (link al detalle del candidato con el panel ya
+>   abierto en los skills rescatados).
 > - `/admin/skills`: CRUD de skills + aliases (admin-only).
 > - `/admin/skills/uncataloged`: lista `experience_skills WHERE
 skill_id IS NULL` agrupadas por skill_raw + count + acción
@@ -775,8 +866,10 @@ skill_id IS NULL` agrupadas por skill_raw + count + acción
 - UX: recruiter puede pegar JD, ver ranking, expandir breakdown,
   agregar skill uncataloged al catálogo, re-ejecutar run — todo
   sin salir de la app.
+- Evidence panel visible para al menos un candidato del smoke test
+  (valida que `fetchEvidenceSnippets()` está integrado).
 
-**Estimación**: 16 h.
+**Estimación**: 20 h (16 base + 4 evidence panel por ADR-016).
 
 ---
 

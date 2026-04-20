@@ -1,6 +1,6 @@
 # ADR-016 — Señales complementarias al ranker estructurado (FTS + vector + evidence panel)
 
-- **Estado**: Propuesto
+- **Estado**: Aceptado
 - **Fecha**: 2026-04-20
 - **Decisores**: Owner VAIRIX + Claude Code
 - **Relacionado con**: ADR-015 (ranker determinístico), ADR-012
