@@ -4,13 +4,58 @@
 > del estado; no es un registro histórico completo (para eso está
 > el git log).
 
-**Última actualización**: 2026-04-19
-**Última sesión**: 2026-04-19 — F3-001 evaluation slice (embeddings worker + CLI + embed-all integrado), RLS tests para `evaluation_answers`, F2-002 dry-run CLI (`pnpm normalize:rejections [--dry-run|--force|--batch=N]`), F2-004 needs_review admin UI (`/admin/needs-review` con reclassify + dismiss), F3-002 `/search/semantic` page, F3-003 `/search/hybrid` page con filtros structured + rerank, `SYNC_MAX_RECORDS` + `SYNC_SCOPE_BY_CANDIDATES` knobs para smoke-test seeding
-**Fase activa**: **Fase 1 — Fundación** (+ F2-002/F2-004 cerradas, F3-001 4 slices completas, F3-002/F3-003 con UI)
+**Última actualización**: 2026-04-20
+**Última sesión**: 2026-04-20 — **Planning-only**: F4 matching por descomposición documentado end-to-end. UC-11 agregado a `use-cases.md`; `spec.md` §2.6 + §10 Fase 4 + §12 (3 riesgos nuevos); ADRs 012-015 redactadas y **Aceptadas** (extracción CV, catálogo skills, decomposition LLM, matching & ranking); `data-model.md` §16 con 9 tablas F4 + helper SQL `resolve_skill()` + invariantes de inmutabilidad; `roadmap.md` F4-001..F4-009 slices ejecutables; `_pending-decisions-f4.md` eliminado (decisiones consolidadas). **Sin código** — próxima sesión arranca F4-001.
+**Fase activa**: **Fase 4 — Inteligencia** (eje matching). F1 fundación + F2/F3 slices previas siguen done.
 
 ---
 
 ## ✅ Completado
+
+- **F4 planning end-to-end** ✅ done — 2026-04-20 — `085c079`..`7a2c1fd`.
+  - **use-cases.md**: UC-11 "Matching por descomposición de llamado"
+    (actor, goal, flow de 8 pasos, sequence diagram, 8 acceptance
+    criteria). Insertado entre UC-08 y UC-09.
+  - **spec.md**: §2.6 nueva (matching por descomposición), §10
+    Fase 4 con F4 como primer item, §12 con 3 riesgos nuevos
+    (PII en provider LLM, costo LLM, CV-vs-realidad drift).
+  - **ADR-012** (Extracción estructurada de CVs, Aceptada —
+    `790008d`): clasificador determinístico de variants,
+    `ExtractionProvider` abstraction con OpenAI `gpt-4o-mini`,
+    `candidate_extractions` con `content_hash = SHA256(parsed_text
+|| NUL || model || NUL || prompt_version)`, prompt versionado
+    con bump manual, weight por variant derivado en ranker (no en
+    schema).
+  - **ADR-013** (Catálogo de skills, Aceptada — `e3c0e85`): dos
+    tablas `skills` + `skill_aliases` con resolver determinístico
+    TS + helper SQL mirror (`public.resolve_skill`),
+    `experience_skills.skill_id` nullable, seed curado + CLI
+    reconcile, admin UI `/admin/skills/uncataloged`,
+    `skills_blacklist` para términos tóxicos.
+  - **ADR-014** (Decomposition LLM de job descriptions, Aceptada —
+    `f76d9fd`): pipeline preprocess → hash → cache lookup → LLM
+    (`gpt-4o-mini`) si miss → resolve skills → persist.
+    `job_queries` con `decomposed_json` inmutable + `resolved_json`
+    mutable (re-derivable contra catálogo vivo sin re-llamar LLM).
+    Errores accionables si `unresolved_skills.length > 0`.
+  - **ADR-015** (Matching & ranking, Aceptada — `bf87dae`): ranker
+    determinístico puro (sin LLM, sin embeddings en F4).
+    Years/skill via sweep-line merge de intervalos (solo
+    `kind='work'`). Variant merging union con `cv_primary`
+    autoritativa en duplicados (heurística company+title
+    norm+date overlap > 50%). Must-have gate binario con sección
+    aparte para fallos. Runs inmutables (`match_runs` +
+    `match_results`) reproducibles via `catalog_snapshot_at`.
+    21 tests listados. Budget 100 candidatos < 3s p50.
+  - **data-model.md** §16: schemas SQL de las 9 tablas nuevas +
+    `resolve_skill()` helper + matriz RLS extendida + ER diagram
+    extendido. Invariantes: `decomposed_json`, `breakdown_json`,
+    `raw_output` inmutables post-insert.
+  - **roadmap.md**: F4-001..F4-009 slices con prompts listos,
+    DoD, estimación. Viejo F4-003 "Scoring y matching" DROPPED
+    por superseded.
+  - **`_pending-decisions-f4.md` eliminado** (`7a2c1fd`): las 5
+    decisiones P1-P5 quedaron consolidadas en las ADRs.
 
 - **F3-001 evaluation slice** ✅ done — 2026-04-19 — `f307b3a`.
   - `src/lib/embeddings/sources/evaluation.ts`: source builder que
@@ -810,13 +855,15 @@ _(nada todavía)_
 
 ## ⏳ Próximo (top 3 del roadmap)
 
-1. **F1-006** — Syncers restantes por entidad (users, jobs,
-   candidates, applications, evaluations, notes, files) + reconciliación
-   de FKs (ej: `stages.job_id`).
-2. **F1-007** — CV download + Storage upload.
-3. **F1-008** — Dashboard mínimo (UI layer, post-ETL productivo).
+1. **F4-001** — Schema + RLS de 9 tablas F4 (skills catalog,
+   candidate_extractions, job_queries, match_runs). Incluye
+   `resolve_skill()` helper SQL con test de equivalencia TS↔SQL.
+2. **F4-002** — Skills catalog seed (~50-80 curados) + resolver TS.
+3. **F4-003** — CV variant classifier determinístico (sin LLM) con
+   fixtures reales anonimizadas.
 
-Ver `docs/roadmap.md` para el plan completo con prompts.
+Ver `docs/roadmap.md` para el plan completo de F4-001..F4-009 con
+prompts listos.
 
 ---
 
