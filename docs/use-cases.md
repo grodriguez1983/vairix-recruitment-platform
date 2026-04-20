@@ -277,6 +277,114 @@ stateDiagram-v2
 
 ---
 
+## UC-11 — Matching por descomposición de llamado
+
+**Actor**: Reclutador / persona de talento.
+**Goal**: A partir de un job description pegado tal cual (texto libre
+de un llamado del cliente), encontrar los candidates cuyos CVs
+contengan evidencia real de experiencia laboral con las tecnologías y
+seniority requeridas, con años totales y años por skill calculados
+desde las experiencias extraídas.
+**Precondiciones**:
+
+- Usuario autenticado con rol `recruiter` o `admin`.
+- CVs parseados (UC-07) y **extraídos estructuralmente** (ver ADR-012
+  propuesto): `candidate_experiences` + `experience_skills` poblados.
+- Catálogo `skills` seedeado con aliases (ADR-013 propuesto).
+
+### Flujo principal
+
+1. El reclutador pega el llamado en una textarea (p.ej. _"Buscamos
+   backend sr con 3+ años de Node.js en producción, experiencia real
+   con PostgreSQL, deseable AWS. Inglés intermedio."_).
+2. El sistema descompone el llamado en requisitos atómicos
+   (ADR-014 propuesto): `[{skill: "Node.js", min_years: 3,
+must_have: true, evidence: "work"}, {skill: "PostgreSQL",
+must_have: true}, {skill: "AWS", must_have: false}]` + seniority +
+   idiomas.
+3. El motor de matching (ADR-015 propuesto) resuelve cada requisito
+   contra `experience_skills` (SQL estructurado: "candidatos con
+   ≥3 años acumulados de Node.js en posiciones laborales") y
+   combina con similitud semántica para los requisitos cualitativos.
+4. Devuelve lista ordenada con score explicable: por cada candidato,
+   qué requisitos cumplió, años reales por skill, y snippet de la
+   experiencia que lo demuestra.
+5. Click en candidato → perfil consolidado (UC-04) con las
+   experiencias relevantes resaltadas.
+6. Puede agregarlo a una shortlist (UC-03).
+
+### Sequence
+
+```mermaid
+sequenceDiagram
+  actor R as Reclutador
+  participant UI as /search/match-by-role
+  participant API as matchByRole service
+  participant Decomp as llm/decomposer
+  participant Skills as lib/skills
+  participant PG as Postgres
+  participant Embed as embeddings/provider
+
+  R->>UI: paste job description
+  UI->>API: POST { jobDescription }
+  API->>Decomp: decompose(text)
+  Decomp-->>API: requirements[] + seniority + languages
+  API->>Skills: resolveAliases(requirements)
+  Skills-->>API: skill_ids[]
+
+  par structured
+    API->>PG: SELECT candidate_id, SUM(years) FROM experience_skills<br/>WHERE skill_id IN (...) GROUP BY candidate_id HAVING ...
+    PG-->>API: candidate_ids with per-skill years
+  and semantic
+    API->>Embed: embed(jobDescription)
+    Embed-->>API: vector
+    API->>PG: semantic_search_embeddings(vector, candidate_id_filter)
+    PG-->>API: scores
+  end
+
+  API->>PG: hydrate candidate cards + matching experiences
+  PG-->>API: enriched rows
+  API-->>UI: { matches: [{candidate, score, matched_requirements, years_by_skill, evidence}] }
+  UI-->>R: grid con scorecard por candidato
+```
+
+### Acceptance criteria (tests E2E derivados)
+
+- `test_decomposer_extracts_years_and_must_haves` — "3+ años de Node"
+  debe producir `{skill: "Node.js", min_years: 3, must_have: true}`.
+- `test_matcher_excludes_candidates_missing_must_have` — si el
+  llamado pide Node.js must-have y el candidato no tiene
+  `experience_skills` con Node.js, NO aparece.
+- `test_matcher_counts_only_work_experience` — años por skill
+  calculados solo sobre `candidate_experiences` (no cursos, side
+  projects listados aparte), a menos que el requisito lo permita
+  explícitamente.
+- `test_matcher_respects_overlapping_experiences` — dos trabajos
+  simultáneos con la misma skill cuentan según la política definida
+  en ADR-015 (overlapping vs aditivo).
+- `test_matcher_returns_explainable_score` — cada match incluye
+  `matched_requirements[]` con `{requirement, status, years, evidence_snippet}`.
+- `test_matcher_empty_job_description_rejected` — input vacío / sin
+  skills extraíbles devuelve error con mensaje accionable.
+- `test_matcher_respects_rls` — un recruiter no ve matches de
+  candidates soft-deleted.
+- `test_matcher_deterministic_given_same_extraction` — mismas
+  `candidate_experiences` + misma descomposición ⇒ mismo ranking.
+
+### Notas de diseño (pre-ADR)
+
+- La descomposición del llamado es un paso **separado** de la
+  extracción del CV. Ambos pasan por LLM pero con prompts distintos
+  y hashes de invalidación independientes (ver ADR-012 y ADR-014).
+- El CV estructurado es la fuente de verdad; el embedding del CV
+  entero (F3-001) queda como complemento para matches cualitativos
+  ("alguien prolijo"), no para skills/years.
+- Esta feature **no** reemplaza UC-01 ni UC-02; es un tercer modo de
+  búsqueda específicamente para el caso "tengo un llamado, quién
+  encaja".
+
+---
+
 ## UC-09 — Normalización de rejection reason (ADR-007)
 
 **Actor**: Sistema (post-sync de evaluations).
