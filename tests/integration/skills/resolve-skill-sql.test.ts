@@ -155,10 +155,12 @@ describe('sql: public.resolve_skill', () => {
   });
 
   it('does NOT consult skills_blacklist (resolver bypasses it)', async () => {
-    const skillId = await seedSkill(svc, 'Team Player', 'team-player');
-    await svc.from('skills_blacklist').insert({ alias_normalized: 'team-player' });
-    // The blacklist is a UI admin helper, not a resolver gate. If the
-    // catalog has the slug, the resolver must return it.
+    // Slug uses the normalized form (internal whitespace preserved as
+    // single space, per ADR-013 §2). If blacklist also lists this
+    // string, the resolver still returns the skill — blacklist is a
+    // UI admin helper, not a resolver gate.
+    const skillId = await seedSkill(svc, 'Team Player', 'team player');
+    await svc.from('skills_blacklist').insert({ alias_normalized: 'team player' });
     expect(await resolveSkill(svc, 'Team Player')).toBe(skillId);
   });
 });
