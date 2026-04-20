@@ -474,9 +474,319 @@ uuid[]`. Servicio `hybridSearchCandidates` con 3 modos: `hybrid`,
 
 ## Fase 4 — Inteligencia
 
-- F4-001 — RAG sobre historial del candidate.
-- F4-002 — Insights dashboard (rejection trends, bottlenecks).
-- F4-003 — Scoring y matching candidate ↔ job.
+> **Eje principal F4**: matching por descomposición de llamado (UC-11).
+> Gobernado por ADRs 012 (extracción CVs), 013 (catálogo skills),
+> 014 (decomposition LLM), 015 (matching & ranking). Sliced en
+> F4-001..F4-009 abajo. Los ex-items F4-010/F4-011 (RAG, insights)
+> quedan como trabajo de Fase 4 fuera del eje matching.
+
+### F4-001 — Schema + RLS de tablas F4
+
+**Depende de**: F1-003 (para patrón RLS), ADRs 012-015 Accepted.
+
+**Prompt**:
+
+> Creá las migraciones para las 9 tablas de `data-model.md` §16:
+> `skills`, `skill_aliases`, `skills_blacklist`,
+> `candidate_extractions`, `candidate_experiences`,
+> `experience_skills`, `job_queries`, `match_runs`, `match_results`.
+> Una migración por grupo lógico:
+>
+> - `0XX_skills_catalog.sql` (skills + aliases + blacklist +
+>   `resolve_skill()` helper SQL).
+> - `0XX_candidate_extractions.sql` (extractions + experiences +
+>   experience_skills).
+> - `0XX_job_queries.sql`.
+> - `0XX_match_runs.sql` (runs + results).
+>   RLS policies en archivos separados `0XX_rls_<tabla>.sql`
+>   siguiendo ADR-003. Invariantes: `decomposed_json`,
+>   `breakdown_json`, `raw_output` inmutables post-insert (trigger o
+>   policy). Regenerá tipos con `supabase gen types typescript`.
+>   Tests RLS mínimos: `test_job_queries_rls_denies_cross_tenant`,
+>   `test_match_results_rls_denies_cross_tenant`,
+>   `test_decomposed_json_update_is_rejected`,
+>   `test_breakdown_json_update_is_rejected`.
+>   TDD: `test(db): [RED] ...` por cada test, luego
+>   `feat(db): [GREEN] ...` por migración.
+
+**DoD**:
+
+- Migraciones aplican idempotentemente.
+- Tipos TS generados incluyen las 9 tablas.
+- Tests RLS verdes.
+- Equivalencia `resolve_skill()` SQL ↔ `resolveSkill()` TS:
+  al menos 1 test propiedad-based comparando 20 inputs.
+
+**Estimación**: 10 h.
+
+---
+
+### F4-002 — Skills catalog seed + resolver
+
+**Depende de**: F4-001.
+
+**Prompt**:
+
+> Implementá ADR-013 §2 y §4:
+>
+> - `src/lib/skills/resolver.ts` con `resolveSkill(raw): Promise<{ skill_id: string | null }>`.
+>   Pipeline: lowercase → trim → strip terminal punct → preserve
+>   internal punct (`c++`, `c#`, `node.js`) → slug match → alias
+>   match → null. Blacklist check pre-resolución.
+> - Seed curado ~50-80 skills en `src/lib/skills/seed.ts` + migración
+>   `0XX_skills_seed.sql` que aplica el insert.
+> - CLI `pnpm skills:reconcile` que re-ejecuta el resolver sobre
+>   `experience_skills WHERE skill_id IS NULL` y puebla `skill_id`.
+> - `tests/skills/resolver.test.ts` con 15+ tests incluyendo
+>   punctuation preservation, empty input, whitespace-only, aliases,
+>   blacklist hits.
+> - Test de equivalencia TS↔SQL que compara 30 inputs random.
+
+**DoD**:
+
+- Cobertura ≥ 95% en `src/lib/skills/`.
+- `skills:reconcile` es idempotente (dos runs consecutivos → 0
+  updates en el segundo).
+- Test de equivalencia verde.
+
+**Estimación**: 8 h.
+
+---
+
+### F4-003 — CV variant classifier
+
+**Depende de**: F1-008 (CV parser produce `parsed_text`).
+
+**Prompt**:
+
+> Implementá ADR-012 §1:
+>
+> - `src/lib/cv/variant-classifier.ts` con `classifyVariant(parsedText): 'linkedin_export' | 'cv_primary'`.
+>   Determinístico: busca señales textuales típicas de LinkedIn
+>   export ("linkedin.com/in/", headers "Contact", "Experience",
+>   "Education" en orden, patrones de fecha MM/YYYY - Present).
+> - Tests adversariales: CV con link a LinkedIn pero formato CV
+>   normal → `cv_primary`. LinkedIn export sin URL pero con todos
+>   los headers → `linkedin_export`. Texto vacío → fallback
+>   `cv_primary`.
+> - Sin LLM: si la señal es ambigua, default `cv_primary` (más
+>   seguro para scoring, ADR-012 §7).
+
+**DoD**:
+
+- Cobertura ≥ 95% en `src/lib/cv/variant-classifier.ts`.
+- Fixtures reales (5 de cada tipo) en `tests/fixtures/cv-variants/`,
+  anonimizadas.
+
+**Estimación**: 4 h.
+
+---
+
+### F4-004 — ExtractionProvider + persistencia
+
+**Depende de**: F4-001, F4-003.
+
+**Prompt**:
+
+> Implementá ADR-012 §3-§6:
+>
+> - `src/lib/cv/extraction/provider.ts` con interface
+>   `ExtractionProvider` + implementación `OpenAiExtractionProvider`
+>   usando `gpt-4o-mini` + `response_format: { type: 'json_schema' }`
+>   - prompt versionado `EXTRACTION_PROMPT_V1 = '2026-04-v1'`.
+> - Stub determinístico `StubExtractionProvider` para tests (no
+>   hace calls, devuelve fixture).
+> - Worker `runCvExtractions()` en `src/lib/cv/extraction/worker.ts`:
+>   lee `files` con `parsed_text IS NOT NULL` + sin
+>   `candidate_extractions` para ese `content_hash`, clasifica
+>   variant, llama provider, persiste en `candidate_extractions`.
+> - CLI `pnpm extract:cvs [--batch=N]`.
+> - Idempotencia: `content_hash` unique impide duplicados.
+> - Errores de provider → `sync_errors` con
+>   `entity='cv_extraction'`.
+> - Tests: `test_extraction_is_idempotent_by_content_hash`,
+>   `test_provider_failure_logs_to_sync_errors`,
+>   `test_prompt_version_bump_creates_new_row`.
+
+**DoD**:
+
+- 10+ tests cubriendo happy path + errores + idempotencia.
+- Dry-run local contra 5 fixtures variados (CVs cortos, largos,
+  con tablas, scans fallidos).
+- Zero-retention confirmado con OpenAI antes de mergear (ver
+  `docs/status.md` §Deuda de seguridad).
+
+**Estimación**: 12 h.
+
+---
+
+### F4-005 — Derivación de experiences + experience_skills
+
+**Depende de**: F4-002, F4-004.
+
+**Prompt**:
+
+> Implementá ADR-012 §4 + ADR-013 §3:
+>
+> - Servicio `deriveExperiences(extraction_id)`:
+>   lee `candidate_extractions.raw_output` → inserta filas en
+>   `candidate_experiences` (una por experience del raw_output) →
+>   por cada skill mencionada, inserta en `experience_skills` con
+>   `skill_id = await resolveSkill(skill_raw)`.
+> - Invocado automáticamente al final del worker de F4-004.
+> - Idempotente: si ya existen rows para ese `extraction_id`, skip.
+> - Tests: `test_derivation_from_raw_output`,
+>   `test_unresolved_skills_stored_with_null_skill_id`,
+>   `test_derivation_is_idempotent`.
+
+**DoD**:
+
+- Integration test end-to-end: file parseado → extraído → derivado
+  → contable en SQL (`SELECT COUNT(*) FROM experience_skills WHERE
+experience_id = ...`).
+- `/admin/skills/uncataloged` (F4-009) puede listar las skills null.
+
+**Estimación**: 8 h.
+
+---
+
+### F4-006 — DecompositionProvider + job_queries
+
+**Depende de**: F4-002.
+
+**Prompt**:
+
+> Implementá ADR-014:
+>
+> - `src/lib/matching/decomposition/provider.ts` con interface
+>   `DecompositionProvider` + `OpenAiDecompositionProvider`
+>   (`gpt-4o-mini`, `DECOMPOSITION_PROMPT_V1 = '2026-04-v1'`).
+> - Stub determinístico para tests.
+> - Servicio `decomposeJobQuery(raw_text, user)`:
+>   1. preprocess → normalized_text
+>   2. `content_hash = SHA256(normalized_text || NUL || prompt_version)`
+>   3. lookup en `job_queries.content_hash`:
+>      - hit: re-resolve skills contra catálogo actual, update
+>        `resolved_json` + `unresolved_skills`, return.
+>      - miss: call provider, persist `decomposed_json` +
+>        `resolved_json`.
+>   4. return `JobQueryResult { id, resolved, unresolved_skills }`.
+> - Server action `/api/matching/decompose` con auth.
+> - Tests 10+ incluyendo cache hit, cache miss, empty input,
+>   schema_violation, provider_failure, unresolved_skills
+>   triggering actionable error.
+
+**DoD**:
+
+- Cache hit no invoca provider (mock assertion).
+- `decomposed_json` inmutable verificado (intent de UPDATE lanza
+  policy error).
+
+**Estimación**: 10 h.
+
+---
+
+### F4-007 — Variant merger + years calculator + ranker
+
+**Depende de**: F4-005, F4-006.
+
+**Prompt**:
+
+> Implementá ADR-015 §§1-3, §7:
+>
+> - `src/lib/matching/variant-merger.ts`: `mergeVariants(experiences): CandidateExperience[]`
+>   con heurística company + title norm + date overlap > 50%.
+>   Diagnostics en return para debugging.
+> - `src/lib/matching/years-calculator.ts`:
+>   `yearsForSkill(skill_id, experiences): number` con sweep-line.
+>   Solo `kind='work'`. Excluye `skill_id IS NULL`.
+> - `src/lib/matching/score-aggregator.ts`: aplica weights
+>   must_have=2.0 / nice_to_have=1.0, language bonus ±5/-10,
+>   seniority ±5, normaliza a [0, 100].
+> - `src/lib/matching/ranker.ts`: `DeterministicRanker` que orquesta.
+> - Un archivo ≤ 300 LOC, funciones ≤ 50 LOC.
+> - 21 tests de ADR-015 §Tests requeridos.
+
+**DoD**:
+
+- Los 21 tests verdes.
+- Test de idempotencia: mismo input → mismo output bit-a-bit.
+- Cobertura ≥ 95% en `src/lib/matching/`.
+
+**Estimación**: 16 h.
+
+---
+
+### F4-008 — API routes + persist match runs
+
+**Depende de**: F4-007.
+
+**Prompt**:
+
+> Expón el matching via API:
+>
+> - `POST /api/matching/run` — body: `{ job_query_id, filters }`.
+>   Crea `match_runs` row status='running', ejecuta pre-filter
+>   bitmap por must-have skill presence, carga candidatos,
+>   corre `DeterministicRanker`, persiste `match_results`, cierra
+>   run con status='completed' + `finished_at`.
+> - `GET /api/matching/runs/:id` — metadata del run.
+> - `GET /api/matching/runs/:id/results?offset=&limit=` —
+>   paginado con breakdown.
+> - `POST /api/matching/decompose` ya existe de F4-006.
+> - Middleware `requireAuth()` + tenant check.
+> - Logging estructurado: run_id, candidates_evaluated, duration_ms.
+
+**DoD**:
+
+- Integration test end-to-end: JD pegado → decompose → run →
+  top-10 esperado contra fixture de 20 candidates.
+- Performance: 100 candidatos < 3s p50 en local.
+
+**Estimación**: 10 h.
+
+---
+
+### F4-009 — UI: pegar JD, resultados, admin
+
+**Depende de**: F4-008.
+
+**Prompt**:
+
+> UI según UC-11 acceptance criteria:
+>
+> - `/matching/new`: textarea para pegar JD + botón "Decomponer".
+>   Muestra `DecompositionResult` parseado + skills unresolved
+>   accionables (link a `/admin/skills`).
+> - `/matching/runs/:id`: ranking con breakdown expandible por
+>   candidato, sección aparte "No cumplen must-have".
+> - `/admin/skills`: CRUD de skills + aliases (admin-only).
+> - `/admin/skills/uncataloged`: lista `experience_skills WHERE
+skill_id IS NULL` agrupadas por skill_raw + count + acción
+>   "Agregar al catálogo" → crea `skill` + corre
+>   `skills:reconcile` incremental.
+> - `/admin/job-queries`: monitoring de LLM calls + cost tracking
+>   (opcional F4-009).
+> - Style según `ui-style-guide.md`.
+
+**DoD**:
+
+- Smoke E2E UC-11 completo (Cypress o Playwright).
+- UX: recruiter puede pegar JD, ver ranking, expandir breakdown,
+  agregar skill uncataloged al catálogo, re-ejecutar run — todo
+  sin salir de la app.
+
+**Estimación**: 16 h.
+
+---
+
+### Items Fase 4 fuera del eje matching
+
+- F4-010 — RAG sobre historial del candidate.
+- F4-011 — Insights dashboard (rejection trends, bottlenecks).
+- F4-012 — Scoring y matching candidate ↔ job legacy — **🗑️ DROPPED**:
+  superseded por F4-001..F4-009 (matching por descomposición es
+  una implementación rigurosa del mismo goal).
 
 ---
 
