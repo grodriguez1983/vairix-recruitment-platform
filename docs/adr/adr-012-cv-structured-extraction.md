@@ -1,6 +1,6 @@
 # ADR-012 — Extracción estructurada de CVs (experiencias + skills)
 
-- **Estado**: Propuesto
+- **Estado**: Aceptado
 - **Fecha**: 2026-04-20
 - **Decisores**: Owner VAIRIX + Claude Code
 - **Relacionado con**: `spec.md` §2.6 + §10 Fase 4, `use-cases.md`
@@ -92,6 +92,17 @@ type ExtractionResult = {
 
 La normalización de skills a un catálogo es responsabilidad de
 ADR-013; acá salen como strings crudos.
+
+**Invariante de contrato (aplica a ambos backends)**: ni el parser
+determinístico de LinkedIn ni el extractor LLM pueden normalizar
+skills por su cuenta. Los dos devuelven los strings **tal como
+aparecen en el CV** ("React.js", "ReactJS", "react" pueden
+coexistir). La única vía de normalización es el resolver del
+catálogo de ADR-013, aplicado al upsert de `experience_skills`. Un
+backend que intente "limpiar" un skill rompe este contrato y se
+debe rechazar en code review — evita que los dos paths diverjan en
+criterios de normalización y mantiene el catálogo como única
+fuente de verdad sobre aliases.
 
 ### 3. Provider LLM: OpenAI con abstracción
 
