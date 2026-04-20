@@ -4,7 +4,7 @@
 > este documento. Si el schema cambia, actualizar acá **y** crear la
 > migración correspondiente en `supabase/migrations/`.
 >
-> **ADRs relacionados**: 001, 002, 003, 004, 005, 006, 007.
+> **ADRs relacionados**: 001, 002, 003, 004, 005, 006, 007, 012, 013, 014, 015.
 
 ---
 
@@ -559,7 +559,269 @@ create index idx_sync_errors_unresolved on sync_errors(resolved_at)
 
 ---
 
-## 16. Row Level Security
+## 16. Tablas F4 — Matching por descomposición (ADRs 012-015)
+
+Las siguientes tablas habilitan UC-11 (matching de candidatos contra
+un job description pegado por el recruiter). Orden de dependencias:
+`skills` → `skill_aliases` → `candidate_extractions` →
+`candidate_experiences` → `experience_skills` → `job_queries` →
+`match_runs` → `match_results`.
+
+### 16.1 `skills` (ADR-013)
+
+Catálogo canónico de tecnologías y skills.
+
+```sql
+create table skills (
+  id              uuid primary key default uuid_generate_v4(),
+  canonical_name  text unique not null,       -- "React", "Node.js", "C++"
+  slug            text unique not null,       -- "react", "node-js", "c-plus-plus"
+  category        text not null check (category in (
+                     'language', 'framework', 'database', 'platform',
+                     'tool', 'methodology', 'soft_skill', 'other'
+                  )),
+  description     text,
+  deprecated_at   timestamptz,
+  created_by      uuid references app_users(id) on delete set null,
+  created_at      timestamptz not null default now(),
+  updated_at      timestamptz not null default now()
+);
+
+create index idx_skills_slug     on skills(slug);
+create index idx_skills_category on skills(category);
+create index idx_skills_name_trgm on skills using gin (canonical_name gin_trgm_ops);
+
+create trigger trg_skills_updated_at
+  before update on skills
+  for each row execute function set_updated_at();
+```
+
+### 16.2 `skill_aliases` (ADR-013)
+
+Alias no-canónicos ("reactjs", "node", "postgresql") resueltos al
+`skills.id`.
+
+```sql
+create table skill_aliases (
+  id                uuid primary key default uuid_generate_v4(),
+  skill_id          uuid not null references skills(id) on delete cascade,
+  alias_normalized  text unique not null,     -- lowercase + trim + puntuación preservada
+  source            text not null check (source in ('curated', 'cv_derived', 'manual_admin')),
+  created_by        uuid references app_users(id) on delete set null,
+  created_at        timestamptz not null default now()
+);
+
+create index idx_skill_aliases_skill on skill_aliases(skill_id);
+```
+
+### 16.3 `skills_blacklist` (ADR-013)
+
+Términos que el resolver debe ignorar activamente ("experience",
+"team player", "communication") para no contaminar el catálogo.
+
+```sql
+create table skills_blacklist (
+  id                uuid primary key default uuid_generate_v4(),
+  term_normalized   text unique not null,
+  reason            text,
+  created_by        uuid references app_users(id) on delete set null,
+  created_at        timestamptz not null default now()
+);
+```
+
+### 16.4 Helper SQL: `public.resolve_skill(text)` (ADR-013)
+
+Mirror de `src/lib/skills/resolver.ts`. Tests de equivalencia
+(ADR-013 §2) garantizan que ambos coinciden.
+
+```sql
+create or replace function public.resolve_skill(raw text)
+returns uuid as $$
+declare
+  normalized text;
+  result_id  uuid;
+begin
+  if raw is null or length(trim(raw)) = 0 then
+    return null;
+  end if;
+
+  -- lowercase → trim → strip terminal punct → preserve internal
+  normalized := lower(trim(raw));
+  normalized := regexp_replace(normalized, '[[:punct:]]+$', '');
+
+  if exists (select 1 from skills_blacklist where term_normalized = normalized) then
+    return null;
+  end if;
+
+  select id into result_id from skills where slug = normalized;
+  if result_id is not null then return result_id; end if;
+
+  select skill_id into result_id
+  from skill_aliases where alias_normalized = normalized;
+
+  return result_id;  -- puede ser null (uncataloged)
+end;
+$$ language plpgsql stable;
+```
+
+### 16.5 `candidate_extractions` (ADR-012)
+
+Raw output del extractor LLM sobre CVs. Idempotente por
+`content_hash`. No se normalizan skills acá — eso vive en
+`experience_skills` (ADR-013).
+
+```sql
+create table candidate_extractions (
+  id              uuid primary key default uuid_generate_v4(),
+  tenant_id       uuid,
+  candidate_id    uuid not null references candidates(id) on delete cascade,
+  file_id         uuid not null references files(id) on delete cascade,
+  source_variant  text not null check (source_variant in ('linkedin_export', 'cv_primary')),
+  model           text not null,
+  prompt_version  text not null,
+  content_hash    text unique not null,       -- SHA256(parsed_text || NUL || model || NUL || prompt_version)
+  raw_output      jsonb not null,             -- ExtractionResult completo
+  extracted_at    timestamptz not null default now(),
+  created_at      timestamptz not null default now()
+);
+
+create index idx_candidate_extractions_candidate on candidate_extractions(candidate_id);
+create index idx_candidate_extractions_file      on candidate_extractions(file_id);
+create index idx_candidate_extractions_variant   on candidate_extractions(source_variant);
+```
+
+### 16.6 `candidate_experiences` (ADR-012)
+
+Experiencias individuales (work / side_project / education)
+derivadas de `candidate_extractions.raw_output`. Unidad atómica
+del matching.
+
+```sql
+create table candidate_experiences (
+  id                uuid primary key default uuid_generate_v4(),
+  tenant_id         uuid,
+  candidate_id      uuid not null references candidates(id) on delete cascade,
+  extraction_id     uuid not null references candidate_extractions(id) on delete cascade,
+  source_variant    text not null check (source_variant in ('linkedin_export', 'cv_primary')),
+  kind              text not null check (kind in ('work', 'side_project', 'education')),
+  company           text,
+  title             text,
+  start_date        date,
+  end_date          date,                     -- null = ongoing
+  description       text,
+  merged_from_ids   uuid[],                   -- diagnósticos del variant-merger (ADR-015)
+  created_at        timestamptz not null default now()
+);
+
+create index idx_candidate_experiences_candidate on candidate_experiences(candidate_id);
+create index idx_candidate_experiences_kind      on candidate_experiences(kind);
+create index idx_candidate_experiences_dates     on candidate_experiences(start_date, end_date);
+```
+
+### 16.7 `experience_skills` (ADR-012 + ADR-013)
+
+Skills mencionadas por experiencia, resueltas al catálogo. `skill_id`
+nullable: null = uncataloged (no cuenta para `min_years` del
+ranker; visible en `/admin/skills/uncataloged`).
+
+```sql
+create table experience_skills (
+  id              uuid primary key default uuid_generate_v4(),
+  experience_id   uuid not null references candidate_experiences(id) on delete cascade,
+  skill_raw       text not null,              -- lo que dijo el LLM
+  skill_id        uuid references skills(id) on delete set null,
+  resolved_at     timestamptz,
+  created_at      timestamptz not null default now()
+);
+
+create index idx_experience_skills_experience on experience_skills(experience_id);
+create index idx_experience_skills_skill      on experience_skills(skill_id)
+  where skill_id is not null;
+create index idx_experience_skills_uncataloged on experience_skills(skill_raw)
+  where skill_id is null;
+```
+
+### 16.8 `job_queries` (ADR-014)
+
+Descomposiciones de job descriptions pegadas por el recruiter.
+`decomposed_json` es inmutable; `resolved_json` se re-deriva contra
+el catálogo actual sin re-llamar al LLM.
+
+```sql
+create table job_queries (
+  id                   uuid primary key default uuid_generate_v4(),
+  tenant_id            uuid,
+  created_by           uuid references app_users(id) on delete set null,
+  raw_text             text,                  -- purgable por política
+  raw_text_retained    boolean not null default true,
+  normalized_text      text not null,
+  content_hash         text unique not null,  -- SHA256(normalized_text || NUL || prompt_version)
+  model                text not null,
+  prompt_version       text not null,
+  decomposed_json      jsonb not null,        -- inmutable post-insert (policy)
+  resolved_json        jsonb not null,        -- mutable: se re-deriva al cambiar catálogo
+  unresolved_skills    text[] not null default '{}',
+  resolved_at          timestamptz not null default now(),
+  created_at           timestamptz not null default now()
+);
+
+create index idx_job_queries_created_by on job_queries(created_by);
+create index idx_job_queries_tenant     on job_queries(tenant_id);
+create index idx_job_queries_unresolved on job_queries using gin (unresolved_skills)
+  where array_length(unresolved_skills, 1) > 0;
+```
+
+### 16.9 `match_runs` (ADR-015)
+
+Ejecuciones del ranker. **Inmutables post-cierre**; si el catálogo
+cambia, el recruiter ejecuta un run nuevo.
+
+```sql
+create table match_runs (
+  id                    uuid primary key default uuid_generate_v4(),
+  job_query_id          uuid not null references job_queries(id) on delete cascade,
+  tenant_id             uuid,
+  triggered_by          uuid references app_users(id) on delete set null,
+  started_at            timestamptz not null default now(),
+  finished_at           timestamptz,
+  status                text not null default 'running'
+    check (status in ('running', 'completed', 'failed')),
+  candidates_evaluated  integer,
+  diagnostics           jsonb,                -- warnings, skipped candidates
+  catalog_snapshot_at   timestamptz not null,
+  created_at            timestamptz not null default now()
+);
+
+create index idx_match_runs_job_query on match_runs(job_query_id);
+create index idx_match_runs_tenant    on match_runs(tenant_id);
+create index idx_match_runs_status    on match_runs(status);
+```
+
+### 16.10 `match_results` (ADR-015)
+
+Resultado por candidato dentro de un `match_run`. `tenant_id`
+duplicado intencionalmente (evita join en RLS policy).
+
+```sql
+create table match_results (
+  match_run_id     uuid not null references match_runs(id) on delete cascade,
+  candidate_id    uuid not null references candidates(id) on delete cascade,
+  tenant_id        uuid,
+  total_score      numeric(5, 2) not null,
+  must_have_gate   text not null check (must_have_gate in ('passed', 'failed')),
+  rank             integer not null,
+  breakdown_json   jsonb not null,
+  primary key (match_run_id, candidate_id)
+);
+
+create index idx_match_results_run_rank on match_results(match_run_id, rank);
+create index idx_match_results_candidate on match_results(candidate_id);
+create index idx_match_results_tenant    on match_results(tenant_id);
+```
+
+---
+
+## 17. Row Level Security
 
 RLS activa en todas las tablas de dominio. Policies concretas en
 migraciones, siguiendo el patrón del ADR-003.
@@ -582,14 +844,33 @@ Matriz de acceso:
 | `app_users`                          | ❌                    | R/W       |
 | `sync_state`, `sync_errors`          | ❌                    | R/W       |
 | `rejection_categories`               | R                     | R/W       |
+| `skills`, `skill_aliases`            | R                     | R/W       |
+| `skills_blacklist`                   | ❌                    | R/W       |
+| `candidate_extractions`              | R                     | R/W       |
+| `candidate_experiences`              | R                     | R/W       |
+| `experience_skills`                  | R                     | R/W       |
+| `job_queries`                        | R/W (propios)         | R/W       |
+| `match_runs`, `match_results`        | R (propios)           | R/W       |
 
-El backend (ETL y embeddings worker) usa **service role key**, por
-lo que RLS no aplica a esos jobs. RLS aplica exclusivamente a las
-conexiones con JWT de usuario.
+El backend (ETL, embeddings worker, CV extractor, decomposition
+worker, ranker) usa **service role key**, por lo que RLS no aplica a
+esos jobs. RLS aplica exclusivamente a las conexiones con JWT de
+usuario.
+
+**Invariantes F4**:
+
+- `job_queries.decomposed_json`: INSERT por user auth'd; UPDATE solo
+  backend (re-resolve de `resolved_json`); `decomposed_json` nunca
+  muta post-insert (policy o constraint).
+- `match_runs` y `match_results`: INSERT por backend; UPDATE
+  únicamente para cerrar run (`status = 'completed'` o
+  `'failed'` + `finished_at`); `breakdown_json` inmutable.
+- `candidate_extractions.raw_output` inmutable post-insert
+  (idempotencia por `content_hash`).
 
 ---
 
-## 17. Vistas útiles (propuestas)
+## 18. Vistas útiles (propuestas)
 
 ### `v_candidate_summary`
 
@@ -610,7 +891,7 @@ consumidores concretos.
 
 ---
 
-## 18. Diagrama ER (Mermaid)
+## 19. Diagrama ER (Mermaid)
 
 ```mermaid
 erDiagram
@@ -632,11 +913,22 @@ erDiagram
   candidates ||--o{ shortlist_candidates : listed_in
   app_users ||--o{ shortlists : created_by
   app_users ||--o{ candidate_tags : tagged_by
+  candidates ||--o{ candidate_extractions : has
+  files ||--o{ candidate_extractions : source
+  candidate_extractions ||--o{ candidate_experiences : yields
+  candidates ||--o{ candidate_experiences : has
+  candidate_experiences ||--o{ experience_skills : mentions
+  skills ||--o{ experience_skills : resolved_to
+  skills ||--o{ skill_aliases : aliased_by
+  app_users ||--o{ job_queries : created_by
+  job_queries ||--o{ match_runs : triggers
+  match_runs ||--o{ match_results : produces
+  candidates ||--o{ match_results : ranked_in
 ```
 
 ---
 
-## 19. Convenciones de migraciones
+## 20. Convenciones de migraciones
 
 - Archivos: `supabase/migrations/YYYYMMDDHHMMSS_description.sql`
 - Cada migración es **idempotente**.
