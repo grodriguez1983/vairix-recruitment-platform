@@ -1,6 +1,6 @@
 # ADR-015 — Matching & ranking de candidatos contra un job query
 
-- **Estado**: Propuesto
+- **Estado**: Aceptado
 - **Fecha**: 2026-04-20
 - **Decisores**: Owner VAIRIX + Claude Code
 - **Relacionado con**: `use-cases.md` UC-11, ADR-012 (extracción
@@ -349,7 +349,7 @@ Si superamos los 1000 candidatos o degradamos > 5s p95, reevaluar
   reales de experiencia"). User mencionó explícitamente "validando
   tecnologías y años experiencia".
 
-### D) Weight continuo por variant (cv_primary _ 1.0, linkedin _ 0.6)
+### D) Weight continuo por variant (cv*primary * 1.0, linkedin \_ 0.6)
 
 - **Pros**: más fino que la fusión union.
 - **Contras**: complica explicabilidad ("¿por qué esta experiencia
