@@ -45,7 +45,16 @@ planilla). Si (b) o (c), la planilla estructurada probablemente se
 ingesta sin LLM (columnas fijas → columnas tipadas) y solo el free
 text pasa por LLM.
 
-**Respuesta:** _(pendiente)_
+**Respuesta (cita del usuario, 2026-04-20):** _"siempre van a ser
+pdf, pueden ser dos en algunos casos, el extracto de linkedin y el
+cv oficinal teniendo este ultimo mas ponderancia"_.
+
+**Decisión**: solo PDFs en `files.kind='cv'`. Pueden convivir 2 por
+candidato. Cada fila `candidate_experiences` (y derivados) lleva
+`source_variant ∈ {linkedin_export, cv_primary}` + `weight` numérico
+(cv_primary > linkedin_export). `vairix_cv_sheet` y Google Sheet
+externo quedan fuera del pipeline de matching — siguen visibles en
+UC-04 pero no alimentan UC-11.
 
 ---
 
@@ -69,7 +78,22 @@ LLM, ahorrando tokens y siendo más auditable.
 front-end clasificador (LinkedIn vs free-form) y dos backends. Si
 no, un solo path LLM para todo.
 
-**Respuesta:** _(pendiente)_
+**Respuesta (cita del usuario, 2026-04-20):** _"si"_.
+
+**Decisión**: dos paths con front-end clasificador determinístico en
+`lib/cv/variant-classifier.ts`. Heurísticas propuestas (refinables
+con fixtures reales): presencia de URL `linkedin.com/in/...`,
+sección "Contact" con layout fijo de LinkedIn, fingerprint del
+generator del PDF (metadata). Outputs:
+
+- **LinkedIn export** → parser determinístico sobre estructura,
+  sin LLM. Shape de salida idéntico al LLM path.
+- **CV free-form** (default / fallback) → extractor LLM.
+
+Ambos producen `experiences[]` + `experience_skills[]` con el mismo
+shape. El clasificador es **conservador**: si no está seguro, cae a
+LLM (free-form). El peso (P1) se deriva de `source_variant` pero es
+ortogonal al path de extracción.
 
 ---
 
@@ -101,7 +125,30 @@ se cuentan los años?
 **Impacto en ADR-015**: define la función `yearsForSkill(candidate,
 skill)`. Esto es el core del filtro `min_years` de UC-11.
 
-**Respuesta:** _(pendiente)_
+**Respuesta (cita del usuario, 2026-04-20):** _"lo dejo a tu
+criterio"_.
+
+**Decisión propuesta (a validar en ADR-015)**:
+
+- **Overlapping por skill** sobre experiencias laborales. Para cada
+  skill del candidato, se colapsan los intervalos (start, end) en
+  sus uniones disjuntas; el total = suma de las uniones en meses.
+  Dos trabajos 2020-2023 y 2022-2024 con React → unión 2020-2024 =
+  4 años, no 5.
+- **Side projects separados**: `candidate_experiences.kind IN
+('work', 'side_project', 'education')`. Solo `work` cuenta para
+  el filtro `min_years` de UC-11. Side projects + educación se
+  muestran en la UI y alimentan el embedding del CV (F3-001), pero
+  no el matcher estructurado.
+- **Gaps laborales** se ignoran — no descuentan. Lo que importa es
+  "cuántos años calendario tuvo exposure a la skill en trabajo
+  real", no continuidad.
+- **Una experiencia con N skills** en la descripción les da el
+  período completo a las N. Sin LLM interpretando no hay forma
+  razonable de atribuir fracciones; el ADR-015 documenta esto como
+  **limitación conocida (overstate controlado)**: un candidato con
+  React + Node + PostgreSQL en un mismo trabajo de 3 años aparece
+  con 3 años en cada una. El recruiter es el humano en el loop.
 
 ---
 
@@ -128,7 +175,20 @@ el prompt puede cambiar la extracción sin cambiar el modelo.
 **Impacto en ADR-012**: determina la columna de hash y el flujo de
 deploy del prompt.
 
-**Respuesta:** _(pendiente)_
+**Respuesta (cita del usuario, 2026-04-20):** _"el que mejor haga
+el trabajo"_ + selección explícita de la opción **(a)** tras
+aclaración.
+
+**Decisión**: opción (a) — hash = SHA256(`parsed_text || model ||
+prompt_version`). `prompt_version` es un string versionado en el
+código (`EXTRACTION_PROMPT_VERSION = '2026-04-v1'`). Bumpear
+`prompt_version` es un **cambio de código consciente** en un PR
+separado, con ADR nuevo **solo si cambia la semántica de
+extracción** (ej. agregar/sacar campos del output). Typo fixes en
+el prompt sin impacto semántico **no** bumpean la versión. Ventaja:
+control total sobre cuándo se paga re-extract. Desventaja aceptada:
+confiamos en el juicio del autor del PR para decidir si un cambio
+es semántico (mitigado por review).
 
 ---
 
@@ -160,7 +220,66 @@ fracción.
 para extracción, la abstracción del caller, y la sección "riesgos"
 del ADR sobre PII.
 
-**Respuesta:** _(pendiente)_
+**Respuesta (cita del usuario, 2026-04-20):** _"lo que salga"_ +
+_"usar open AI el modelo mas economico"_.
+
+**Decisión**:
+
+- **Provider**: **OpenAI** (reusa `OPENAI_API_KEY` ya en el
+  proyecto para embeddings). La abstracción `ExtractionProvider`
+  (mirror de `EmbeddingProvider`, ADR-005) queda confinada a
+  `src/lib/cv/extraction/providers/` para no acoplar vendor.
+- **Modelo**: **`gpt-4o-mini`** como default (el más económico de
+  la familia 4o al 2026-04-20, ~USD 0.15/1M input + USD 0.60/1M
+  output). Estimación del backfill inicial: ~1000 CVs × ~5500
+  tokens = ~5.5M tokens ≈ **USD 1–2 total**. Si recall es bajo
+  sobre fixtures reales, evaluamos fallback a `gpt-4o` en un slice
+  dedicado, no se asume desde el día 1.
+- **Budget**: sin hard-cap en la key (usuario dijo "lo que salga").
+  Observabilidad desde día 1: logs estructurados con token counts
+  por extracción (JSON a stderr, mirror del patrón
+  `embeddings/worker-runtime.ts`) para poder decidir si vale la pena
+  subir a 4o.
+- **Data retention** 🚨: se acepta la política estándar de OpenAI
+  (retention 30d, con opt-out vía account setting si es
+  Enterprise; default en proyectos nuevos = retention on para
+  abuse monitoring). Consecuencias:
+  - Se documenta como **riesgo aceptado** en ADR-012 §Riesgos:
+    "CVs con PII de candidatos (nombre, email, teléfono, LinkedIn,
+    historia laboral) son enviados a OpenAI y pueden quedar hasta
+    30d en su storage de abuse monitoring."
+  - Se agrega entrada a `status.md §Deuda de seguridad` con gate
+    de desbloqueo: "Antes de F4 contra tenant productivo,
+    confirmar si la cuenta de OpenAI permite zero-retention y, si
+    sí, habilitarlo. Si no, documentar como riesgo aceptado por
+    producto."
+  - La alternativa (Anthropic con retention off by default) queda
+    como opción abierta en ADR-012 §Alternativas descartadas, con
+    trigger de re-evaluación: "si compliance/legal de VAIRIX
+    levanta el tema en Fase 2+".
+
+---
+
+---
+
+## ✅ Decisiones consolidadas (2026-04-20)
+
+| #   | Eje          | Decisión                                                                                                                                                                                            |
+| --- | ------------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| P1  | Alcance      | Solo PDFs `files.kind='cv'`. Hasta 2 por candidato: `linkedin_export` (weight menor) + `cv_primary` (weight mayor). Planilla VAIRIX + Google Sheet quedan fuera del matching.                       |
+| P2  | Variants     | Clasificador determinístico (`lib/cv/variant-classifier.ts`). Dos paths: LinkedIn → parser determinístico; free-form → LLM. Shape de output idéntico.                                               |
+| P3  | Años/skill   | Overlapping sobre `kind='work'`. Side projects + educación separados. Gaps no descuentan. N skills por experiencia → período completo a las N (overstate aceptado, documentado en ADR-015).         |
+| P4  | Hash extract | `SHA256(parsed_text \|\| model \|\| prompt_version)`. `prompt_version` string en código, bump manual consciente. ADR nuevo si cambia semántica del output.                                          |
+| P5  | Provider/LLM | OpenAI `gpt-4o-mini`. Sin hard-cap. Logs de tokens desde día 1. Data retention estándar aceptado como riesgo (entrada en `status.md §Deuda de seguridad`). Anthropic queda como plan B documentado. |
+
+Estas decisiones alimentan:
+
+- **ADR-012** CV structured extraction → P1, P2, P4, P5
+- **ADR-013** Skills taxonomy → (independiente — se decide al redactar)
+- **ADR-014** Job-description decomposition → reusa ADR-012
+  §provider LLM
+- **ADR-015** Matching & ranking → P3 (función `yearsForSkill`) +
+  P1 (`weight` por variant en el scoring)
 
 ---
 

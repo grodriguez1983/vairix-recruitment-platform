@@ -897,6 +897,30 @@ _(lista de inconsistencias encontradas y su plan de resolución)_
     el límite de gasto (usage limit) del proyecto de OpenAI para
     acotar blast radius.
 
+- **🔄 Decidir data retention de OpenAI para F4 antes del primer
+  backfill de extracción contra prod**.
+  - **Estado actual**: key project-scoped estándar, retention on
+    (hasta 30d para abuse monitoring de OpenAI). Decisión del
+    usuario (2026-04-20) aceptó este riesgo explícitamente para
+    arrancar F4.
+  - **Por qué es deuda**: F4 (ADR-012 propuesto) manda CVs
+    completos de candidatos — con PII (nombre, email, teléfono,
+    LinkedIn, historial laboral) — a OpenAI. La política estándar
+    acepta que esos payloads queden hasta 30d en storage de abuse
+    monitoring de OpenAI.
+  - **Gate de desbloqueo antes de F4 contra tenant productivo**
+    (no antes del desarrollo sobre fixtures locales):
+    1. Verificar en el admin de OpenAI si la cuenta permite
+       zero-retention (requiere Enterprise o Zero Data Retention
+       agreement).
+    2. Si sí → habilitar y rotar key.
+    3. Si no → mantener el riesgo aceptado documentado en ADR-012
+       §Riesgos. Escalarlo con producto/legal si existe interés
+       de VAIRIX de cumplir con compliance formal en Fase 2+.
+  - **Alternativa si compliance lo requiere**: Anthropic Claude
+    (retention off by default). Queda listada en ADR-012
+    §Alternativas descartadas como plan B con trigger explícito.
+
 ---
 
 ## 🔗 Notas volátiles
