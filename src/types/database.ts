@@ -922,6 +922,108 @@ export type Database = {
         }
         Relationships: []
       }
+      match_results: {
+        Row: {
+          breakdown_json: Json
+          candidate_id: string
+          match_run_id: string
+          must_have_gate: string
+          rank: number
+          tenant_id: string | null
+          total_score: number
+        }
+        Insert: {
+          breakdown_json: Json
+          candidate_id: string
+          match_run_id: string
+          must_have_gate: string
+          rank: number
+          tenant_id?: string | null
+          total_score: number
+        }
+        Update: {
+          breakdown_json?: Json
+          candidate_id?: string
+          match_run_id?: string
+          must_have_gate?: string
+          rank?: number
+          tenant_id?: string | null
+          total_score?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_results_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_results_match_run_id_fkey"
+            columns: ["match_run_id"]
+            isOneToOne: false
+            referencedRelation: "match_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      match_runs: {
+        Row: {
+          candidates_evaluated: number | null
+          catalog_snapshot_at: string
+          created_at: string
+          diagnostics: Json | null
+          finished_at: string | null
+          id: string
+          job_query_id: string
+          started_at: string
+          status: string
+          tenant_id: string | null
+          triggered_by: string | null
+        }
+        Insert: {
+          candidates_evaluated?: number | null
+          catalog_snapshot_at: string
+          created_at?: string
+          diagnostics?: Json | null
+          finished_at?: string | null
+          id?: string
+          job_query_id: string
+          started_at?: string
+          status?: string
+          tenant_id?: string | null
+          triggered_by?: string | null
+        }
+        Update: {
+          candidates_evaluated?: number | null
+          catalog_snapshot_at?: string
+          created_at?: string
+          diagnostics?: Json | null
+          finished_at?: string | null
+          id?: string
+          job_query_id?: string
+          started_at?: string
+          status?: string
+          tenant_id?: string | null
+          triggered_by?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_runs_job_query_id_fkey"
+            columns: ["job_query_id"]
+            isOneToOne: false
+            referencedRelation: "job_queries"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_runs_triggered_by_fkey"
+            columns: ["triggered_by"]
+            isOneToOne: false
+            referencedRelation: "app_users"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       notes: {
         Row: {
           application_id: string | null
