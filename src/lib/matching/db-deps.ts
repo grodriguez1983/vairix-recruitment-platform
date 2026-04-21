@@ -199,14 +199,14 @@ export function buildRunMatchJobDeps(
     rescueFailedCandidates: async (params) => {
       if (params.failed.length === 0) return { rescues_inserted: 0 };
 
-      // Resolve skill_id → slug via skills_catalog (ADR-013).
+      // Resolve skill_id → slug via the `skills` catalog table (ADR-013).
       const allIds = Array.from(new Set(params.failed.flatMap((f) => f.missing_skill_ids)));
       if (allIds.length === 0) return { rescues_inserted: 0 };
       const { data: skills, error: skillErr } = await supabase
-        .from('skills_catalog')
+        .from('skills')
         .select('id, slug')
         .in('id', allIds);
-      if (skillErr) throw new Error(`rescueFailedCandidates: skills_catalog: ${skillErr.message}`);
+      if (skillErr) throw new Error(`rescueFailedCandidates: skills: ${skillErr.message}`);
       const idToSlug = new Map<string, string>();
       for (const s of skills ?? []) idToSlug.set(s.id as string, s.slug as string);
 

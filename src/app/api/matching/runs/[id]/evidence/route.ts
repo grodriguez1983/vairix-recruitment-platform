@@ -79,7 +79,7 @@ export async function GET(
   }
 
   const { data: skills, error: skillErr } = await supabase
-    .from('skills_catalog')
+    .from('skills')
     .select('id, slug')
     .in('id', skillIds);
   if (skillErr) {

@@ -34,7 +34,13 @@ test.describe('@smoke authenticated shell', () => {
   test('status filter narrows to active applications', async ({ page }) => {
     await page.goto('/candidates');
     await page.getByRole('button', { name: /^Filters/ }).click();
-    await page.getByLabel('Status').selectOption('active');
+    // The `<label>` wraps both text and the `<select>`, so Playwright
+    // derives the accessible name as `Status` + option text; scope by
+    // the label element directly to keep the selector unambiguous.
+    await page
+      .locator('label', { hasText: /^Status/ })
+      .locator('select')
+      .selectOption('active');
     await page.getByRole('button', { name: 'Search' }).click();
     await page.waitForURL(/\/candidates\?.*status=active/);
     // Only Alice has an application, so only she should appear.
