@@ -32,6 +32,7 @@
     "embed:evaluations": "tsx src/scripts/embed-evaluations.ts",
     "embed:all": "tsx src/scripts/embed-all.ts",
     "normalize:rejections": "tsx src/scripts/normalize-rejections.ts",
+    "skills:reconcile": "tsx src/scripts/skills-reconcile.ts",
     "parse:cvs": "tsx src/scripts/parse-cvs.ts",
     "supabase:types": "supabase gen types typescript --local > src/types/database.ts",
     "prepare": "husky install",
