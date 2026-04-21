@@ -22,16 +22,18 @@ import type { ExperienceInput } from './types';
 import { mergeVariants } from './variant-merger';
 
 function mkExp(overrides: Partial<ExperienceInput> & { id: string }): ExperienceInput {
+  // Use `in` checks so explicit `null` overrides survive (critical for
+  // tests asserting that null company/dates block merging).
   return {
     id: overrides.id,
-    source_variant: overrides.source_variant ?? 'cv_primary',
-    kind: overrides.kind ?? 'work',
-    company: overrides.company ?? 'Acme',
-    title: overrides.title ?? 'Engineer',
-    start_date: overrides.start_date ?? '2020-01-01',
-    end_date: overrides.end_date ?? '2022-01-01',
-    description: overrides.description ?? null,
-    skills: overrides.skills ?? [],
+    source_variant: 'source_variant' in overrides ? overrides.source_variant! : 'cv_primary',
+    kind: 'kind' in overrides ? overrides.kind! : 'work',
+    company: 'company' in overrides ? overrides.company! : 'Acme',
+    title: 'title' in overrides ? overrides.title! : 'Engineer',
+    start_date: 'start_date' in overrides ? overrides.start_date! : '2020-01-01',
+    end_date: 'end_date' in overrides ? overrides.end_date! : '2022-01-01',
+    description: 'description' in overrides ? overrides.description! : null,
+    skills: 'skills' in overrides ? overrides.skills! : [],
   };
 }
 
