@@ -5,12 +5,29 @@
 > el git log).
 
 **Última actualización**: 2026-04-20
-**Última sesión**: 2026-04-20 — **F4-001 + F4-002 cerrados**. F4-001 (schema + RLS, 4 sub-bloques) + F4-002 (resolver TS + seed + reconcile CLI, 4 sub-bloques). Resolver `src/lib/skills/resolver.ts` como pure function con `CatalogSnapshot` inyectado; seed curado de 65 skills + 55 aliases como source-of-truth en TS con migración espejo; equivalence test TS↔SQL contra `public.resolve_skill()`; `pnpm skills:reconcile` idempotente para backfill de `experience_skills.skill_id IS NULL`. **Full suite 531/531 green**. Siguiente: F4-003 (CV variant classifier determinístico).
+**Última sesión**: 2026-04-20 — **F4-001 + F4-002 + F4-003 cerrados en un mismo día**. F4-003 (variant classifier determinístico) cerrado en 2 sub-bloques: función pura `src/lib/cv/variant-classifier.ts` con scoring heurístico (+3 headers ordenados / +2 Top Skills / +1 URL / +1 ≥2 fechas "- Present", threshold ≥3 → linkedin_export; default cv_primary como ADR-012 §7), + 10 fixtures sintéticos (5 por variante) manejando shapes realistas. 13 unit tests inline + 11 fixture-driven. Unit suite 288/288 green. Siguiente: F4-004 (extractor LLM con Zod schema).
 **Fase activa**: **Fase 4 — Inteligencia** (eje matching). F1 fundación + F2/F3 slices previas siguen done.
 
 ---
 
 ## ✅ Completado
+
+- **F4-003 CV variant classifier** ✅ done — 2026-04-20 —
+  `adac30c`..`8dcd483`.
+  - **Sub-A** (`adac30c`→`4cf443b`): `src/lib/cv/variant-classifier.ts`
+    como pure function (RED→GREEN). 13 unit tests adversariales:
+    default seguro (empty/whitespace/plain CV), URL sola insuficiente,
+    LinkedIn export positivos (full / sin URL / Top Skills+URL sin
+    headers ordenados), headers solo-en-prosa no cuentan, case-sensitive,
+    orden estricto, fechas "Month Year - Present", bound y determinismo.
+    Scoring explícito en ADR-012 §1 respetado literalmente.
+  - **Sub-B** (`8dcd483`): `tests/fixtures/cv-variants/{linkedin_export,cv_primary}/*.txt`
+    con 5 fixtures cada uno + `variant-classifier.fixtures.test.ts`
+    fixture-driven que itera la carpeta y asserta variant+confidence.
+    Guard: ≥5 fixtures por variante (regression contra degradación de
+    heurísticas nuevas). Fixtures sintéticos anonimizados, cubren
+    shapes reales (full export, sin URL, prosa ATS shouting, prosa con
+    "Please contact me", etc.).
 
 - **F4-002 skills catalog seed + resolver** ✅ done — 2026-04-20 —
   `04a8736`..`2be40f1`.
@@ -908,12 +925,11 @@ _(nada todavía)_
 
 ## ⏳ Próximo (top 3 del roadmap)
 
-1. **F4-003** — CV variant classifier determinístico (sin LLM) con
-   fixtures reales anonimizadas.
-2. **F4-004** — Extractor CV→JSON con `ExtractionProvider`
+1. **F4-004** — Extractor CV→JSON con `ExtractionProvider`
    (`gpt-4o-mini`) e idempotencia por `content_hash`.
-3. **F4-005** — Derivación de experiences + experience_skills desde
+2. **F4-005** — Derivación de experiences + experience_skills desde
    `candidate_extractions.raw_output` (usa resolver de F4-002).
+3. **F4-006** — Job query decomposition (LLM → `job_queries`).
 
 Ver `docs/roadmap.md` para el plan completo de F4-001..F4-009 con
 prompts listos.
