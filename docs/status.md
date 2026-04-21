@@ -5,12 +5,60 @@
 > el git log).
 
 **Última actualización**: 2026-04-21
-**Última sesión**: 2026-04-21 — **F4-008 gate estructural resuelto (ADR-017 + migración)**, continúa F4-008 sub-A loadCandidateAggregates. **F4-006, F4-007 bis y F4-007 cerrados**. F4-006 sub-A..sub-D: DecompositionProvider (StubDecompositionProvider + OpenAIDecompositionProvider con prompt-v1), content_hash SHA-256 sobre (normalized_text ∥ model ∥ promptVersion) con NUL separator, `decomposeJobQuery(raw_text, deps)` idempotente por hash + resolución de catálogo + persist en `job_queries` + API route POST `/api/matching/decompose` con Zod schema + `requireAuth()`. F4-007 bis: migración `20260420000009_candidate_experiences_description_tsv.sql` + GIN index + integration test (match/miss/null). F4-007 sub-A..sub-D matching ranker: `date-intervals.ts` (MS_PER_YEAR, Interval, toInterval, overlapRatio) compartido; `variant-merger.ts` (284 LOC, COMPANY_SUFFIX_RE, titleCompatible lenient con substring + Jaccard ≥ 0.5, greedy best-match, near-miss diagnostics); `years-calculator.ts` sweep-line; `score-aggregator.ts` con must-have gate (resolved + ratio=0 → failed; unresolved skill_id NO falla gate — ADR-015 §Consecuencias), weights 2.0/1.0 normalizados, language bonus ±5/-10, seniority bucket (<2 junior, 2-5 semi, 5-10 senior, 10+ lead) ±5, clamp [0,100]; `ranker.ts` DeterministicRanker orquestador con sort (score desc, candidate_id asc), catalogSnapshotAt wired como now. 47 matching + 3 F4-007bis = 777 tests verde. Siguiente: F4-008 (API `/api/matching/run` + persistencia match_runs/match_results) y F4-008 bis (match_rescues + fallback FTS ADR-016).
+**Última sesión**: 2026-04-21 — **F4-008 sub-A, sub-B, sub-C, sub-D (POST + 2 GET routes) hechos**. ADR-017 + migración `20260421000001_rls_match_results_insert_own_run.sql` desbloquean la persistencia de `match_results` por el recruiter dueño del run. Queda pendiente integration e2e end-to-end (fixture 20 candidates → decompose → run → top-10). **F4-006, F4-007 bis y F4-007 cerrados**. F4-006 sub-A..sub-D: DecompositionProvider (StubDecompositionProvider + OpenAIDecompositionProvider con prompt-v1), content_hash SHA-256 sobre (normalized_text ∥ model ∥ promptVersion) con NUL separator, `decomposeJobQuery(raw_text, deps)` idempotente por hash + resolución de catálogo + persist en `job_queries` + API route POST `/api/matching/decompose` con Zod schema + `requireAuth()`. F4-007 bis: migración `20260420000009_candidate_experiences_description_tsv.sql` + GIN index + integration test (match/miss/null). F4-007 sub-A..sub-D matching ranker: `date-intervals.ts` (MS_PER_YEAR, Interval, toInterval, overlapRatio) compartido; `variant-merger.ts` (284 LOC, COMPANY_SUFFIX_RE, titleCompatible lenient con substring + Jaccard ≥ 0.5, greedy best-match, near-miss diagnostics); `years-calculator.ts` sweep-line; `score-aggregator.ts` con must-have gate (resolved + ratio=0 → failed; unresolved skill_id NO falla gate — ADR-015 §Consecuencias), weights 2.0/1.0 normalizados, language bonus ±5/-10, seniority bucket (<2 junior, 2-5 semi, 5-10 senior, 10+ lead) ±5, clamp [0,100]; `ranker.ts` DeterministicRanker orquestador con sort (score desc, candidate_id asc), catalogSnapshotAt wired como now. 47 matching + 3 F4-007bis = 777 tests verde. Siguiente: F4-008 (API `/api/matching/run` + persistencia match_runs/match_results) y F4-008 bis (match_rescues + fallback FTS ADR-016).
 **Fase activa**: **Fase 4 — Inteligencia** (eje matching). F1 fundación + F2/F3 slices previas siguen done.
 
 ---
 
 ## ✅ Completado
+
+- **F4-008 API + persistencia (core)** ✅ done — 2026-04-21 —
+  `c2c95ff`..`7e98a38`. Resuelto el gate estructural por ADR-017
+  (ver sección "Decisiones cerradas esta sesión").
+  - **Sub-A** (`c2c95ff`→`6881294`): `src/lib/matching/load-candidate-aggregates.ts`
+    `loadCandidateAggregates(candidateIds, deps) → CandidateAggregate[]`.
+    Groups rows por candidate_id, corre `mergeVariants` para
+    collapse cv_primary + linkedin_export, attach de languages.
+    Deps inyectadas: `loadExperiences(ids)` + `loadLanguages(ids)`.
+    Empty input → [] sin tocar deps. 9 unit tests.
+  - **Sub-B** (`9830964`→`d8d4c16`): `src/lib/matching/pre-filter.ts`
+    `preFilterByMustHave(jq, tenantId, deps) → candidateIds`.
+    Sólo filtra por `must_have = true && skill_id ≠ null` (ADR-015
+    Consecuencias: unresolved skill_id NO filtra para no ocultar
+    candidatos por catalog drift). AND-intersection sobre todos los
+    skills requeridos. 8 unit tests.
+  - **Sub-C** (`fab3ccc`→`28744f2`): `src/lib/matching/run-match-job.ts`
+    orchestrator `runMatchJob(input, deps) → {run_id,
+candidates_evaluated, top}`. Flujo:
+    `loadJobQuery → createMatchRun(status=running) → preFilter →
+loadCandidates → rank → insertMatchResults → completeMatchRun`.
+    On error: `failMatchRun(reason)` + rethrow. State-machine
+    trigger de `match_runs` enforza la transición correcta.
+    `tenant_id` del job_query se propaga a cada escritura (hedge
+    ADR-003). 9 unit tests.
+  - **Sub-D parcial** (`3ba25ac`→`7e98a38`): 3 API routes + wiring.
+    - POST `/api/matching/run`: Zod (job_query_id UUID + top_n
+      1..100 default 10, strip unknown), `requireAuth`,
+      `current_app_user_id` RPC, `buildRunMatchJobDeps(supabase)`,
+      error mapping (404 job_query_not_found, 500 match_run_failed).
+      9 schema tests.
+    - GET `/api/matching/runs/:id`: metadata bajo RLS. 400 si id
+      no-UUID, 404 si no visible.
+    - GET `/api/matching/runs/:id/results?offset=&limit=`: paginado
+      ordenado por rank asc, Zod schema offset ≥0 default 0, limit
+      1..200 default 50, exact count. 7 schema tests.
+    - `src/lib/matching/db-deps.ts` wirea todas las deps contra el
+      cliente RLS-scoped (no service role, CLAUDE.md #4 intacta).
+      `fetchCandidatesWithAllSkills` hace AND-intersection
+      in-memory (F1 scale, ~100 candidatos × N skills).
+  - **Pendiente sub-D**: integration e2e end-to-end (DoD roadmap).
+    Fixture 20 candidates + JD, asserts top-10. Se hará en la
+    próxima sesión.
+  - **Languages no-op**: `loadLanguages` devuelve `[]` — la tabla
+    `candidate_languages` no existe en F1 y el raw_output →
+    languages aún no se deriva. El bono ±5/-10 de ADR-015 §3 queda
+    inerte. Documentado en doc-comment de `db-deps.ts`. Follow-up
+    slice pendiente (ver sección "Siguiente").
 
 - **F4-007 Deterministic matcher (ranker puro)** ✅ done — 2026-04-21 —
   `840d8f4`..`072c0dd`.
