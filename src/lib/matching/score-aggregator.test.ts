@@ -150,8 +150,10 @@ describe('aggregateScore — ADR-015 §3', () => {
   });
 
   it('test_language_bonus_applied — all required languages matched → +5', () => {
+    // Partial ratio (1y vs min 2y → base 50) so the +5 bonus is visible
+    // and not clipped by the 100 ceiling.
     const reqs = [
-      mkRequirement({ skill_raw: 'React', skill_id: REACT_ID, min_years: 1, must_have: false }),
+      mkRequirement({ skill_raw: 'React', skill_id: REACT_ID, min_years: 2, must_have: false }),
     ];
     const exp = mkExp({
       id: 'a',
@@ -216,8 +218,10 @@ describe('aggregateScore — ADR-015 §3', () => {
 
   it('test_seniority_match_adjustment — candidate seniority matches job query → +5', () => {
     // Job asks senior; candidate has 6 years of work → senior bucket.
+    // Partial skill ratio (6y vs 12y → base 50) so the +5 bonus is not
+    // swallowed by the ceiling clamp.
     const reqs = [
-      mkRequirement({ skill_raw: 'React', skill_id: REACT_ID, min_years: 1, must_have: false }),
+      mkRequirement({ skill_raw: 'React', skill_id: REACT_ID, min_years: 12, must_have: false }),
     ];
     const exp = mkExp({
       id: 'a',
