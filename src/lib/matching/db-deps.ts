@@ -5,13 +5,6 @@
  *
  * Intentionally thin: it only shapes rows; correctness lives in the
  * pure units (sub-A / sub-B / sub-C) and the DB (RLS + triggers).
- *
- * Languages limitation: `candidate_languages` is not a table in F1.
- * The matcher's language bonus (±5 / -10 per ADR-015 §3) requires a
- * per-candidate language list. Until a dedicated derivation lands,
- * `loadLanguages` returns `[]` — effectively a no-op (no bonus, no
- * penalty). Documented in status.md; follow-up slice will persist
- * `candidate_extractions.raw_output -> 'languages'` into a table.
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 
@@ -100,10 +93,18 @@ export function buildRunMatchJobDeps(
     }));
   }
 
-  async function loadLanguages(_candidateIds: string[]): Promise<CandidateLanguageRow[]> {
-    // See file-level note: language bonus is a no-op until F4-008 bis
-    // (or a dedicated follow-up) persists languages.
-    return [];
+  async function loadLanguages(candidateIds: string[]): Promise<CandidateLanguageRow[]> {
+    if (candidateIds.length === 0) return [];
+    const { data, error } = await supabase
+      .from('candidate_languages')
+      .select('candidate_id, name, level')
+      .in('candidate_id', candidateIds);
+    if (error) throw new Error(`loadLanguages: ${error.message}`);
+    return (data ?? []).map((r) => ({
+      candidate_id: r.candidate_id as string,
+      name: r.name as string,
+      level: (r.level as string | null) ?? null,
+    }));
   }
 
   return {

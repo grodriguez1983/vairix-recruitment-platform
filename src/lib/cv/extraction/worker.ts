@@ -65,6 +65,15 @@ export interface CvExtractionWorkerDeps {
   deriveExperiences?: (
     extractionId: string,
   ) => Promise<{ skipped: boolean; experiencesInserted: number; skillsInserted: number }>;
+  /**
+   * Optional languages derivation hook (parallel to `deriveExperiences`).
+   * Invoked with the same extraction id after a successful extraction.
+   * Errors are logged to `sync_errors` with `entity='cv_derivation'`
+   * and do NOT roll back the extraction.
+   */
+  deriveLanguages?: (
+    extractionId: string,
+  ) => Promise<{ skipped: boolean; languagesInserted: number }>;
   provider: ExtractionProvider;
   now?: () => Date;
 }
@@ -82,6 +91,8 @@ export interface CvExtractionRunResult {
   experiencesInserted: number;
   /** Sum of `skillsInserted` from every successful derivation call. */
   skillsInserted: number;
+  /** Sum of `languagesInserted` from every successful derivation call. */
+  languagesInserted: number;
   /** Count of derivations that threw after a successful extraction. */
   derivationErrored: number;
 }
@@ -98,6 +109,7 @@ export async function runCvExtractions(
   let errored = 0;
   let experiencesInserted = 0;
   let skillsInserted = 0;
+  let languagesInserted = 0;
   let derivationErrored = 0;
 
   for (const row of pending) {
@@ -151,6 +163,20 @@ export async function runCvExtractions(
         derivationErrored += 1;
       }
     }
+
+    if (deps.deriveLanguages !== undefined && insertedId !== null) {
+      try {
+        const d = await deps.deriveLanguages(insertedId);
+        languagesInserted += d.languagesInserted;
+      } catch (e) {
+        await deps.logRowError({
+          entity: 'cv_derivation',
+          entity_id: insertedId,
+          message: e instanceof Error ? e.message : String(e),
+        });
+        derivationErrored += 1;
+      }
+    }
   }
 
   return {
@@ -160,6 +186,7 @@ export async function runCvExtractions(
     errored,
     experiencesInserted,
     skillsInserted,
+    languagesInserted,
     derivationErrored,
   };
 }

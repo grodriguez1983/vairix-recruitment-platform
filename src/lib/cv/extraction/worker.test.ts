@@ -52,6 +52,7 @@ function buildDeps(opts: {
   providerImpl?: ReturnType<typeof createStubExtractionProvider>;
   throwForFile?: string;
   derive?: CvExtractionWorkerDeps['deriveExperiences'];
+  deriveLanguages?: CvExtractionWorkerDeps['deriveLanguages'];
 }): {
   deps: CvExtractionWorkerDeps;
   inserts: Array<{ file_id: string; id: string; content_hash: string; source_variant: string }>;
@@ -100,6 +101,7 @@ function buildDeps(opts: {
       }),
       provider: wrappedProvider,
       deriveExperiences: opts.derive,
+      deriveLanguages: opts.deriveLanguages,
     },
     inserts,
     errors,
@@ -227,6 +229,7 @@ describe('runCvExtractions — ADR-012 §6 worker invariants', () => {
     expect(stats.errored).toBe(0);
     expect(stats.experiencesInserted).toBe(0);
     expect(stats.skillsInserted).toBe(0);
+    expect(stats.languagesInserted).toBe(0);
     expect(stats.derivationErrored).toBe(0);
   });
 
@@ -306,6 +309,62 @@ describe('runCvExtractions — ADR-012 §6 worker invariants', () => {
     expect(stats.extracted).toBe(1);
     expect(stats.experiencesInserted).toBe(0);
     expect(stats.skillsInserted).toBe(0);
+    expect(stats.languagesInserted).toBe(0);
     expect(stats.derivationErrored).toBe(0);
+  });
+
+  it('invokes deriveLanguages after a successful insert and surfaces the counter', async () => {
+    const deriveLanguages = vi.fn(async () => ({ skipped: false, languagesInserted: 2 }));
+    const pending: Row[] = [
+      { file_id: 'f1', candidate_id: 'c1', parsed_text: 'cv one' },
+      { file_id: 'f2', candidate_id: 'c2', parsed_text: 'cv two' },
+    ];
+    const { deps, errors } = buildDeps({ pending, deriveLanguages });
+    const stats = await runCvExtractions(deps);
+
+    expect(deriveLanguages).toHaveBeenCalledTimes(2);
+    expect(deriveLanguages).toHaveBeenCalledWith('ext-f1');
+    expect(deriveLanguages).toHaveBeenCalledWith('ext-f2');
+    expect(stats.languagesInserted).toBe(4);
+    expect(stats.derivationErrored).toBe(0);
+    expect(errors).toHaveLength(0);
+  });
+
+  it('does NOT invoke deriveLanguages when the extraction was skipped (hash hit)', async () => {
+    const { extractionContentHash } = await import('./hash');
+    const provider = createStubExtractionProvider({ fixture: sampleResult() });
+    const hash = extractionContentHash('cached', provider.model, provider.promptVersion);
+    const deriveLanguages = vi.fn(async () => ({ skipped: false, languagesInserted: 1 }));
+
+    const { deps } = buildDeps({
+      pending: [{ file_id: 'f1', candidate_id: 'c1', parsed_text: 'cached' }],
+      existingHashes: new Set([hash]),
+      providerImpl: provider,
+      deriveLanguages,
+    });
+    await runCvExtractions(deps);
+    expect(deriveLanguages).not.toHaveBeenCalled();
+  });
+
+  it('logs languages derivation failure to sync_errors and continues the batch', async () => {
+    const deriveLanguages = vi.fn(async (id: string) => {
+      if (id === 'ext-f-bad') throw new Error('simulated languages derivation failure');
+      return { skipped: false, languagesInserted: 1 };
+    });
+    const pending: Row[] = [
+      { file_id: 'f-ok', candidate_id: 'c1', parsed_text: 'good cv' },
+      { file_id: 'f-bad', candidate_id: 'c2', parsed_text: 'bad cv' },
+    ];
+    const { deps, inserts, errors } = buildDeps({ pending, deriveLanguages });
+    const stats = await runCvExtractions(deps);
+
+    expect(stats.extracted).toBe(2);
+    expect(inserts).toHaveLength(2);
+    expect(stats.derivationErrored).toBe(1);
+    expect(stats.languagesInserted).toBe(1);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]!.entity).toBe('cv_derivation');
+    expect(errors[0]!.entity_id).toBe('ext-f-bad');
+    expect(errors[0]!.message).toContain('simulated languages derivation failure');
   });
 });

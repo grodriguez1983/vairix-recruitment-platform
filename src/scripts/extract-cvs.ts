@@ -43,6 +43,7 @@ import {
   deriveExperiences,
   type DeriveExperiencesDeps,
 } from '../lib/cv/extraction/derive-experiences';
+import { deriveLanguages, type DeriveLanguagesDeps } from '../lib/cv/extraction/derive-languages';
 import type { ExtractionResult, SourceVariant } from '../lib/cv/extraction/types';
 import { loadCatalogSnapshot } from '../lib/skills/catalog-loader';
 
@@ -130,7 +131,55 @@ function buildDeps(db: SupabaseClient, provider: ExtractionProvider): CvExtracti
       if (error) throw new Error(error.message);
     },
     deriveExperiences: (extractionId) => deriveExperiences(extractionId, buildDeriveDeps(db)),
+    deriveLanguages: (extractionId) => deriveLanguages(extractionId, buildDeriveLanguagesDeps(db)),
     provider,
+  };
+}
+
+/**
+ * Wires the languages derivation service to Supabase. Same service-role
+ * client as the worker (cross-tenant ETL, ADR-003).
+ */
+function buildDeriveLanguagesDeps(db: SupabaseClient): DeriveLanguagesDeps {
+  return {
+    loadExtraction: async (id) => {
+      const { data, error } = await db
+        .from('candidate_extractions')
+        .select('candidate_id, raw_output')
+        .eq('id', id)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      if (data === null) return null;
+      return {
+        candidate_id: data.candidate_id as string,
+        raw_output: data.raw_output as ExtractionResult,
+      };
+    },
+    hasExistingLanguages: async (extractionId) => {
+      const { data, error } = await db
+        .from('candidate_languages')
+        .select('id')
+        .eq('extraction_id', extractionId)
+        .limit(1);
+      if (error) throw new Error(error.message);
+      return (data ?? []).length > 0;
+    },
+    insertLanguages: async (rows) => {
+      if (rows.length === 0) return 0;
+      const { data, error } = await db
+        .from('candidate_languages')
+        .insert(
+          rows.map((r) => ({
+            candidate_id: r.candidate_id,
+            extraction_id: r.extraction_id,
+            name: r.name,
+            level: r.level,
+          })),
+        )
+        .select('id');
+      if (error) throw new Error(error.message);
+      return (data ?? []).length;
+    },
   };
 }
 
