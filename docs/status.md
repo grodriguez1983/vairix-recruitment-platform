@@ -5,12 +5,34 @@
 > el git log).
 
 **Última actualización**: 2026-04-20
-**Última sesión**: 2026-04-20 — **F4-001 schema + RLS completo** (4 sub-bloques vía TDD RED→GREEN). Migraciones `20260420000000..000007`: skills catalog + resolver SQL, cv_extractions (3 tablas con trigger de inmutabilidad sobre `raw_output`), job_queries (con helper `public.current_app_user_id()` + trigger de inmutabilidad sobre hash/LLM inputs), match_runs + match_results (state machine 'running'→'completed'/'failed' + insert-only trigger en results). Además **ADR-016 Aceptada** (Complementary signals: post-ranker rescue + evidence panel FTS + description_tsv), roadmap actualizado con F4-007bis/F4-008bis. **Full suite 501/501 green**. Siguiente: F4-002 (seed skills catalog + TS resolver).
+**Última sesión**: 2026-04-20 — **F4-001 + F4-002 cerrados**. F4-001 (schema + RLS, 4 sub-bloques) + F4-002 (resolver TS + seed + reconcile CLI, 4 sub-bloques). Resolver `src/lib/skills/resolver.ts` como pure function con `CatalogSnapshot` inyectado; seed curado de 65 skills + 55 aliases como source-of-truth en TS con migración espejo; equivalence test TS↔SQL contra `public.resolve_skill()`; `pnpm skills:reconcile` idempotente para backfill de `experience_skills.skill_id IS NULL`. **Full suite 531/531 green**. Siguiente: F4-003 (CV variant classifier determinístico).
 **Fase activa**: **Fase 4 — Inteligencia** (eje matching). F1 fundación + F2/F3 slices previas siguen done.
 
 ---
 
 ## ✅ Completado
+
+- **F4-002 skills catalog seed + resolver** ✅ done — 2026-04-20 —
+  `04a8736`..`2be40f1`.
+  - **Sub-A** (`04a8736`→`8acc811`): `src/lib/skills/resolver.ts`
+    como pure function (RED→GREEN). Types `CatalogSnapshot`,
+    `SkillRow`, `AliasRow`, `Resolution`. `normalizeSkillInput`
+    exportado para reusar en reporte admin. 18 unit tests
+    adversariales mirror del contrato SQL.
+  - **Sub-B** (`<post-8acc811>`): migración `20260420000008_skills_seed.sql`
+    - `src/lib/skills/seed.ts` (65 skills, ~55 aliases) + helper
+      `applyCuratedSeed` (upsert idempotente) para tests que wipean.
+      5 sanity tests TS↔DB (slugs symmetric diff, canonical+category
+      match, aliases, no duplicados, no alias=slug de otra skill).
+      `resolve-skill-sql.test.ts` restaura seed en afterAll.
+  - **Sub-C** (`2b82b9b`): `tests/integration/skills/resolver-equivalence.test.ts`
+    — battery determinística de 41 inputs + sample real de aliases
+    - sample real de slugs, total agreement TS↔SQL.
+  - **Sub-D** (`2be40f1`): `src/lib/skills/catalog-loader.ts` +
+    `src/lib/skills/reconcile.ts` + `src/scripts/skills-reconcile.ts`
+    - `pnpm skills:reconcile`. Idempotente (Set de seen-IDs evita
+      doble-count), preserva `resolved_at` original en filas con
+      skill_id ya set. 4 integration tests.
 
 - **F4-001 schema + RLS** ✅ done — 2026-04-20 — `7fd5663`..`cbbc70e`.
   - **Sub-bloque 1** (`7fd5663`): `skills`, `skill_aliases`,
@@ -886,12 +908,12 @@ _(nada todavía)_
 
 ## ⏳ Próximo (top 3 del roadmap)
 
-1. **F4-002** — Skills catalog seed (~50-80 curados) + resolver TS
-   con test de equivalencia TS↔SQL contra `public.resolve_skill()`.
-2. **F4-003** — CV variant classifier determinístico (sin LLM) con
+1. **F4-003** — CV variant classifier determinístico (sin LLM) con
    fixtures reales anonimizadas.
-3. **F4-004** — Extractor CV-→JSON con `ExtractionProvider`
+2. **F4-004** — Extractor CV→JSON con `ExtractionProvider`
    (`gpt-4o-mini`) e idempotencia por `content_hash`.
+3. **F4-005** — Derivación de experiences + experience_skills desde
+   `candidate_extractions.raw_output` (usa resolver de F4-002).
 
 Ver `docs/roadmap.md` para el plan completo de F4-001..F4-009 con
 prompts listos.
