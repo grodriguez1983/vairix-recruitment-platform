@@ -18,7 +18,7 @@ import type { ResolvedDecomposition } from '../rag/decomposition/resolve-require
 
 import { runMatchJob } from './run-match-job';
 import type { MatchResultRow, RunMatchJobDeps, RunMatchJobInput } from './run-match-job';
-import type { CandidateAggregate, CandidateScore, RankResult } from './types';
+import type { CandidateAggregate, CandidateScore, RankResult, RequirementBreakdown } from './types';
 
 const REACT_ID = '00000000-0000-0000-0000-000000000001';
 const SNAPSHOT = new Date('2025-01-01T00:00:00Z');
@@ -41,6 +41,31 @@ function jobQuery(): ResolvedDecomposition {
     seniority: 'unspecified',
     languages: [],
     notes: null,
+  };
+}
+
+function mkRequirementBreakdown(
+  skillId: string | null,
+  skillRaw: string,
+  mustHave: boolean,
+  status: 'match' | 'partial' | 'missing',
+): RequirementBreakdown {
+  return {
+    requirement: {
+      skill_raw: skillRaw,
+      skill_id: skillId,
+      resolved_at: skillId === null ? null : '2025-01-01T00:00:00Z',
+      min_years: 1,
+      max_years: null,
+      must_have: mustHave,
+      evidence_snippet: skillRaw,
+      category: 'technical',
+    },
+    candidate_years: status === 'match' ? 5 : 0,
+    years_ratio: status === 'match' ? 1 : 0,
+    contribution: 0,
+    status,
+    evidence: [],
   };
 }
 
@@ -242,6 +267,98 @@ describe('runMatchJob — F4-008 sub-C', () => {
     });
     expect(out.top).toEqual([]);
     expect(out.candidates_evaluated).toBe(0);
+  });
+
+  it('invokes rescueFailedCandidates with gate-failed candidates + their missing must-have skill IDs (ADR-016 §1)', async () => {
+    const REACT = '10000000-0000-0000-0000-000000000001';
+    const PG = '10000000-0000-0000-0000-000000000002';
+    const TS = '10000000-0000-0000-0000-000000000003';
+    const AWS = '10000000-0000-0000-0000-000000000004';
+    const failedScore: CandidateScore = {
+      candidate_id: 'c-fail',
+      total_score: 10,
+      must_have_gate: 'failed',
+      breakdown: [
+        mkRequirementBreakdown(REACT, 'React', true, 'missing'),
+        mkRequirementBreakdown(PG, 'Postgres', true, 'partial'),
+        mkRequirementBreakdown(TS, 'TypeScript', true, 'match'),
+        mkRequirementBreakdown(AWS, 'AWS', false, 'missing'),
+        mkRequirementBreakdown(null, 'Unresolved', true, 'missing'), // excluded (null id)
+      ],
+      language_match: { required: 0, matched: 0 },
+      seniority_match: 'unknown',
+    };
+    const passedScore = mkScore('c-pass', 90);
+    const rescueHook = vi.fn(async () => ({ rescues_inserted: 1 }));
+    const deps = mkDeps({
+      loadJobQuery: vi.fn(async () => ({
+        resolved: jobQuery(),
+        catalog_snapshot_at: SNAPSHOT,
+        tenant_id: 't-rescue',
+      })),
+      rank: vi.fn(async () => ({ results: [passedScore, failedScore], diagnostics: [] })),
+      rescueFailedCandidates: rescueHook,
+    });
+
+    const out = await runMatchJob(input(), deps);
+
+    expect(rescueHook).toHaveBeenCalledTimes(1);
+    expect(rescueHook).toHaveBeenCalledWith({
+      run_id: 'run-1',
+      tenant_id: 't-rescue',
+      failed: [
+        {
+          candidate_id: 'c-fail',
+          missing_skill_ids: [REACT, PG], // must_have && status !== 'match' && skill_id !== null
+        },
+      ],
+    });
+    expect(out.rescues_inserted).toBe(1);
+  });
+
+  it('skips rescueFailedCandidates when no candidate fails the must-have gate', async () => {
+    const rescueHook = vi.fn(async () => ({ rescues_inserted: 0 }));
+    const deps = mkDeps({
+      rank: vi.fn(async () => ({
+        results: [mkScore('c1', 80), mkScore('c2', 70)],
+        diagnostics: [],
+      })),
+      rescueFailedCandidates: rescueHook,
+    });
+    const out = await runMatchJob(input(), deps);
+    expect(rescueHook).not.toHaveBeenCalled();
+    expect(out.rescues_inserted).toBe(0);
+  });
+
+  it('omits rescues_inserted when the rescue dep is not wired (backwards compat)', async () => {
+    const deps = mkDeps(); // no rescueFailedCandidates
+    const out = await runMatchJob(input(), deps);
+    expect(out.rescues_inserted).toBeUndefined();
+  });
+
+  it('rescueFailedCandidates throws → run still completes (swallowed, rescues_inserted=0)', async () => {
+    const failedScore: CandidateScore = {
+      candidate_id: 'c-fail',
+      total_score: 0,
+      must_have_gate: 'failed',
+      breakdown: [
+        mkRequirementBreakdown('10000000-0000-0000-0000-000000000099', 'React', true, 'missing'),
+      ],
+      language_match: { required: 0, matched: 0 },
+      seniority_match: 'unknown',
+    };
+    const rescueHook = vi.fn(async () => {
+      throw new Error('FTS exploded');
+    });
+    const deps = mkDeps({
+      rank: vi.fn(async () => ({ results: [failedScore], diagnostics: [] })),
+      rescueFailedCandidates: rescueHook,
+    });
+    // Run should not throw — rescue is orthogonal per ADR-016.
+    const out = await runMatchJob(input(), deps);
+    expect(deps.completeMatchRun).toHaveBeenCalled();
+    expect(deps.failMatchRun).not.toHaveBeenCalled();
+    expect(out.rescues_inserted).toBe(0);
   });
 
   it('propagates tenant_id from job_query to every write path', async () => {

@@ -38,6 +38,15 @@ export interface RunMatchJobResult {
   run_id: string;
   candidates_evaluated: number;
   top: CandidateScore[];
+  /** Set iff `rescueFailedCandidates` dep was wired. 0 means invoked
+   *  but nothing landed (no failed candidates, or rescue swallowed). */
+  rescues_inserted?: number;
+}
+
+export interface FailedCandidateInput {
+  candidate_id: string;
+  /** Must-have, unresolved-excluded, status !== 'match'. */
+  missing_skill_ids: string[];
 }
 
 export interface RunMatchJobDeps {
@@ -65,6 +74,17 @@ export interface RunMatchJobDeps {
     },
   ) => Promise<void>;
   failMatchRun: (runId: string, params: { finished_at: Date; reason: string }) => Promise<void>;
+  /**
+   * Optional post-run rescue hook (ADR-016 §1). Invoked after
+   * `completeMatchRun` with the gate-failed candidates + their
+   * missing must-have skill ids. Errors are swallowed (the rescue
+   * bucket is orthogonal to the official ranking).
+   */
+  rescueFailedCandidates?: (params: {
+    run_id: string;
+    tenant_id: string | null;
+    failed: FailedCandidateInput[];
+  }) => Promise<{ rescues_inserted: number }>;
   now?: () => Date;
 }
 
