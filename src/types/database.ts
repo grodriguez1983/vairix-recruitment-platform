@@ -17,10 +17,10 @@ export type Database = {
     Functions: {
       graphql: {
         Args: {
-          operationName?: string
           extensions?: Json
-          variables?: Json
+          operationName?: string
           query?: string
+          variables?: Json
         }
         Returns: Json
       }
@@ -224,6 +224,7 @@ export type Database = {
           company: string | null
           created_at: string
           description: string | null
+          description_tsv: unknown | null
           end_date: string | null
           extraction_id: string
           id: string
@@ -239,6 +240,7 @@ export type Database = {
           company?: string | null
           created_at?: string
           description?: string | null
+          description_tsv?: unknown | null
           end_date?: string | null
           extraction_id: string
           id?: string
@@ -254,6 +256,7 @@ export type Database = {
           company?: string | null
           created_at?: string
           description?: string | null
+          description_tsv?: unknown | null
           end_date?: string | null
           extraction_id?: string
           id?: string
@@ -1669,15 +1672,15 @@ export type Database = {
       }
       semantic_search_embeddings: {
         Args: {
-          source_type_filter?: string[]
-          candidate_id_filter?: string[]
-          query_embedding: number[]
           max_results?: number
+          query_embedding: number[]
+          candidate_id_filter?: string[]
+          source_type_filter?: string[]
         }
         Returns: {
-          candidate_id: string
-          source_type: string
           score: number
+          source_type: string
+          candidate_id: string
         }[]
       }
       set_limit: {
