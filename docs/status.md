@@ -5,7 +5,7 @@
 > el git log).
 
 **Última actualización**: 2026-04-21
-**Última sesión**: 2026-04-21 — **F4-006, F4-007 bis y F4-007 cerrados**. F4-006 sub-A..sub-D: DecompositionProvider (StubDecompositionProvider + OpenAIDecompositionProvider con prompt-v1), content_hash SHA-256 sobre (normalized_text ∥ model ∥ promptVersion) con NUL separator, `decomposeJobQuery(raw_text, deps)` idempotente por hash + resolución de catálogo + persist en `job_queries` + API route POST `/api/matching/decompose` con Zod schema + `requireAuth()`. F4-007 bis: migración `20260420000009_candidate_experiences_description_tsv.sql` + GIN index + integration test (match/miss/null). F4-007 sub-A..sub-D matching ranker: `date-intervals.ts` (MS_PER_YEAR, Interval, toInterval, overlapRatio) compartido; `variant-merger.ts` (284 LOC, COMPANY_SUFFIX_RE, titleCompatible lenient con substring + Jaccard ≥ 0.5, greedy best-match, near-miss diagnostics); `years-calculator.ts` sweep-line; `score-aggregator.ts` con must-have gate (resolved + ratio=0 → failed; unresolved skill_id NO falla gate — ADR-015 §Consecuencias), weights 2.0/1.0 normalizados, language bonus ±5/-10, seniority bucket (<2 junior, 2-5 semi, 5-10 senior, 10+ lead) ±5, clamp [0,100]; `ranker.ts` DeterministicRanker orquestador con sort (score desc, candidate_id asc), catalogSnapshotAt wired como now. 47 matching + 3 F4-007bis = 777 tests verde. Siguiente: F4-008 (API `/api/matching/run` + persistencia match_runs/match_results) y F4-008 bis (match_rescues + fallback FTS ADR-016).
+**Última sesión**: 2026-04-21 — **F4-008 gate estructural resuelto (ADR-017 + migración)**, continúa F4-008 sub-A loadCandidateAggregates. **F4-006, F4-007 bis y F4-007 cerrados**. F4-006 sub-A..sub-D: DecompositionProvider (StubDecompositionProvider + OpenAIDecompositionProvider con prompt-v1), content_hash SHA-256 sobre (normalized_text ∥ model ∥ promptVersion) con NUL separator, `decomposeJobQuery(raw_text, deps)` idempotente por hash + resolución de catálogo + persist en `job_queries` + API route POST `/api/matching/decompose` con Zod schema + `requireAuth()`. F4-007 bis: migración `20260420000009_candidate_experiences_description_tsv.sql` + GIN index + integration test (match/miss/null). F4-007 sub-A..sub-D matching ranker: `date-intervals.ts` (MS_PER_YEAR, Interval, toInterval, overlapRatio) compartido; `variant-merger.ts` (284 LOC, COMPANY_SUFFIX_RE, titleCompatible lenient con substring + Jaccard ≥ 0.5, greedy best-match, near-miss diagnostics); `years-calculator.ts` sweep-line; `score-aggregator.ts` con must-have gate (resolved + ratio=0 → failed; unresolved skill_id NO falla gate — ADR-015 §Consecuencias), weights 2.0/1.0 normalizados, language bonus ±5/-10, seniority bucket (<2 junior, 2-5 semi, 5-10 senior, 10+ lead) ±5, clamp [0,100]; `ranker.ts` DeterministicRanker orquestador con sort (score desc, candidate_id asc), catalogSnapshotAt wired como now. 47 matching + 3 F4-007bis = 777 tests verde. Siguiente: F4-008 (API `/api/matching/run` + persistencia match_runs/match_results) y F4-008 bis (match_rescues + fallback FTS ADR-016).
 **Fase activa**: **Fase 4 — Inteligencia** (eje matching). F1 fundación + F2/F3 slices previas siguen done.
 
 ---
@@ -1048,42 +1048,17 @@ prompts listos.
 
 ## 🚫 Bloqueos
 
-- 🟥 **F4-008 — Gate estructural: cómo persistir `match_results` desde
-  una route disparada por usuario** (levantado 2026-04-21). CLAUDE.md
-  `#4 Auth y RLS` es tajante: _"Cliente Supabase con service role key
-  SOLO en ETL y worker de embeddings. Nunca se expone al cliente ni en
-  routes disparadas por usuario."_ Pero la migración
-  `20260420000007_rls_match_runs_and_results.sql` modela
-  `match_results` como **admin-only INSERT** bajo el supuesto de que
-  _"Ranker output is written by the backend worker with service role
-  (which bypasses RLS)"_. En F1 no hay queues/workers asíncronos — el
-  run se dispara desde el POST `/api/matching/run`. Tensión no
-  resuelta entre CLAUDE.md y la intención de la migración.
-  - **Opciones**:
-    - **A) Ampliar CLAUDE.md** para incluir "worker de ranking" como
-      tercer uso legítimo de service role en-proceso (análogo a
-      embeddings). Costo: cambia regla global inviolable, requiere
-      ADR-delta y justificación.
-    - **B) Abrir RLS** a `match_results INSERT` para recruiter
-      cuando `exists(match_runs where triggered_by = self)`. El
-      insert-only trigger sigue bloqueando UPDATE incluso a service
-      role, y la identidad sigue auditada vía `match_runs.triggered_by`.
-      Costo: 1 migración + ADR-delta a ADR-015 §8 (reemplaza
-      "admin-only INSERT" por "owner via parent run"). No toca
-      CLAUDE.md.
-    - **C) Async worker real**: API route inserta `match_runs`
-      status='running' con user client, un script/cron worker
-      separado procesa y escribe results con service role. Costo:
-      infra de queue/lease (no existe en F1), UX pierde respuesta
-      síncrona — contradice DoD F4-008 ("top-N inline").
-  - **Recomendación Claude**: **B**. Es el cambio más chico, mantiene
-    el principio "service role solo en batch workers", preserva la
-    auditabilidad (triggered_by + insert-only trigger), y no requiere
-    reescribir CLAUDE.md ni infra nueva. El ADR-delta documentaría
-    que el recruiter dueño del run escribe sus propios `match_results`
-    (el gate "no UPDATE" se mantiene via trigger).
-  - **Gate de desbloqueo**: el usuario aprueba A / B / C. Mientras
-    tanto F4-008 espera.
+- ✅ **F4-008 Gate estructural resuelto — opción B (ADR-017)** —
+  2026-04-21. Usuario aprueba abrir `match_results INSERT` al
+  recruiter dueño del parent `match_run`. ADR-017
+  (`docs/adr/adr-017-match-results-insert-ownership.md`) + migración
+  `20260421000001_rls_match_results_insert_own_run.sql` (`93089a9`)
+  reemplazan `match_results_admin_insert` por
+  `match_results_insert_own_run_or_admin`. Inmutabilidad post-insert
+  preservada (no existe policy UPDATE + trigger
+  `enforce_match_results_insert_only` bloquea UPDATE incluso con
+  service role). CLAUDE.md #4 intacto. 23 tests RLS verde. F4-008
+  desbloqueado.
 - ⏳ **Lista de custom fields de Teamtailor** (pendiente de acceso).
 - ⏳ **Tenant de staging en Teamtailor** (no existe, hay que crear).
 - ✅ **Verificar `X-Api-Version` vigente** — resuelto 2026-04-17:
