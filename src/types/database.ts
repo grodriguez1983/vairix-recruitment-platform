@@ -17,10 +17,10 @@ export type Database = {
     Functions: {
       graphql: {
         Args: {
+          operationName?: string
           extensions?: Json
           variables?: Json
           query?: string
-          operationName?: string
         }
         Returns: Json
       }
@@ -970,6 +970,51 @@ export type Database = {
         }
         Relationships: []
       }
+      match_rescues: {
+        Row: {
+          candidate_id: string
+          created_at: string
+          fts_max_rank: number
+          fts_snippets: Json
+          match_run_id: string
+          missing_skills: string[]
+          tenant_id: string | null
+        }
+        Insert: {
+          candidate_id: string
+          created_at?: string
+          fts_max_rank: number
+          fts_snippets: Json
+          match_run_id: string
+          missing_skills: string[]
+          tenant_id?: string | null
+        }
+        Update: {
+          candidate_id?: string
+          created_at?: string
+          fts_max_rank?: number
+          fts_snippets?: Json
+          match_run_id?: string
+          missing_skills?: string[]
+          tenant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "match_rescues_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "match_rescues_match_run_id_fkey"
+            columns: ["match_run_id"]
+            isOneToOne: false
+            referencedRelation: "match_runs"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       match_results: {
         Row: {
           breakdown_json: Json
@@ -1723,9 +1768,9 @@ export type Database = {
           candidate_id_filter?: string[]
         }
         Returns: {
-          score: number
           candidate_id: string
           source_type: string
+          score: number
         }[]
       }
       set_limit: {
