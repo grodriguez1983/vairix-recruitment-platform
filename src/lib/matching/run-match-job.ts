@@ -17,7 +17,13 @@
  */
 import type { ResolvedDecomposition } from '../rag/decomposition/resolve-requirements';
 
-import type { CandidateAggregate, CandidateScore, RankResult, RankerInput } from './types';
+import type {
+  CandidateAggregate,
+  CandidateScore,
+  RankResult,
+  RankerInput,
+  RequirementBreakdown,
+} from './types';
 
 export interface MatchResultRow {
   candidate_id: string;
@@ -88,6 +94,22 @@ export interface RunMatchJobDeps {
   now?: () => Date;
 }
 
+function collectFailedCandidates(results: CandidateScore[]): FailedCandidateInput[] {
+  const out: FailedCandidateInput[] = [];
+  for (const score of results) {
+    if (score.must_have_gate !== 'failed') continue;
+    const missing = score.breakdown
+      .filter(
+        (b: RequirementBreakdown) =>
+          b.requirement.must_have && b.status !== 'match' && b.requirement.skill_id !== null,
+      )
+      .map((b) => b.requirement.skill_id as string);
+    if (missing.length === 0) continue;
+    out.push({ candidate_id: score.candidate_id, missing_skill_ids: missing });
+  }
+  return out;
+}
+
 function toMatchResultRow(
   score: CandidateScore,
   tenantId: string | null,
@@ -146,10 +168,31 @@ export async function runMatchJob(
       diagnostics: rankResult.diagnostics,
     });
 
+    // Post-run rescue (ADR-016 §1). Orthogonal to the ranking —
+    // errors are swallowed so a flaky FTS never fails the run.
+    let rescuesInserted: number | undefined;
+    if (deps.rescueFailedCandidates !== undefined) {
+      rescuesInserted = 0;
+      const failed = collectFailedCandidates(rankResult.results);
+      if (failed.length > 0) {
+        try {
+          const r = await deps.rescueFailedCandidates({
+            run_id: runId,
+            tenant_id,
+            failed,
+          });
+          rescuesInserted = r.rescues_inserted;
+        } catch {
+          // Swallow — rescue bucket failure must not fail a completed run.
+        }
+      }
+    }
+
     return {
       run_id: runId,
       candidates_evaluated: rankResult.results.length,
       top: rankResult.results.slice(0, input.topN),
+      ...(rescuesInserted !== undefined ? { rescues_inserted: rescuesInserted } : {}),
     };
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
