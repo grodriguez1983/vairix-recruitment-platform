@@ -260,3 +260,33 @@ F4-008 bis) junto a los helpers `fetchFtsRescues()` y
 
 La actualización del roadmap (insertar F4-007 bis y F4-008 bis) se
 hace al aceptar este ADR.
+
+### Gap conocido — rescue vs pre-filter (pendiente de resolver)
+
+Identificado al cerrar F4-008 bis (2026-04-21). El pre-filtro actual
+(`preFilterByMustHave`, `src/lib/matching/pre-filter.ts`) hace
+AND-intersection sobre `must_have && skill_id != null` consultando
+`experience_skills`. Un candidato cuyo CV **menciona el skill en
+`files.parsed_text` pero cuya extracción LLM lo omitió** queda fuera
+del pool del ranker y **nunca llega al rescue bucket** (el rescue hoy
+opera sobre `must_have_gate='failed'`, no sobre pre-filter-excluded).
+
+Esto contradice la intención de §1: ADR-016 existe precisamente para
+rescatar ese caso ("el LLM probablemente se perdió algo"). Con la
+implementación actual, el bucket captura solo candidatos que el
+pre-filter ya dejó pasar (tienen algunos must-haves pero no todos) —
+ruido mucho menor al previsto.
+
+**Resolución futura** (F4-008 ter, no bloqueante para F4-009 UI):
+
+1. `preFilter` retorna `{ included, excluded_ids }` en lugar de solo
+   `included`.
+2. `runMatchJob` pasa `excluded_ids` al rescue hook; cada excluded
+   candidate se consulta contra `files.parsed_text` con sus
+   must-haves completos como `missing_skill_slugs`.
+3. El bucket `match_rescues` cubre entonces el caso canónico
+   (skill en CV text, no en `experience_skills`).
+
+Mientras tanto, el bucket funciona correctamente para candidatos con
+must-have parcial — subconjunto menor del caso real pero con la misma
+mecánica de persistencia, RLS, y UI.
