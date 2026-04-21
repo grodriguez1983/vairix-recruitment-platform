@@ -8,13 +8,23 @@
  * Same contract as `extractionContentHash` (ADR-012 §4). NUL separator
  * prevents boundary-shift collisions: ("ab","def","ghi") vs
  * ("abdef","","ghi") must not collide.
+ *
+ * The caller is expected to pass the POST-preprocess text so that two
+ * submissions differing only in whitespace / HTML noise produce the
+ * same hash (cache hit).
  */
+import { createHash } from 'node:crypto';
 
-// RED stub.
 export function decompositionContentHash(
-  _normalizedText: string,
-  _model: string,
-  _promptVersion: string,
+  normalizedText: string,
+  model: string,
+  promptVersion: string,
 ): string {
-  throw new Error('decompositionContentHash: not implemented');
+  return createHash('sha256')
+    .update(normalizedText)
+    .update('\x00')
+    .update(model)
+    .update('\x00')
+    .update(promptVersion)
+    .digest('hex');
 }

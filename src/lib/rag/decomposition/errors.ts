@@ -22,10 +22,12 @@ export type DecompositionErrorCode =
   | 'provider_failure'
   | 'hallucinated_snippet';
 
-// RED stub — class not yet wired.
 export class DecompositionError extends Error {
-  readonly code!: DecompositionErrorCode;
-  constructor(_code: DecompositionErrorCode, _message: string, _options?: { cause?: unknown }) {
-    super('not implemented');
+  readonly code: DecompositionErrorCode;
+
+  constructor(code: DecompositionErrorCode, message: string, options?: { cause?: unknown }) {
+    super(message, options);
+    this.name = 'DecompositionError';
+    this.code = code;
   }
 }

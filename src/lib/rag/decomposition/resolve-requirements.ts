@@ -14,9 +14,10 @@
  *     `resolved_at` (ISO timestamp when resolved, null otherwise)
  *
  * `unresolved_skills` is a deduped list of `skill_raw` (verbatim —
- * the UI shows the exact string the recruiter typed).
+ * the UI shows the exact string the recruiter typed). Order follows
+ * first-occurrence in the input so the output is deterministic.
  */
-import type { CatalogSnapshot } from '../../skills/resolver';
+import { resolveSkill, type CatalogSnapshot } from '../../skills/resolver';
 
 import type { DecompositionResult, JobQueryLanguage, Requirement, Seniority } from './types';
 
@@ -41,11 +42,36 @@ export interface ResolveRequirementsOptions {
   now?: () => Date;
 }
 
-// RED stub.
 export function resolveRequirements(
-  _decomposition: DecompositionResult,
-  _catalog: CatalogSnapshot,
-  _options: ResolveRequirementsOptions = {},
+  decomposition: DecompositionResult,
+  catalog: CatalogSnapshot,
+  options: ResolveRequirementsOptions = {},
 ): ResolveRequirementsResult {
-  throw new Error('resolveRequirements: not implemented');
+  const now = options.now ?? (() => new Date());
+  const resolvedAt = now().toISOString();
+
+  const unresolvedSet = new Set<string>();
+  const unresolvedOrder: string[] = [];
+
+  const requirements: ResolvedRequirement[] = decomposition.requirements.map((r) => {
+    const hit = resolveSkill(r.skill_raw, catalog);
+    if (hit !== null) {
+      return { ...r, skill_id: hit.skill_id, resolved_at: resolvedAt };
+    }
+    if (!unresolvedSet.has(r.skill_raw)) {
+      unresolvedSet.add(r.skill_raw);
+      unresolvedOrder.push(r.skill_raw);
+    }
+    return { ...r, skill_id: null, resolved_at: null };
+  });
+
+  return {
+    resolved: {
+      requirements,
+      seniority: decomposition.seniority,
+      languages: decomposition.languages,
+      notes: decomposition.notes,
+    },
+    unresolved_skills: unresolvedOrder,
+  };
 }
