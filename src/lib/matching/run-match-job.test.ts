@@ -316,6 +316,79 @@ describe('runMatchJob — F4-008 sub-C', () => {
     expect(out.rescues_inserted).toBe(1);
   });
 
+  it('rescue bucket merges pre-filter excluded with gate-failed from the ranker (F4-008 ter)', async () => {
+    // ADR-016 §"Gap conocido" closure: candidates dropped by the
+    // pre-filter for missing a must-have in experience_skills must
+    // still reach the rescue FTS path (the must-have might live in
+    // files.parsed_text instead).
+    const REACT = '10000000-0000-0000-0000-000000000001';
+    const PG = '10000000-0000-0000-0000-000000000002';
+    const failedScore: CandidateScore = {
+      candidate_id: 'c-gate-failed',
+      total_score: 10,
+      must_have_gate: 'failed',
+      breakdown: [mkRequirementBreakdown(REACT, 'React', true, 'missing')],
+      language_match: { required: 0, matched: 0 },
+      seniority_match: 'unknown',
+    };
+    const rescueHook = vi.fn(async () => ({ rescues_inserted: 2 }));
+    const deps = mkDeps({
+      preFilter: vi.fn(async () => ({
+        included: ['c-gate-failed'],
+        excluded: [
+          {
+            candidate_id: 'c-pre-excluded-1',
+            missing_must_have_skill_ids: [REACT, PG],
+          },
+          {
+            candidate_id: 'c-pre-excluded-2',
+            missing_must_have_skill_ids: [REACT],
+          },
+        ],
+      })),
+      loadCandidates: vi.fn(async () => [
+        { candidate_id: 'c-gate-failed', merged_experiences: [], languages: [] },
+      ]),
+      rank: vi.fn(async () => ({ results: [failedScore], diagnostics: [] })),
+      rescueFailedCandidates: rescueHook,
+    });
+
+    const out = await runMatchJob(input(), deps);
+
+    expect(rescueHook).toHaveBeenCalledTimes(1);
+    const calls = (rescueHook as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+    const arg = calls[0]?.[0] as {
+      failed: Array<{ candidate_id: string; missing_skill_ids: string[] }>;
+    };
+    const byCandidate = new Map(arg.failed.map((f) => [f.candidate_id, f.missing_skill_ids]));
+    expect(byCandidate.size).toBe(3);
+    expect(byCandidate.get('c-gate-failed')).toEqual([REACT]);
+    expect(byCandidate.get('c-pre-excluded-1')?.sort()).toEqual([REACT, PG].sort());
+    expect(byCandidate.get('c-pre-excluded-2')).toEqual([REACT]);
+    expect(out.rescues_inserted).toBe(2);
+  });
+
+  it('pre-filter excluded alone (no ranker failures) still invokes rescue (F4-008 ter)', async () => {
+    const REACT = '10000000-0000-0000-0000-000000000001';
+    const rescueHook = vi.fn(async () => ({ rescues_inserted: 1 }));
+    const deps = mkDeps({
+      preFilter: vi.fn(async () => ({
+        included: ['c1'],
+        excluded: [{ candidate_id: 'c-pre', missing_must_have_skill_ids: [REACT] }],
+      })),
+      rank: vi.fn(async () => ({ results: [mkScore('c1', 80)], diagnostics: [] })),
+      rescueFailedCandidates: rescueHook,
+    });
+    const out = await runMatchJob(input(), deps);
+    expect(rescueHook).toHaveBeenCalledTimes(1);
+    const calls = (rescueHook as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+    const arg = calls[0]?.[0] as {
+      failed: Array<{ candidate_id: string; missing_skill_ids: string[] }>;
+    };
+    expect(arg.failed).toEqual([{ candidate_id: 'c-pre', missing_skill_ids: [REACT] }]);
+    expect(out.rescues_inserted).toBe(1);
+  });
+
   it('skips rescueFailedCandidates when no candidate fails the must-have gate', async () => {
     const rescueHook = vi.fn(async () => ({ rescues_inserted: 0 }));
     const deps = mkDeps({
