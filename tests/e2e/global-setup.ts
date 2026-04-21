@@ -62,7 +62,7 @@ function cookieNameFor(url: string): string {
 }
 
 export default async function globalSetup(config: FullConfig): Promise<void> {
-  await seedE2EFixtures();
+  const outcome = await seedE2EFixtures();
 
   const project = config.projects[0];
   const baseURL = project?.use.baseURL;
@@ -125,4 +125,21 @@ export default async function globalSetup(config: FullConfig): Promise<void> {
 
   const storageState = { cookies, origins: [] as unknown[] };
   writeFileSync(storagePath, JSON.stringify(storageState, null, 2), 'utf-8');
+
+  // Expose seeded IDs to specs (matching smoke needs the run id).
+  const idsPath = resolve(process.cwd(), 'playwright/.auth/e2e-ids.json');
+  writeFileSync(
+    idsPath,
+    JSON.stringify(
+      {
+        matchRunId: outcome.matchRunId,
+        reactSkillId: outcome.reactSkillId,
+        candidateIds: outcome.candidateIds,
+        jobId: outcome.jobId,
+      },
+      null,
+      2,
+    ),
+    'utf-8',
+  );
 }
