@@ -49,12 +49,22 @@ export interface CvExtractionWorkerDeps {
     prompt_version: string;
     content_hash: string;
     raw_output: ExtractionResult;
-  }) => Promise<void>;
+  }) => Promise<{ id: string }>;
   logRowError: (input: {
-    entity: 'cv_extraction';
+    entity: 'cv_extraction' | 'cv_derivation';
     entity_id: string;
     message: string;
   }) => Promise<void>;
+  /**
+   * Optional post-insert derivation hook (F4-005). If provided, the
+   * worker invokes it with the id returned by `insertExtraction` after
+   * every successful extraction. A thrown error is logged to
+   * `sync_errors` with `entity='cv_derivation'` and does NOT roll back
+   * the extraction itself (idempotent by content_hash).
+   */
+  deriveExperiences?: (
+    extractionId: string,
+  ) => Promise<{ skipped: boolean; experiencesInserted: number; skillsInserted: number }>;
   provider: ExtractionProvider;
   now?: () => Date;
 }
@@ -68,6 +78,12 @@ export interface CvExtractionRunResult {
   extracted: number;
   skipped: number;
   errored: number;
+  /** Sum of `experiencesInserted` from every successful derivation call. */
+  experiencesInserted: number;
+  /** Sum of `skillsInserted` from every successful derivation call. */
+  skillsInserted: number;
+  /** Count of derivations that threw after a successful extraction. */
+  derivationErrored: number;
 }
 
 export async function runCvExtractions(
@@ -80,6 +96,11 @@ export async function runCvExtractions(
   let extracted = 0;
   let skipped = 0;
   let errored = 0;
+  // F4-005 sub-C wires this; current body does not invoke the
+  // optional `deriveExperiences` dep yet — RED for the new tests.
+  const experiencesInserted = 0;
+  const skillsInserted = 0;
+  const derivationErrored = 0;
 
   for (const row of pending) {
     const variant = classifyVariant(row.parsed_text).variant;
@@ -116,5 +137,13 @@ export async function runCvExtractions(
     }
   }
 
-  return { processed: pending.length, extracted, skipped, errored };
+  return {
+    processed: pending.length,
+    extracted,
+    skipped,
+    errored,
+    experiencesInserted,
+    skillsInserted,
+    derivationErrored,
+  };
 }

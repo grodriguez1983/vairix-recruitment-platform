@@ -51,13 +51,19 @@ function buildDeps(opts: {
   existingHashes?: Set<string>;
   providerImpl?: ReturnType<typeof createStubExtractionProvider>;
   throwForFile?: string;
+  derive?: CvExtractionWorkerDeps['deriveExperiences'];
 }): {
   deps: CvExtractionWorkerDeps;
-  inserts: Array<{ file_id: string; content_hash: string; source_variant: string }>;
-  errors: Array<{ entity_id: string; message: string }>;
+  inserts: Array<{ file_id: string; id: string; content_hash: string; source_variant: string }>;
+  errors: Array<{ entity: string; entity_id: string; message: string }>;
 } {
-  const inserts: Array<{ file_id: string; content_hash: string; source_variant: string }> = [];
-  const errors: Array<{ entity_id: string; message: string }> = [];
+  const inserts: Array<{
+    file_id: string;
+    id: string;
+    content_hash: string;
+    source_variant: string;
+  }> = [];
+  const errors: Array<{ entity: string; entity_id: string; message: string }> = [];
   const existing = new Set(opts.existingHashes ?? []);
   const provider = opts.providerImpl ?? createStubExtractionProvider({ fixture: sampleResult() });
 
@@ -80,16 +86,20 @@ function buildDeps(opts: {
       listPending: vi.fn(async () => opts.pending ?? []),
       extractionExistsByHash: vi.fn(async (hash: string) => existing.has(hash)),
       insertExtraction: vi.fn(async (row) => {
+        const id = `ext-${row.file_id}`;
         inserts.push({
+          id,
           file_id: row.file_id,
           content_hash: row.content_hash,
           source_variant: row.source_variant,
         });
+        return { id };
       }),
       logRowError: vi.fn(async (input) => {
-        errors.push({ entity_id: input.entity_id, message: input.message });
+        errors.push({ entity: input.entity, entity_id: input.entity_id, message: input.message });
       }),
       provider: wrappedProvider,
+      deriveExperiences: opts.derive,
     },
     inserts,
     errors,
@@ -105,7 +115,10 @@ describe('runCvExtractions — ADR-012 §6 worker invariants', () => {
     const { deps, inserts, errors } = buildDeps({ pending });
     const stats = await runCvExtractions(deps);
 
-    expect(stats).toEqual({ processed: 2, extracted: 2, skipped: 0, errored: 0 });
+    expect(stats.processed).toBe(2);
+    expect(stats.extracted).toBe(2);
+    expect(stats.skipped).toBe(0);
+    expect(stats.errored).toBe(0);
     expect(inserts).toHaveLength(2);
     expect(errors).toHaveLength(0);
   });
@@ -127,7 +140,10 @@ describe('runCvExtractions — ADR-012 §6 worker invariants', () => {
     });
 
     const stats = await runCvExtractions(deps);
-    expect(stats).toEqual({ processed: 1, extracted: 0, skipped: 1, errored: 0 });
+    expect(stats.processed).toBe(1);
+    expect(stats.extracted).toBe(0);
+    expect(stats.skipped).toBe(1);
+    expect(stats.errored).toBe(0);
     expect(inserts).toHaveLength(0);
     expect(extractSpy).not.toHaveBeenCalled();
   });
@@ -194,7 +210,7 @@ describe('runCvExtractions — ADR-012 §6 worker invariants', () => {
     const deps: CvExtractionWorkerDeps = {
       listPending,
       extractionExistsByHash: async () => false,
-      insertExtraction: async () => {},
+      insertExtraction: async () => ({ id: 'x' }),
       logRowError: async () => {},
       provider,
     };
@@ -205,6 +221,91 @@ describe('runCvExtractions — ADR-012 §6 worker invariants', () => {
   it('empty pending list returns zero counters', async () => {
     const { deps } = buildDeps({ pending: [] });
     const stats = await runCvExtractions(deps);
-    expect(stats).toEqual({ processed: 0, extracted: 0, skipped: 0, errored: 0 });
+    expect(stats.processed).toBe(0);
+    expect(stats.extracted).toBe(0);
+    expect(stats.skipped).toBe(0);
+    expect(stats.errored).toBe(0);
+    expect(stats.experiencesInserted).toBe(0);
+    expect(stats.skillsInserted).toBe(0);
+    expect(stats.derivationErrored).toBe(0);
+  });
+
+  it('invokes deriveExperiences after a successful insert and surfaces the counters', async () => {
+    const derive = vi.fn(async () => ({
+      skipped: false,
+      experiencesInserted: 3,
+      skillsInserted: 7,
+    }));
+    const pending: Row[] = [
+      { file_id: 'f1', candidate_id: 'c1', parsed_text: 'cv one' },
+      { file_id: 'f2', candidate_id: 'c2', parsed_text: 'cv two' },
+    ];
+    const { deps, errors } = buildDeps({ pending, derive });
+    const stats = await runCvExtractions(deps);
+
+    expect(derive).toHaveBeenCalledTimes(2);
+    expect(derive).toHaveBeenCalledWith('ext-f1');
+    expect(derive).toHaveBeenCalledWith('ext-f2');
+    expect(stats.experiencesInserted).toBe(6);
+    expect(stats.skillsInserted).toBe(14);
+    expect(stats.derivationErrored).toBe(0);
+    expect(errors).toHaveLength(0);
+  });
+
+  it('does NOT invoke deriveExperiences when the extraction was skipped (hash hit)', async () => {
+    const { extractionContentHash } = await import('./hash');
+    const provider = createStubExtractionProvider({ fixture: sampleResult() });
+    const hash = extractionContentHash('cached', provider.model, provider.promptVersion);
+    const derive = vi.fn(async () => ({
+      skipped: false,
+      experiencesInserted: 1,
+      skillsInserted: 1,
+    }));
+
+    const { deps } = buildDeps({
+      pending: [{ file_id: 'f1', candidate_id: 'c1', parsed_text: 'cached' }],
+      existingHashes: new Set([hash]),
+      providerImpl: provider,
+      derive,
+    });
+    await runCvExtractions(deps);
+    expect(derive).not.toHaveBeenCalled();
+  });
+
+  it('logs derivation failure to sync_errors (entity=cv_derivation) and continues the batch', async () => {
+    const derive = vi.fn(async (id: string) => {
+      if (id === 'ext-f-bad') throw new Error('simulated derivation failure');
+      return { skipped: false, experiencesInserted: 1, skillsInserted: 2 };
+    });
+    const pending: Row[] = [
+      { file_id: 'f-ok', candidate_id: 'c1', parsed_text: 'good cv' },
+      { file_id: 'f-bad', candidate_id: 'c2', parsed_text: 'bad cv' },
+      { file_id: 'f-ok2', candidate_id: 'c3', parsed_text: 'good cv 2' },
+    ];
+    const { deps, inserts, errors } = buildDeps({ pending, derive });
+    const stats = await runCvExtractions(deps);
+
+    // Extraction itself succeeded for all three — the derivation error
+    // does NOT roll back the extraction (hash-idempotent).
+    expect(stats.extracted).toBe(3);
+    expect(inserts).toHaveLength(3);
+    expect(stats.derivationErrored).toBe(1);
+    expect(stats.experiencesInserted).toBe(2);
+    expect(stats.skillsInserted).toBe(4);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]!.entity).toBe('cv_derivation');
+    expect(errors[0]!.entity_id).toBe('ext-f-bad');
+    expect(errors[0]!.message).toContain('simulated derivation failure');
+  });
+
+  it('skips derivation counters when the derivation dep is absent (backwards-compat)', async () => {
+    const pending: Row[] = [{ file_id: 'f1', candidate_id: 'c1', parsed_text: 'cv one' }];
+    // NOTE: omit derive — older callers (or CLI pre-wiring) don't pass it.
+    const { deps } = buildDeps({ pending });
+    const stats = await runCvExtractions(deps);
+    expect(stats.extracted).toBe(1);
+    expect(stats.experiencesInserted).toBe(0);
+    expect(stats.skillsInserted).toBe(0);
+    expect(stats.derivationErrored).toBe(0);
   });
 });

@@ -98,16 +98,21 @@ function buildDeps(db: SupabaseClient, provider: ExtractionProvider): CvExtracti
       return data !== null;
     },
     insertExtraction: async (row) => {
-      const { error } = await db.from('candidate_extractions').insert({
-        candidate_id: row.candidate_id,
-        file_id: row.file_id,
-        source_variant: row.source_variant,
-        model: row.model,
-        prompt_version: row.prompt_version,
-        content_hash: row.content_hash,
-        raw_output: row.raw_output,
-      });
-      if (error) throw new Error(error.message);
+      const { data, error } = await db
+        .from('candidate_extractions')
+        .insert({
+          candidate_id: row.candidate_id,
+          file_id: row.file_id,
+          source_variant: row.source_variant,
+          model: row.model,
+          prompt_version: row.prompt_version,
+          content_hash: row.content_hash,
+          raw_output: row.raw_output,
+        })
+        .select('id')
+        .single();
+      if (error || !data) throw new Error(error?.message ?? 'insertExtraction returned no row');
+      return { id: data.id as string };
     },
     logRowError: async (input) => {
       const { error } = await db.from('sync_errors').insert({
