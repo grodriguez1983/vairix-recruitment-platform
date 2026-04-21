@@ -16,6 +16,8 @@
  * schema-valid but the content is meaningless. Never use for
  * behavior that depends on decomposition semantics.
  */
+import { createHash } from 'node:crypto';
+
 import type { DecompositionProvider } from './provider';
 import type { DecompositionResult } from './types';
 
@@ -25,9 +27,45 @@ export interface StubDecompositionProviderOptions {
   fixture?: DecompositionResult;
 }
 
+function deterministicResult(rawText: string): DecompositionResult {
+  const hash = createHash('sha256').update(rawText).digest('hex');
+  // Use a portable prefix of the input as the evidence_snippet so the
+  // schema's "must be a literal substring" contract stays true even
+  // for the stub. Falls back to the input itself when shorter than 8
+  // chars. An input the test suite reliably provides is non-empty; an
+  // empty string would violate schema invariants and the stub is not
+  // intended for that path (the service rejects empty input upstream).
+  const snippet = rawText.length >= 8 ? rawText.slice(0, 8) : rawText;
+  return {
+    requirements: [
+      {
+        skill_raw: `stub-skill-${hash.slice(0, 8)}`,
+        min_years: null,
+        max_years: null,
+        must_have: true,
+        evidence_snippet: snippet,
+        category: 'technical',
+      },
+    ],
+    seniority: 'unspecified',
+    languages: [],
+    notes: null,
+  };
+}
+
 export function createStubDecompositionProvider(
-  _options: StubDecompositionProviderOptions = {},
+  options: StubDecompositionProviderOptions = {},
 ): DecompositionProvider {
-  // Intentional RED stub — tests drive the implementation.
-  throw new Error('createStubDecompositionProvider: not implemented');
+  const model = options.model ?? 'stub-decomp-v1';
+  const promptVersion = options.promptVersion ?? 'stub-decomp-prompt-v1';
+  const fixture = options.fixture;
+
+  return {
+    model,
+    promptVersion,
+    decompose(rawText: string): Promise<DecompositionResult> {
+      if (fixture !== undefined) return Promise.resolve(fixture);
+      return Promise.resolve(deterministicResult(rawText));
+    },
+  };
 }

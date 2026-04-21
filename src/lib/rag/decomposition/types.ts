@@ -16,6 +16,7 @@
  *     strings are rejected because "no evidence" is not a legal state.
  *   - `min_years` / `max_years` are null when unspecified; ADR-014 §3
  *     explicitly forbids the LLM from inferring years from seniority.
+ *     Non-null values must be non-negative integers.
  *   - `requirements` covers technical / language-tagged / soft
  *     requisites. Languages themselves are duplicated in `languages[]`
  *     because they hit a different filter (ADR-014 §2 separation).
@@ -24,36 +25,45 @@
  */
 import { z } from 'zod';
 
-// Intentionally STUB: provoke RED on every test in types.test.ts.
-export const SeniorityEnum = z.never() as unknown as z.ZodTypeAny;
-export const RequirementCategoryEnum = z.never() as unknown as z.ZodTypeAny;
-export const LanguageLevelEnum = z.never() as unknown as z.ZodTypeAny;
-export const RequirementSchema = z.never() as unknown as z.ZodTypeAny;
-export const LanguageSchema = z.never() as unknown as z.ZodTypeAny;
-export const DecompositionResultSchema = z.never() as unknown as z.ZodTypeAny;
+export const SeniorityEnum = z.enum(['junior', 'semi_senior', 'senior', 'lead', 'unspecified']);
 
-export type Seniority = 'junior' | 'semi_senior' | 'senior' | 'lead' | 'unspecified';
-export type RequirementCategory = 'technical' | 'language' | 'soft' | 'other';
-export type LanguageLevel = 'basic' | 'intermediate' | 'advanced' | 'native' | 'unspecified';
+export const RequirementCategoryEnum = z.enum(['technical', 'language', 'soft', 'other']);
 
-export type Requirement = {
-  skill_raw: string;
-  min_years: number | null;
-  max_years: number | null;
-  must_have: boolean;
-  evidence_snippet: string;
-  category: RequirementCategory;
-};
+export const LanguageLevelEnum = z.enum([
+  'basic',
+  'intermediate',
+  'advanced',
+  'native',
+  'unspecified',
+]);
 
-export type JobQueryLanguage = {
-  name: string;
-  level: LanguageLevel;
-  must_have: boolean;
-};
+const YearsField = z.number().int().min(0).nullable();
 
-export type DecompositionResult = {
-  requirements: Requirement[];
-  seniority: Seniority;
-  languages: JobQueryLanguage[];
-  notes: string | null;
-};
+export const RequirementSchema = z.object({
+  skill_raw: z.string().min(1),
+  min_years: YearsField,
+  max_years: YearsField,
+  must_have: z.boolean(),
+  evidence_snippet: z.string().min(1),
+  category: RequirementCategoryEnum,
+});
+
+export const LanguageSchema = z.object({
+  name: z.string().min(1),
+  level: LanguageLevelEnum,
+  must_have: z.boolean(),
+});
+
+export const DecompositionResultSchema = z.object({
+  requirements: z.array(RequirementSchema),
+  seniority: SeniorityEnum,
+  languages: z.array(LanguageSchema),
+  notes: z.string().nullable(),
+});
+
+export type Seniority = z.infer<typeof SeniorityEnum>;
+export type RequirementCategory = z.infer<typeof RequirementCategoryEnum>;
+export type LanguageLevel = z.infer<typeof LanguageLevelEnum>;
+export type Requirement = z.infer<typeof RequirementSchema>;
+export type JobQueryLanguage = z.infer<typeof LanguageSchema>;
+export type DecompositionResult = z.infer<typeof DecompositionResultSchema>;
