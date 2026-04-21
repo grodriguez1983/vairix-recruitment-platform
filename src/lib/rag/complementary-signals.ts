@@ -55,6 +55,43 @@ interface GroupedHit {
   snippet: string;
 }
 
+export interface EvidenceSnippetInput {
+  candidate_id: string;
+  /** Verbatim slugs from the job_query requirements. Duplicates are
+   *  deduped before hitting FTS. */
+  skill_slugs: string[];
+}
+
+export interface EvidenceSnippetRow {
+  candidate_id: string;
+  /** skill_slug → snippets ordered by ts_rank desc, then snippet asc.
+   *  Skills with zero hits are OMITTED (caller can infer from input). */
+  snippets: Record<string, string[]>;
+}
+
+export interface FetchEvidenceSnippetsOptions {
+  /** Per-skill cap. Defaults to `EVIDENCE_SNIPPET_LIMIT`. */
+  limit?: number;
+}
+
+/**
+ * ADR-016 §2 — evidence panel. For a single candidate + a list of
+ * requirement slugs, return the top-N snippets per skill from FTS
+ * over `files.parsed_text`.
+ *
+ * No threshold: the ranker already decided the candidate is worth
+ * showing; the panel just explains why. Empty result is fine.
+ *
+ * Stub for RED; implementation arrives in the GREEN commit.
+ */
+export async function fetchEvidenceSnippets(
+  _input: EvidenceSnippetInput,
+  _deps: ComplementarySignalsDeps,
+  _options: FetchEvidenceSnippetsOptions = {},
+): Promise<EvidenceSnippetRow> {
+  throw new Error('fetchEvidenceSnippets: not implemented (RED)');
+}
+
 export async function fetchFtsRescues(
   candidates: FtsRescueCandidate[],
   deps: ComplementarySignalsDeps,
