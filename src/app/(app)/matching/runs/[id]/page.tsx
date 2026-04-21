@@ -133,7 +133,7 @@ export default async function MatchRunPage({ params }: PageProps): Promise<JSX.E
         <MetaCell label="started" value={shortTs(run.started_at as string | null)} />
       </section>
 
-      <ResultsTable rows={rows} />
+      <ResultsTable runId={params.id} rows={rows} />
     </div>
   );
 }

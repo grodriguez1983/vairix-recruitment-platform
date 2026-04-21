@@ -1,14 +1,15 @@
 /**
- * `/matching/runs/:id` — client results table with inline breakdown.
+ * `/matching/runs/:id` — client results table with inline breakdown
+ * + lazy-loaded evidence panel (ADR-016 §2).
  *
- * Pure display of pre-hydrated rows. Clicking a row toggles the
- * breakdown drawer for that candidate. No fetch on the client —
- * every row came from the server component under RLS.
+ * Rows arrive pre-hydrated from the server under RLS. Clicking a
+ * row toggles the drawer; the evidence panel fetches lazily on
+ * first open per candidate and caches the result in local state.
  */
 'use client';
 
 import Link from 'next/link';
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 
 import { cn } from '@/lib/shared/cn';
 import type { CandidateScore, RequirementBreakdown } from '@/lib/matching/types';
@@ -25,8 +26,21 @@ export interface DisplayResult {
   candidate_email: string | null;
 }
 
-export function ResultsTable({ rows }: { rows: DisplayResult[] }): JSX.Element {
+interface EvidenceState {
+  status: 'loading' | 'ok' | 'error';
+  snippets?: Record<string, string[]>;
+  message?: string;
+}
+
+export function ResultsTable({
+  runId,
+  rows,
+}: {
+  runId: string;
+  rows: DisplayResult[];
+}): JSX.Element {
   const [expanded, setExpanded] = useState<string | null>(null);
+  const [evidence, setEvidence] = useState<Record<string, EvidenceState>>({});
 
   if (rows.length === 0) {
     return (
@@ -72,7 +86,16 @@ export function ResultsTable({ rows }: { rows: DisplayResult[] }): JSX.Element {
               </span>
             </button>
 
-            {open && <BreakdownPanel row={r} />}
+            {open && (
+              <BreakdownPanel
+                row={r}
+                runId={runId}
+                evidence={evidence[r.candidate_id]}
+                onEvidenceLoaded={(state) =>
+                  setEvidence((prev) => ({ ...prev, [r.candidate_id]: state }))
+                }
+              />
+            )}
           </li>
         );
       })}
@@ -80,7 +103,53 @@ export function ResultsTable({ rows }: { rows: DisplayResult[] }): JSX.Element {
   );
 }
 
-function BreakdownPanel({ row }: { row: DisplayResult }): JSX.Element {
+function BreakdownPanel({
+  row,
+  runId,
+  evidence,
+  onEvidenceLoaded,
+}: {
+  row: DisplayResult;
+  runId: string;
+  evidence: EvidenceState | undefined;
+  onEvidenceLoaded: (state: EvidenceState) => void;
+}): JSX.Element {
+  useEffect(() => {
+    if (evidence !== undefined) return;
+    let cancelled = false;
+    onEvidenceLoaded({ status: 'loading' });
+    (async () => {
+      try {
+        const res = await fetch(
+          `/api/matching/runs/${runId}/evidence?candidate_id=${row.candidate_id}`,
+        );
+        const body = (await res.json().catch(() => ({}))) as {
+          snippets?: Record<string, string[]>;
+          error?: string;
+          message?: string;
+        };
+        if (cancelled) return;
+        if (!res.ok) {
+          onEvidenceLoaded({
+            status: 'error',
+            message: body.message ?? body.error ?? `evidence fetch failed (${res.status})`,
+          });
+          return;
+        }
+        onEvidenceLoaded({ status: 'ok', snippets: body.snippets ?? {} });
+      } catch (err) {
+        if (cancelled) return;
+        onEvidenceLoaded({
+          status: 'error',
+          message: err instanceof Error ? err.message : String(err),
+        });
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [row.candidate_id, runId, evidence, onEvidenceLoaded]);
+
   return (
     <div className="flex flex-col gap-3 border-t border-border bg-bg px-4 py-3">
       <div className="flex flex-wrap gap-2 font-mono text-[10px] uppercase tracking-wider text-text-muted">
@@ -148,6 +217,78 @@ function BreakdownPanel({ row }: { row: DisplayResult }): JSX.Element {
           ))}
         </tbody>
       </table>
+
+      <EvidenceSection evidence={evidence} />
     </div>
   );
+}
+
+function EvidenceSection({ evidence }: { evidence: EvidenceState | undefined }): JSX.Element {
+  if (evidence === undefined || evidence.status === 'loading') {
+    return (
+      <div className="rounded-md border border-dashed border-border bg-surface p-3">
+        <p className="font-mono text-[10px] uppercase tracking-wider text-text-muted">
+          evidence · loading…
+        </p>
+      </div>
+    );
+  }
+  if (evidence.status === 'error') {
+    return (
+      <div className="rounded-md border border-danger/40 bg-danger/5 p-3">
+        <p className="font-mono text-[10px] uppercase tracking-wider text-danger">
+          evidence failed
+        </p>
+        <p className="mt-0.5 font-mono text-[11px] text-danger">{evidence.message}</p>
+      </div>
+    );
+  }
+  const snippets = evidence.snippets ?? {};
+  const skills = Object.keys(snippets).sort();
+  if (skills.length === 0) {
+    return (
+      <div className="rounded-md border border-dashed border-border bg-surface p-3">
+        <p className="font-mono text-[10px] uppercase tracking-wider text-text-muted">
+          evidence · no textual matches
+        </p>
+      </div>
+    );
+  }
+  return (
+    <div className="rounded-md border border-border bg-surface p-3">
+      <p className="mb-2 font-mono text-[10px] uppercase tracking-wider text-text-muted">
+        evidence
+      </p>
+      <ul className="flex flex-col gap-2">
+        {skills.map((slug) => {
+          const list = snippets[slug] ?? [];
+          return (
+            <li key={slug} className="flex flex-col gap-1">
+              <p className="font-mono text-[10px] uppercase tracking-wider text-accent">{slug}</p>
+              <ul className="flex flex-col gap-1">
+                {list.map((s, i) => (
+                  <li
+                    key={i}
+                    className="font-mono text-[11px] leading-snug text-text-primary"
+                    dangerouslySetInnerHTML={{ __html: highlightSnippet(s) }}
+                  />
+                ))}
+              </ul>
+            </li>
+          );
+        })}
+      </ul>
+    </div>
+  );
+}
+
+/**
+ * Mirrors the rescues page: match_rescue_fts_search returns
+ * snippets with «…» as StartSel/StopSel.
+ */
+function highlightSnippet(raw: string): string {
+  const escaped = raw.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+  return escaped
+    .replace(/«/g, '<mark class="bg-accent/20 text-accent px-0.5 rounded">')
+    .replace(/»/g, '</mark>');
 }
