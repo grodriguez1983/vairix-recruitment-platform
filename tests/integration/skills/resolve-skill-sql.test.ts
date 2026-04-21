@@ -13,8 +13,9 @@
  *
  * Invariant: the helper does NOT consult skills_blacklist (§5).
  */
-import { afterEach, beforeAll, describe, expect, it } from 'vitest';
+import { afterAll, afterEach, beforeAll, describe, expect, it } from 'vitest';
 
+import { applyCuratedSeed } from '../../../src/lib/skills/seed-applier';
 import { serviceClient } from '../../rls/helpers';
 
 async function resolveSkill(
@@ -59,6 +60,10 @@ async function seedAlias(
 describe('sql: public.resolve_skill', () => {
   const svc = serviceClient();
 
+  // The curated seed lands at migration time (20260420000008). These
+  // tests insert ad-hoc fixtures on top and wipe ALL rows between
+  // assertions for isolation — so we restore the seed at the end
+  // with applyCuratedSeed() for any other test file that depends on it.
   beforeAll(async () => {
     await svc.from('skill_aliases').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await svc.from('skills_blacklist').delete().neq('id', '00000000-0000-0000-0000-000000000000');
@@ -69,6 +74,10 @@ describe('sql: public.resolve_skill', () => {
     await svc.from('skill_aliases').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await svc.from('skills_blacklist').delete().neq('id', '00000000-0000-0000-0000-000000000000');
     await svc.from('skills').delete().neq('id', '00000000-0000-0000-0000-000000000000');
+  });
+
+  afterAll(async () => {
+    await applyCuratedSeed(svc);
   });
 
   it('returns null for null input', async () => {
