@@ -33,6 +33,7 @@ import type { DecompositionResult } from './types';
 export interface JobQueryInsertRow {
   content_hash: string;
   raw_text: string;
+  normalized_text: string;
   model: string;
   prompt_version: string;
   decomposed_json: DecompositionResult;
@@ -163,6 +164,7 @@ export async function decomposeJobQuery(
   const inserted = await deps.insertJobQuery({
     content_hash: hash,
     raw_text: rawText,
+    normalized_text: normalized,
     model,
     prompt_version: promptVersion,
     decomposed_json: decomposed,
