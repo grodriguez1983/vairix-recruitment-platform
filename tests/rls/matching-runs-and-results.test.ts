@@ -383,11 +383,15 @@ describe('rls: match_results', () => {
     expect((bView ?? []).length).toBe(0);
   });
 
-  it('recruiter cannot insert results (backend-only via service role)', async () => {
+  // ADR-017: recruiters can now insert match_results for runs they
+  // triggered themselves. The insert-only trigger continues to block
+  // any UPDATE, preserving immutability per ADR-015 §5.
+
+  it('recruiter can insert results for their own run (ADR-017)', async () => {
     const { client, appUserId } = await makeRoleClient('recruiter');
-    const jq = await seedJobQuery(svc, 'h-res-ins', appUserId);
+    const jq = await seedJobQuery(svc, 'h-res-ins-own', appUserId);
     const runId = await seedRun(svc, jq, { triggeredBy: appUserId });
-    const cid = await seedCandidate(svc, 'tt-res-ins');
+    const cid = await seedCandidate(svc, 'tt-res-ins-own');
 
     const { error } = await client.from('match_results').insert({
       match_run_id: runId,
@@ -396,6 +400,27 @@ describe('rls: match_results', () => {
       must_have_gate: 'passed',
       rank: 1,
       breakdown_json: {},
+    });
+    expect(error).toBeNull();
+  });
+
+  it("recruiter cannot insert results for another recruiter's run (ADR-017)", async () => {
+    const { client: clientA, appUserId: userA } = await makeRoleClient('recruiter');
+    const { appUserId: userB } = await makeRoleClient('recruiter');
+    const jq = await seedJobQuery(svc, 'h-res-ins-other', userB);
+    const otherRun = await seedRun(svc, jq, { triggeredBy: userB });
+    const cid = await seedCandidate(svc, 'tt-res-ins-other');
+
+    // sanity: userA is not userB
+    expect(userA).not.toBe(userB);
+
+    const { error } = await clientA.from('match_results').insert({
+      match_run_id: otherRun,
+      candidate_id: cid,
+      total_score: 99,
+      must_have_gate: 'passed',
+      rank: 1,
+      breakdown_json: { spoofed: true },
     });
     expect(error).not.toBeNull();
   });
