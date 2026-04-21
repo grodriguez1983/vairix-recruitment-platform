@@ -25,13 +25,12 @@
     sin auto-merge. Sort final: start_date desc NULLS LAST, id asc.
     13 tests: ADR tests 12–16 + adversariales (null company/title/
     dates, sin candidatos a mergear, re-ordering invariance).
-  - **Sub-B** (`d3e8f03`→`298b151`): `src/lib/matching/years-calculator.ts`
-    - `date-intervals.ts` primitives compartidas. `yearsForSkill(skillId,
+  - **Sub-B** (`d3e8f03`→`298b151`): `src/lib/matching/years-calculator.ts` - `date-intervals.ts` primitives compartidas. `yearsForSkill(skillId,
 experiences, {now})` → sweep-line merge de intervalos de
-      experiencias `kind='work'` con ese skill_id (null skill_id nunca
-      suma, ADR-015 §1 invariant). 13 tests: ADR tests 1–6 + adversariales
-      (null start/end, end ≤ start data bug, contiguous intervals,
-      gap counting).
+    experiencias `kind='work'` con ese skill_id (null skill_id nunca
+    suma, ADR-015 §1 invariant). 13 tests: ADR tests 1–6 + adversariales
+    (null start/end, end ≤ start data bug, contiguous intervals,
+    gap counting).
   - **Sub-C** (`6e9434f`→`904ba54`): `src/lib/matching/score-aggregator.ts`
     pure `aggregateScore(jobQuery, candidate, {now})`. Per-requirement
     breakdown (candidate_years, years_ratio, contribution, status,
@@ -1049,6 +1048,42 @@ prompts listos.
 
 ## 🚫 Bloqueos
 
+- 🟥 **F4-008 — Gate estructural: cómo persistir `match_results` desde
+  una route disparada por usuario** (levantado 2026-04-21). CLAUDE.md
+  `#4 Auth y RLS` es tajante: _"Cliente Supabase con service role key
+  SOLO en ETL y worker de embeddings. Nunca se expone al cliente ni en
+  routes disparadas por usuario."_ Pero la migración
+  `20260420000007_rls_match_runs_and_results.sql` modela
+  `match_results` como **admin-only INSERT** bajo el supuesto de que
+  _"Ranker output is written by the backend worker with service role
+  (which bypasses RLS)"_. En F1 no hay queues/workers asíncronos — el
+  run se dispara desde el POST `/api/matching/run`. Tensión no
+  resuelta entre CLAUDE.md y la intención de la migración.
+  - **Opciones**:
+    - **A) Ampliar CLAUDE.md** para incluir "worker de ranking" como
+      tercer uso legítimo de service role en-proceso (análogo a
+      embeddings). Costo: cambia regla global inviolable, requiere
+      ADR-delta y justificación.
+    - **B) Abrir RLS** a `match_results INSERT` para recruiter
+      cuando `exists(match_runs where triggered_by = self)`. El
+      insert-only trigger sigue bloqueando UPDATE incluso a service
+      role, y la identidad sigue auditada vía `match_runs.triggered_by`.
+      Costo: 1 migración + ADR-delta a ADR-015 §8 (reemplaza
+      "admin-only INSERT" por "owner via parent run"). No toca
+      CLAUDE.md.
+    - **C) Async worker real**: API route inserta `match_runs`
+      status='running' con user client, un script/cron worker
+      separado procesa y escribe results con service role. Costo:
+      infra de queue/lease (no existe en F1), UX pierde respuesta
+      síncrona — contradice DoD F4-008 ("top-N inline").
+  - **Recomendación Claude**: **B**. Es el cambio más chico, mantiene
+    el principio "service role solo en batch workers", preserva la
+    auditabilidad (triggered_by + insert-only trigger), y no requiere
+    reescribir CLAUDE.md ni infra nueva. El ADR-delta documentaría
+    que el recruiter dueño del run escribe sus propios `match_results`
+    (el gate "no UPDATE" se mantiene via trigger).
+  - **Gate de desbloqueo**: el usuario aprueba A / B / C. Mientras
+    tanto F4-008 espera.
 - ⏳ **Lista de custom fields de Teamtailor** (pendiente de acceso).
 - ⏳ **Tenant de staging en Teamtailor** (no existe, hay que crear).
 - ✅ **Verificar `X-Api-Version` vigente** — resuelto 2026-04-17:
