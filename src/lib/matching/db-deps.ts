@@ -40,20 +40,21 @@ export function buildRunMatchJobDeps(
     return (data ?? []).map((r) => r.id as string);
   }
 
-  async function fetchCandidatesWithAllSkills(
+  async function fetchCandidateMustHaveCoverage(
     skillIds: string[],
     _tenantId: string | null,
-  ): Promise<string[]> {
-    // We can't express the HAVING COUNT(DISTINCT) clause purely via
-    // PostgREST filters, so we fetch the (candidate_id, skill_id)
-    // pairs and intersect in-memory. For F1 scale (~100 candidates
-    // × ~N resolved must-haves) this is well below the RLS join
-    // cost of a dedicated RPC.
+  ): Promise<Array<{ candidate_id: string; covered_skill_ids: string[] }>> {
+    // Fetch (candidate_id, skill_id) pairs for the resolved
+    // must-have set and let the pure filter derive both included
+    // (full coverage) and excluded (partial / zero coverage) in JS.
+    // For F1 scale (~100 candidates × ~N resolved must-haves) this
+    // is well below the RLS join cost of a dedicated RPC.
+    if (skillIds.length === 0) return [];
     const { data, error } = await supabase
       .from('experience_skills')
       .select('skill_id, candidate_experiences!inner(candidate_id)')
       .in('skill_id', skillIds);
-    if (error) throw new Error(`fetchCandidatesWithAllSkills: ${error.message}`);
+    if (error) throw new Error(`fetchCandidateMustHaveCoverage: ${error.message}`);
 
     const byCandidate = new Map<string, Set<string>>();
     for (const row of data ?? []) {
@@ -65,9 +66,9 @@ export function buildRunMatchJobDeps(
       set.add(skillId);
       byCandidate.set(ce.candidate_id, set);
     }
-    const out: string[] = [];
+    const out: Array<{ candidate_id: string; covered_skill_ids: string[] }> = [];
     for (const [candidateId, present] of byCandidate) {
-      if (skillIds.every((s) => present.has(s))) out.push(candidateId);
+      out.push({ candidate_id: candidateId, covered_skill_ids: Array.from(present) });
     }
     return out;
   }
@@ -130,8 +131,8 @@ export function buildRunMatchJobDeps(
 
     preFilter: async (jobQuery, tenantId) =>
       preFilterByMustHave(jobQuery, tenantId, {
-        fetchCandidatesWithAllSkills,
         fetchAllCandidateIds,
+        fetchCandidateMustHaveCoverage,
       }),
 
     loadCandidates: async (candidateIds) =>

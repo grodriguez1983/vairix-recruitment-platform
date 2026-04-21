@@ -17,6 +17,7 @@
  */
 import type { ResolvedDecomposition } from '../rag/decomposition/resolve-requirements';
 
+import type { PreFilterByMustHaveResult } from './pre-filter';
 import type {
   CandidateAggregate,
   CandidateScore,
@@ -61,7 +62,10 @@ export interface RunMatchJobDeps {
     catalog_snapshot_at: Date;
     tenant_id: string | null;
   } | null>;
-  preFilter: (jobQuery: ResolvedDecomposition, tenantId: string | null) => Promise<string[]>;
+  preFilter: (
+    jobQuery: ResolvedDecomposition,
+    tenantId: string | null,
+  ) => Promise<PreFilterByMustHaveResult>;
   loadCandidates: (candidateIds: string[]) => Promise<CandidateAggregate[]>;
   rank: (input: RankerInput) => Promise<RankResult>;
   createMatchRun: (params: {
@@ -149,8 +153,8 @@ export async function runMatchJob(
   });
 
   try {
-    const candidateIds = await deps.preFilter(resolved, tenant_id);
-    const aggregates = await deps.loadCandidates(candidateIds);
+    const preFilterResult = await deps.preFilter(resolved, tenant_id);
+    const aggregates = await deps.loadCandidates(preFilterResult.included);
     const rankResult = await deps.rank({
       jobQuery: resolved,
       candidates: aggregates,

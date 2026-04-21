@@ -1,16 +1,25 @@
 /**
- * Unit tests for `preFilterByMustHave` (F4-008 sub-B).
+ * Unit tests for `preFilterByMustHave` (F4-008 sub-B + F4-008 ter).
  *
  * Before running the (relatively expensive) aggregate loader +
  * deterministic ranker, we narrow the candidate set to those who
  * have at least one `experience_skills` row for *every* resolved
  * must-have skill.
  *
+ * F4-008 ter (ADR-016 §"Gap conocido"): on top of the `included`
+ * pool we now return an `excluded` pool of candidates with partial
+ * or zero must-have coverage, annotated with the missing skill ids.
+ * The rescue bucket picks that up so a candidate who only mentions
+ * a must-have in `files.parsed_text` still gets a FTS lookup.
+ *
  * Invariants from ADR-015:
  *   - Unresolved must-have (`skill_id = null`) does NOT filter
  *     candidates: catalog drift must not silently hide people.
- *   - No resolved must-have → full candidate set passes through.
- *   - Resolved must-have → AND-intersection of candidates per skill.
+ *   - No resolved must-have → full candidate set passes through as
+ *     `included`; `excluded` is empty (nothing to rescue).
+ *   - Resolved must-have → AND-intersection of candidates per skill
+ *     for `included`; the complement is `excluded` with per-candidate
+ *     `missing_must_have_skill_ids`.
  *
  * All I/O is injected so the unit suite doesn't need Supabase.
  */
@@ -34,23 +43,29 @@ function jobQuery(overrides: Partial<ResolvedDecomposition> = {}): ResolvedDecom
   };
 }
 
-function mkDeps(overrides: { withAll?: string[]; all?: string[] }): PreFilterByMustHaveDeps {
+interface MkDepsOverrides {
+  all?: string[];
+  coverage?: Array<{ candidate_id: string; covered_skill_ids: string[] }>;
+}
+
+function mkDeps(overrides: MkDepsOverrides = {}): PreFilterByMustHaveDeps {
   return {
-    fetchCandidatesWithAllSkills: vi.fn(async () => overrides.withAll ?? []),
     fetchAllCandidateIds: vi.fn(async () => overrides.all ?? []),
+    fetchCandidateMustHaveCoverage: vi.fn(async () => overrides.coverage ?? []),
   };
 }
 
-describe('preFilterByMustHave — F4-008 sub-B', () => {
-  it('no requirements → all candidates pass through', async () => {
+describe('preFilterByMustHave — F4-008 sub-B + ter', () => {
+  it('no requirements → all candidates pass through, empty excluded', async () => {
     const deps = mkDeps({ all: ['a', 'b', 'c'] });
     const out = await preFilterByMustHave(jobQuery(), null, deps);
-    expect(out).toEqual(['a', 'b', 'c']);
+    expect(out.included).toEqual(['a', 'b', 'c']);
+    expect(out.excluded).toEqual([]);
     expect(deps.fetchAllCandidateIds).toHaveBeenCalledWith(null);
-    expect(deps.fetchCandidatesWithAllSkills).not.toHaveBeenCalled();
+    expect(deps.fetchCandidateMustHaveCoverage).not.toHaveBeenCalled();
   });
 
-  it('requirements but no must-have → all candidates pass through', async () => {
+  it('requirements but no must-have → all pass through, empty excluded', async () => {
     const deps = mkDeps({ all: ['a', 'b'] });
     const out = await preFilterByMustHave(
       jobQuery({
@@ -70,11 +85,12 @@ describe('preFilterByMustHave — F4-008 sub-B', () => {
       null,
       deps,
     );
-    expect(out).toEqual(['a', 'b']);
-    expect(deps.fetchCandidatesWithAllSkills).not.toHaveBeenCalled();
+    expect(out.included).toEqual(['a', 'b']);
+    expect(out.excluded).toEqual([]);
+    expect(deps.fetchCandidateMustHaveCoverage).not.toHaveBeenCalled();
   });
 
-  it('all must-have unresolved (skill_id=null) → all candidates pass through', async () => {
+  it('all must-have unresolved (skill_id=null) → all pass through, empty excluded', async () => {
     const deps = mkDeps({ all: ['a', 'b'] });
     const out = await preFilterByMustHave(
       jobQuery({
@@ -94,12 +110,24 @@ describe('preFilterByMustHave — F4-008 sub-B', () => {
       null,
       deps,
     );
-    expect(out).toEqual(['a', 'b']);
-    expect(deps.fetchCandidatesWithAllSkills).not.toHaveBeenCalled();
+    expect(out.included).toEqual(['a', 'b']);
+    expect(out.excluded).toEqual([]);
+    expect(deps.fetchCandidateMustHaveCoverage).not.toHaveBeenCalled();
   });
 
-  it('single resolved must-have → delegates to fetchCandidatesWithAllSkills', async () => {
-    const deps = mkDeps({ withAll: ['match-1', 'match-2'] });
+  it('single resolved must-have → included = full coverage, excluded = partial + zero', async () => {
+    // Pool: a, b, c, d.  React must-have.
+    //  - a, b have React in experience_skills → included.
+    //  - c has nothing → excluded with missing=[React].
+    //  - d has React too → included. (coverage includes d.)
+    const deps = mkDeps({
+      all: ['a', 'b', 'c', 'd'],
+      coverage: [
+        { candidate_id: 'a', covered_skill_ids: [REACT_ID] },
+        { candidate_id: 'b', covered_skill_ids: [REACT_ID] },
+        { candidate_id: 'd', covered_skill_ids: [REACT_ID] },
+      ],
+    });
     const out = await preFilterByMustHave(
       jobQuery({
         requirements: [
@@ -118,12 +146,28 @@ describe('preFilterByMustHave — F4-008 sub-B', () => {
       null,
       deps,
     );
-    expect(out).toEqual(['match-1', 'match-2']);
-    expect(deps.fetchCandidatesWithAllSkills).toHaveBeenCalledWith([REACT_ID], null);
+    expect(out.included.sort()).toEqual(['a', 'b', 'd']);
+    expect(out.excluded).toEqual([{ candidate_id: 'c', missing_must_have_skill_ids: [REACT_ID] }]);
+    expect(deps.fetchCandidateMustHaveCoverage).toHaveBeenCalledWith([REACT_ID], null);
   });
 
-  it('multiple resolved must-have → uses AND-intersection (all skill_ids)', async () => {
-    const deps = mkDeps({ withAll: ['only-full-stack'] });
+  it('multiple resolved must-have → partial coverage surfaces with specific missing ids', async () => {
+    // React + Node must-have.
+    //  - a has both → included.
+    //  - b has only React → excluded with missing=[Node].
+    //  - c has only Node → excluded with missing=[React].
+    //  - d has nothing → excluded with missing=[React, Node].
+    //  - e has Node + irrelevant (ignored) → same as c.
+    //  - non-must-have SQL is ignored throughout.
+    const deps = mkDeps({
+      all: ['a', 'b', 'c', 'd', 'e'],
+      coverage: [
+        { candidate_id: 'a', covered_skill_ids: [REACT_ID, NODE_ID] },
+        { candidate_id: 'b', covered_skill_ids: [REACT_ID] },
+        { candidate_id: 'c', covered_skill_ids: [NODE_ID] },
+        { candidate_id: 'e', covered_skill_ids: [NODE_ID] },
+      ],
+    });
     const out = await preFilterByMustHave(
       jobQuery({
         requirements: [
@@ -163,16 +207,32 @@ describe('preFilterByMustHave — F4-008 sub-B', () => {
       null,
       deps,
     );
-    expect(out).toEqual(['only-full-stack']);
-    expect(deps.fetchCandidatesWithAllSkills).toHaveBeenCalledTimes(1);
-    const call = (deps.fetchCandidatesWithAllSkills as ReturnType<typeof vi.fn>).mock.calls[0]!;
-    const [skillIds, tenant] = call;
-    expect((skillIds as string[]).sort()).toEqual([REACT_ID, NODE_ID].sort());
-    expect(tenant).toBeNull();
+
+    expect(out.included).toEqual(['a']);
+
+    // Excluded sorted by candidate_id for determinism.
+    const byCandidate = new Map(
+      out.excluded.map((e) => [e.candidate_id, e.missing_must_have_skill_ids]),
+    );
+    expect(byCandidate.get('b')?.sort()).toEqual([NODE_ID]);
+    expect(byCandidate.get('c')?.sort()).toEqual([REACT_ID]);
+    expect(byCandidate.get('d')?.sort()).toEqual([REACT_ID, NODE_ID].sort());
+    expect(byCandidate.get('e')?.sort()).toEqual([REACT_ID]);
+    expect(out.excluded.length).toBe(4);
+
+    const call = (deps.fetchCandidateMustHaveCoverage as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect((call[0] as string[]).sort()).toEqual([REACT_ID, NODE_ID].sort());
+    expect(call[1]).toBeNull();
   });
 
   it('mixed resolved + unresolved must-have → only resolved ones drive the filter', async () => {
-    const deps = mkDeps({ withAll: ['x'] });
+    // React resolved, Obscure unresolved.
+    //  - x has React → included.
+    //  - y has nothing → excluded with missing=[React] only (unresolved skipped).
+    const deps = mkDeps({
+      all: ['x', 'y'],
+      coverage: [{ candidate_id: 'x', covered_skill_ids: [REACT_ID] }],
+    });
     const out = await preFilterByMustHave(
       jobQuery({
         requirements: [
@@ -201,8 +261,9 @@ describe('preFilterByMustHave — F4-008 sub-B', () => {
       null,
       deps,
     );
-    expect(out).toEqual(['x']);
-    expect(deps.fetchCandidatesWithAllSkills).toHaveBeenCalledWith([REACT_ID], null);
+    expect(out.included).toEqual(['x']);
+    expect(out.excluded).toEqual([{ candidate_id: 'y', missing_must_have_skill_ids: [REACT_ID] }]);
+    expect(deps.fetchCandidateMustHaveCoverage).toHaveBeenCalledWith([REACT_ID], null);
   });
 
   it('propagates tenant_id to deps', async () => {
@@ -211,8 +272,8 @@ describe('preFilterByMustHave — F4-008 sub-B', () => {
     expect(deps.fetchAllCandidateIds).toHaveBeenCalledWith('tenant-42');
   });
 
-  it('empty DB result → empty list (no throw)', async () => {
-    const deps = mkDeps({ withAll: [] });
+  it('empty DB result → empty included + empty excluded (no throw)', async () => {
+    const deps = mkDeps({ all: [], coverage: [] });
     const out = await preFilterByMustHave(
       jobQuery({
         requirements: [
@@ -231,6 +292,39 @@ describe('preFilterByMustHave — F4-008 sub-B', () => {
       null,
       deps,
     );
-    expect(out).toEqual([]);
+    expect(out.included).toEqual([]);
+    expect(out.excluded).toEqual([]);
+  });
+
+  it('coverage row with zero covered_skill_ids → still treated as excluded with all missing', async () => {
+    // Defensive: the DB could emit an empty covered_skill_ids array
+    // if we filtered server-side. Must behave identically to absent.
+    const deps = mkDeps({
+      all: ['a', 'b'],
+      coverage: [
+        { candidate_id: 'a', covered_skill_ids: [REACT_ID] },
+        { candidate_id: 'b', covered_skill_ids: [] },
+      ],
+    });
+    const out = await preFilterByMustHave(
+      jobQuery({
+        requirements: [
+          {
+            skill_raw: 'React',
+            skill_id: REACT_ID,
+            resolved_at: '2025-01-01T00:00:00Z',
+            min_years: 1,
+            max_years: null,
+            must_have: true,
+            evidence_snippet: 'React',
+            category: 'technical',
+          },
+        ],
+      }),
+      null,
+      deps,
+    );
+    expect(out.included).toEqual(['a']);
+    expect(out.excluded).toEqual([{ candidate_id: 'b', missing_must_have_skill_ids: [REACT_ID] }]);
   });
 });

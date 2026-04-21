@@ -89,7 +89,7 @@ function mkDeps(overrides: Partial<RunMatchJobDeps> = {}): RunMatchJobDeps {
       catalog_snapshot_at: SNAPSHOT,
       tenant_id: null,
     })),
-    preFilter: vi.fn(async () => ['c1', 'c2']),
+    preFilter: vi.fn(async () => ({ included: ['c1', 'c2'], excluded: [] })),
     loadCandidates: vi.fn(
       async (ids: string[]): Promise<CandidateAggregate[]> =>
         ids.map((id) => ({ candidate_id: id, merged_experiences: [], languages: [] })),
@@ -254,7 +254,7 @@ describe('runMatchJob — F4-008 sub-C', () => {
 
   it('empty candidate pool → completes run with 0, skips insertMatchResults', async () => {
     const deps = mkDeps({
-      preFilter: vi.fn(async () => []),
+      preFilter: vi.fn(async () => ({ included: [], excluded: [] })),
       loadCandidates: vi.fn(async () => []),
       rank: vi.fn(async () => ({ results: [], diagnostics: [] })),
     });
