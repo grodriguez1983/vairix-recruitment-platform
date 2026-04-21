@@ -18,9 +18,9 @@ export type Database = {
       graphql: {
         Args: {
           extensions?: Json
-          operationName?: string
-          query?: string
           variables?: Json
+          query?: string
+          operationName?: string
         }
         Returns: Json
       }
@@ -337,6 +337,51 @@ export type Database = {
             columns: ["file_id"]
             isOneToOne: false
             referencedRelation: "files"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      candidate_languages: {
+        Row: {
+          candidate_id: string
+          created_at: string
+          extraction_id: string
+          id: string
+          level: string | null
+          name: string
+          tenant_id: string | null
+        }
+        Insert: {
+          candidate_id: string
+          created_at?: string
+          extraction_id: string
+          id?: string
+          level?: string | null
+          name: string
+          tenant_id?: string | null
+        }
+        Update: {
+          candidate_id?: string
+          created_at?: string
+          extraction_id?: string
+          id?: string
+          level?: string | null
+          name?: string
+          tenant_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "candidate_languages_candidate_id_fkey"
+            columns: ["candidate_id"]
+            isOneToOne: false
+            referencedRelation: "candidates"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "candidate_languages_extraction_id_fkey"
+            columns: ["extraction_id"]
+            isOneToOne: false
+            referencedRelation: "candidate_extractions"
             referencedColumns: ["id"]
           },
         ]
@@ -1672,15 +1717,15 @@ export type Database = {
       }
       semantic_search_embeddings: {
         Args: {
-          max_results?: number
           query_embedding: number[]
-          candidate_id_filter?: string[]
+          max_results?: number
           source_type_filter?: string[]
+          candidate_id_filter?: string[]
         }
         Returns: {
           score: number
-          source_type: string
           candidate_id: string
+          source_type: string
         }[]
       }
       set_limit: {
