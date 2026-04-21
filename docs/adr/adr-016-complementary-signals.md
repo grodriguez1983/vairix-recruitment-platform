@@ -261,32 +261,43 @@ F4-008 bis) junto a los helpers `fetchFtsRescues()` y
 La actualización del roadmap (insertar F4-007 bis y F4-008 bis) se
 hace al aceptar este ADR.
 
-### Gap conocido — rescue vs pre-filter (pendiente de resolver)
+### Gap cerrado en F4-008 ter (2026-04-21) — rescue vs pre-filter
 
-Identificado al cerrar F4-008 bis (2026-04-21). El pre-filtro actual
-(`preFilterByMustHave`, `src/lib/matching/pre-filter.ts`) hace
-AND-intersection sobre `must_have && skill_id != null` consultando
-`experience_skills`. Un candidato cuyo CV **menciona el skill en
-`files.parsed_text` pero cuya extracción LLM lo omitió** queda fuera
-del pool del ranker y **nunca llega al rescue bucket** (el rescue hoy
-opera sobre `must_have_gate='failed'`, no sobre pre-filter-excluded).
+Identificado al cerrar F4-008 bis y resuelto el mismo día en F4-008
+ter. El pre-filtro original (`preFilterByMustHave`) hacía
+AND-intersection sobre `must_have && skill_id != null` y sólo
+devolvía el pool `included`; un candidato cuyo CV mencionara el
+must-have en `files.parsed_text` pero cuya extracción LLM lo omitiera
+quedaba fuera del ranker y **nunca llegaba al rescue bucket** (el
+rescue operaba sólo sobre `must_have_gate='failed'`). Eso contradecía
+la intención de §1.
 
-Esto contradice la intención de §1: ADR-016 existe precisamente para
-rescatar ese caso ("el LLM probablemente se perdió algo"). Con la
-implementación actual, el bucket captura solo candidatos que el
-pre-filter ya dejó pasar (tienen algunos must-haves pero no todos) —
-ruido mucho menor al previsto.
+**Implementación** (`src/lib/matching/pre-filter.ts`,
+`src/lib/matching/run-match-job.ts`, `src/lib/matching/db-deps.ts`):
 
-**Resolución futura** (F4-008 ter, no bloqueante para F4-009 UI):
+1. `preFilterByMustHave` ahora retorna
+   `{ included, excluded: PreFilterExcludedCandidate[] }` donde cada
+   excluded lleva su `missing_must_have_skill_ids` específico. El
+   complemento del pool completo contra la coverage parcial se
+   deriva en la función pura (sin I/O extra).
+2. `db-deps.ts` reemplaza la query de intersección por
+   `fetchCandidateMustHaveCoverage(skillIds)` que devuelve pares
+   (candidate_id, covered_skill_ids). El cálculo included/excluded
+   queda en JS — para F1 (~100 candidatos × N must-haves) es más
+   barato que una RPC dedicada y evita un join server-side adicional.
+3. `runMatchJob` hace `mergeRescueInputs(gateFailed, excluded)`
+   antes de invocar `rescueFailedCandidates`. La firma del hook de
+   rescue no cambia (sigue recibiendo `FailedCandidateInput[]`), lo
+   que mantiene el blast-radius mínimo. Los dos conjuntos son
+   disjuntos por construcción (los excluded nunca llegan al ranker)
+   pero el merge hace dedup defensivo por `candidate_id`.
+4. El bucket `match_rescues` cubre ahora el caso canónico (skill en
+   CV text, no en `experience_skills`) **y** el caso parcial
+   (candidato con algunos must-haves pero no todos), con la misma
+   mecánica de persistencia, RLS, y UI de `/matches/runs/[id]`.
 
-1. `preFilter` retorna `{ included, excluded_ids }` en lugar de solo
-   `included`.
-2. `runMatchJob` pasa `excluded_ids` al rescue hook; cada excluded
-   candidate se consulta contra `files.parsed_text` con sus
-   must-haves completos como `missing_skill_slugs`.
-3. El bucket `match_rescues` cubre entonces el caso canónico
-   (skill en CV text, no en `experience_skills`).
-
-Mientras tanto, el bucket funciona correctamente para candidatos con
-must-have parcial — subconjunto menor del caso real pero con la misma
-mecánica de persistencia, RLS, y UI.
+Commits: `1285c4c` (RED pre-filter), `13aa0a0` (GREEN pre-filter),
+`aaeb9de` (RED orchestrator merge), `82d0538` (GREEN orchestrator
+merge). Cobertura unit en `pre-filter.test.ts` (9 escenarios) y
+`run-match-job.test.ts` (2 escenarios nuevos: merge con gate-failed y
+excluded-solo).

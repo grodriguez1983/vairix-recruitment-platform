@@ -5,12 +5,123 @@
 > el git log).
 
 **Última actualización**: 2026-04-21
-**Última sesión**: 2026-04-21 — **Block 1 (languages persistence) + Block 2 (F4-008 bis match_rescues + FTS fallback) + Block 3 (F4-009 UI) cerrados**. Block 1 (`ec53ed6`): `deriveLanguages` cableado en el worker de extracción + `candidate_languages` persistidas + `db-deps.loadLanguages` contra tabla real; 14 worker tests. Block 2 (`6921fe0`→`54825c4`): migraciones `20260421000004_match_rescues.sql` (tabla insert-only via trigger + PK compuesta), `20260421000005_rls_match_rescues.sql` (own-run-or-admin SELECT/INSERT paridad ADR-017; admin-only DELETE), `20260421000006_match_rescue_fts_search.sql` (RPC `security invoker` con ts_rank + ts_headline sobre `files.parsed_text`); servicio puro `src/lib/rag/complementary-signals.ts` con `FTS_RESCUE_THRESHOLD=0.1` + `EVIDENCE_SNIPPET_LIMIT=5` (9 tests); orchestrator `runMatchJob` extendido con `rescueFailedCandidates?` hook que swallowea errores (ADR-016: bucket ortogonal al ranking); `db-deps.rescueFailedCandidates` resuelve skill_id→slug via `skills_catalog`, invoca RPC, persiste en `match_rescues`; GET `/api/matching/runs/:id/rescues` bajo RLS. **Gap conocido** documentado en ADR-016 §"Gap conocido": el pre-filter actual excluye candidatos por catálogo antes del ranker, así que el bucket solo captura gate-failed con must-have parcial (no el caso canónico de "skill solo en parsed_text"); fix postergado a F4-008 ter. Block 3 (esta commit): 3 páginas server-rendered + 1 client form — `/matching/new` (paste JD → decompose → resolved panel con must/years/resolved badges + unresolved list → botón "run match" → redirect), `/matching/runs/:id` (metadata + results table con gate badge + score + drawer expandible con breakdown por skill e evidencia por experience), `/matching/runs/:id/rescues` (bucket FTS con highlighting `«`→`<mark>`). Sidebar extendido con enlace "Matching". RLS hace ownership; fetch de candidate names vía hydrate in-line. 564 unit + 148 integration tests verdes. ADR-017 + migración `20260421000001_rls_match_results_insert_own_run.sql` desbloquean la persistencia de `match_results` por el recruiter dueño del run. Integration e2e (`tests/integration/matching/run-match-job.test.ts`) seedéa 20 candidates (5 strong / 10 medium / 5 missing must-have) → decompose stub → runMatchJob → asserts run completado + 15 match_results persistidos (5 excluidos por pre-filter), ranks 1..15 contiguos, scores monotónicos, top-5 = strong set, breakdown_json round-trip. **F4-006, F4-007 bis y F4-007 cerrados**. F4-006 sub-A..sub-D: DecompositionProvider (StubDecompositionProvider + OpenAIDecompositionProvider con prompt-v1), content_hash SHA-256 sobre (normalized_text ∥ model ∥ promptVersion) con NUL separator, `decomposeJobQuery(raw_text, deps)` idempotente por hash + resolución de catálogo + persist en `job_queries` + API route POST `/api/matching/decompose` con Zod schema + `requireAuth()`. F4-007 bis: migración `20260420000009_candidate_experiences_description_tsv.sql` + GIN index + integration test (match/miss/null). F4-007 sub-A..sub-D matching ranker: `date-intervals.ts` (MS_PER_YEAR, Interval, toInterval, overlapRatio) compartido; `variant-merger.ts` (284 LOC, COMPANY_SUFFIX_RE, titleCompatible lenient con substring + Jaccard ≥ 0.5, greedy best-match, near-miss diagnostics); `years-calculator.ts` sweep-line; `score-aggregator.ts` con must-have gate (resolved + ratio=0 → failed; unresolved skill_id NO falla gate — ADR-015 §Consecuencias), weights 2.0/1.0 normalizados, language bonus ±5/-10, seniority bucket (<2 junior, 2-5 semi, 5-10 senior, 10+ lead) ±5, clamp [0,100]; `ranker.ts` DeterministicRanker orquestador con sort (score desc, candidate_id asc), catalogSnapshotAt wired como now. 47 matching + 3 F4-007bis = 777 tests verde. Siguiente: F4-008 (API `/api/matching/run` + persistencia match_runs/match_results) y F4-008 bis (match_rescues + fallback FTS ADR-016).
+**Última sesión**: 2026-04-21 — **Bloque 7: cierre de pendientes post-F4-009** (`51c6295`, `1285c4c`→`13aa0a0`, `aaeb9de`→`82d0538`). `fix(matching): resolve skills table name + smoke selector drift` corrige dos bugs descubiertos durante Block 6: (a) `skills_catalog` → `skills` en `db-deps.ts:206` y `app/api/matching/runs/[id]/evidence/route.ts:82` (el catálogo vive en `skills`, ADR-013; el nombre viejo nunca existió), (b) `smoke.spec.ts:34` Playwright strict mode violation — `getByLabel('Status')` matchea dos selects porque el `<label>` envuelve todo y el accessible name concatena option text; fix con `page.locator('label', {hasText:/^Status/}).locator('select')`. **F4-008 ter cerrado** (gap "rescue vs pre-filter" de ADR-016 §"Gap conocido"): `preFilterByMustHave` ahora retorna `{included, excluded: PreFilterExcludedCandidate[]}` con `missing_must_have_skill_ids` por candidato; `fetchCandidateMustHaveCoverage(skillIds)` reemplaza la query de intersección con una por-candidate-coverage (más barata en F1 que una RPC dedicada); `runMatchJob` hace `mergeRescueInputs(gateFailed, excluded)` antes de invocar `rescueFailedCandidates` (la firma del hook no cambia, blast radius mínimo). Unit coverage: 9 tests en `pre-filter.test.ts` + 2 nuevos en `run-match-job.test.ts` (merge con gate-failed y excluded-solo). ADR-016 addendum documenta el cierre. **Bloques previos de la misma fecha**: **Block 4 (uncataloged admin surface ADR-013 §5) + Block 5 (/admin/skills CRUD ADR-013 §6) + Block 6 (smoke E2E UC-11) cerrados**. Block 4 (`a3b45c9`→`693cd3b`→`0bc535a`): `aggregateUncataloged` puro con TDD RED→GREEN (6 tests, agrupa por forma normalizada case/whitespace-insensitive, excluye blacklist, ≤3 samples en first-seen order, sort count desc → alias asc), `listUncataloged(db)` con FETCH_CAP=5000, `addSkillToCatalog` que valida slug (`/^[a-z0-9][a-z0-9+#./-]*[a-z0-9+#/]$|^[a-z0-9]$/`) + pre-flights conflicts + inserta skill + aliases `source='admin'` + reconcilia experience_skills, `blacklistAlias` idempotente (swallow 23505). Server actions con `requireRole('admin')` + `revalidatePath`. Página server-rendered `/admin/skills/uncataloged` + client `uncataloged-row.tsx` con `useTransition`, form inline (canonical + slug + category opcional) + botón blacklist. Block 5 (`1acea1a`): `src/lib/skills/admin-service.ts` con `listSkills({search, includeDeprecated, limit, offset})` (or.ilike slug + canonical_name + nested `skill_aliases(id)` para counts), `getSkill` con usage_count desde `experience_skills`, `updateSkill` (canonical_name + category editables, slug immutable), `setDeprecated` soft-delete, `addAlias` idempotente con conflict error + `removeAlias`. Server actions + páginas `/admin/skills` (list con search + deprecated toggle + paginación) y `/admin/skills/[id]` (editor client con aliases por source). Landing `/admin` extendido con 2 cards (uncataloged con count badge + catalog). Block 6 (`6806323`): Playwright smoke `tests/e2e/matching-smoke.spec.ts` — 6 tests (/matching/new form, /matching/runs/:id Alice rank 1 score 100, drawer expand con React cell + evidencia panel, /admin/skills lista seeded e2e-react, /admin/skills/uncataloged surfaces seeded zig alias, /admin landing links). `seed.ts` extendido: skill e2e-react + Alice con file (parsed_text React+Zig) + extraction + 1 experience + 2 experience_skills (react resolved + zig uncataloged) + job_queries con resolved_json/decomposed_json + match_run completed + match_results rank=1 score=100 breakdown_json con React requirement. `global-setup.ts` escribe `playwright/.auth/e2e-ids.json`. 6/6 pass contra local Supabase. **Drift pre-existente observado** (fuera de scope F4-009): `smoke.spec.ts:34 "status filter narrows"` falla con strict mode en `getByLabel('Status')` (ahora matchea también el Job select). **Bloques previos de la misma fecha**: Block 1 (languages persistence) + Block 2 (F4-008 bis match_rescues + FTS fallback) + Block 3 (F4-009 UI) documentados abajo. Block 1 (`ec53ed6`): `deriveLanguages` cableado en el worker de extracción + `candidate_languages` persistidas + `db-deps.loadLanguages` contra tabla real; 14 worker tests. Block 2 (`6921fe0`→`54825c4`): migraciones `20260421000004_match_rescues.sql` (tabla insert-only via trigger + PK compuesta), `20260421000005_rls_match_rescues.sql` (own-run-or-admin SELECT/INSERT paridad ADR-017; admin-only DELETE), `20260421000006_match_rescue_fts_search.sql` (RPC `security invoker` con ts_rank + ts_headline sobre `files.parsed_text`); servicio puro `src/lib/rag/complementary-signals.ts` con `FTS_RESCUE_THRESHOLD=0.1` + `EVIDENCE_SNIPPET_LIMIT=5` (9 tests); orchestrator `runMatchJob` extendido con `rescueFailedCandidates?` hook que swallowea errores (ADR-016: bucket ortogonal al ranking); `db-deps.rescueFailedCandidates` resuelve skill_id→slug via `skills_catalog`, invoca RPC, persiste en `match_rescues`; GET `/api/matching/runs/:id/rescues` bajo RLS. **Gap conocido** documentado en ADR-016 §"Gap conocido": el pre-filter actual excluye candidatos por catálogo antes del ranker, así que el bucket solo captura gate-failed con must-have parcial (no el caso canónico de "skill solo en parsed_text"); fix postergado a F4-008 ter. Block 3 (esta commit): 3 páginas server-rendered + 1 client form — `/matching/new` (paste JD → decompose → resolved panel con must/years/resolved badges + unresolved list → botón "run match" → redirect), `/matching/runs/:id` (metadata + results table con gate badge + score + drawer expandible con breakdown por skill e evidencia por experience), `/matching/runs/:id/rescues` (bucket FTS con highlighting `«`→`<mark>`). Sidebar extendido con enlace "Matching". RLS hace ownership; fetch de candidate names vía hydrate in-line. 564 unit + 148 integration tests verdes. ADR-017 + migración `20260421000001_rls_match_results_insert_own_run.sql` desbloquean la persistencia de `match_results` por el recruiter dueño del run. Integration e2e (`tests/integration/matching/run-match-job.test.ts`) seedéa 20 candidates (5 strong / 10 medium / 5 missing must-have) → decompose stub → runMatchJob → asserts run completado + 15 match_results persistidos (5 excluidos por pre-filter), ranks 1..15 contiguos, scores monotónicos, top-5 = strong set, breakdown_json round-trip. **F4-006, F4-007 bis y F4-007 cerrados**. F4-006 sub-A..sub-D: DecompositionProvider (StubDecompositionProvider + OpenAIDecompositionProvider con prompt-v1), content_hash SHA-256 sobre (normalized_text ∥ model ∥ promptVersion) con NUL separator, `decomposeJobQuery(raw_text, deps)` idempotente por hash + resolución de catálogo + persist en `job_queries` + API route POST `/api/matching/decompose` con Zod schema + `requireAuth()`. F4-007 bis: migración `20260420000009_candidate_experiences_description_tsv.sql` + GIN index + integration test (match/miss/null). F4-007 sub-A..sub-D matching ranker: `date-intervals.ts` (MS_PER_YEAR, Interval, toInterval, overlapRatio) compartido; `variant-merger.ts` (284 LOC, COMPANY_SUFFIX_RE, titleCompatible lenient con substring + Jaccard ≥ 0.5, greedy best-match, near-miss diagnostics); `years-calculator.ts` sweep-line; `score-aggregator.ts` con must-have gate (resolved + ratio=0 → failed; unresolved skill_id NO falla gate — ADR-015 §Consecuencias), weights 2.0/1.0 normalizados, language bonus ±5/-10, seniority bucket (<2 junior, 2-5 semi, 5-10 senior, 10+ lead) ±5, clamp [0,100]; `ranker.ts` DeterministicRanker orquestador con sort (score desc, candidate_id asc), catalogSnapshotAt wired como now. 47 matching + 3 F4-007bis = 777 tests verde. Siguiente: F4-008 (API `/api/matching/run` + persistencia match_runs/match_results) y F4-008 bis (match_rescues + fallback FTS ADR-016).
 **Fase activa**: **Fase 4 — Inteligencia** (eje matching). F1 fundación + F2/F3 slices previas siguen done.
 
 ---
 
 ## ✅ Completado
+
+- **F4-008 ter — rescue vs pre-filter gap** ✅ done — 2026-04-21 —
+  Bloque 7. Commits `1285c4c` (RED pre-filter), `13aa0a0` (GREEN
+  pre-filter), `aaeb9de` (RED orchestrator merge), `82d0538` (GREEN
+  orchestrator merge). Cierra el gap documentado en ADR-016 §"Gap
+  conocido":
+  - `preFilterByMustHave` firma nueva:
+    `{included: string[], excluded: PreFilterExcludedCandidate[]}`
+    donde `PreFilterExcludedCandidate = {candidate_id,
+missing_must_have_skill_ids}`. El complemento contra la coverage
+    parcial se deriva en la función pura (sin I/O extra).
+  - `db-deps.fetchCandidateMustHaveCoverage(skillIds)` reemplaza la
+    query de intersección: devuelve pares
+    `(candidate_id, covered_skill_ids)` contra `experience_skills +
+candidate_experiences!inner`; el cálculo included/excluded queda
+    en JS (para F1 ~100 candidatos × N must-haves es más barato que
+    una RPC dedicada).
+  - `runMatchJob.mergeRescueInputs(gateFailed, excluded)` dedup por
+    candidate_id (los dos sets son disjuntos por construcción, pero
+    se defiende igual) + forwards al hook `rescueFailedCandidates`
+    sin cambios de firma. El bucket `match_rescues` ahora cubre el
+    caso canónico "skill sólo en `files.parsed_text`".
+  - Unit coverage: 9 tests en `pre-filter.test.ts` (incluye zero
+    coverage_rows defensivo + tenant_id propagation) + 2 nuevos en
+    `run-match-job.test.ts` (merge con gate-failed + excluded-solo
+    sin ranker failures). ADR-016 addendum documenta el cierre.
+
+- **Drift fixes post-F4-009 smoke** ✅ done — 2026-04-21 — Bloque 7.
+  Commit `51c6295` (`fix(matching): resolve skills table name + smoke
+selector drift`):
+  - `skills_catalog` → `skills` en `src/lib/matching/db-deps.ts:206`
+    y `src/app/api/matching/runs/[id]/evidence/route.ts:82`. El
+    catálogo vive en `skills` (ADR-013); el nombre viejo nunca
+    existió en el schema. El bug era silencioso porque `rescueHook`
+    swallowea errores y el evidence panel sólo se renderiza en
+    drawer.
+  - `smoke.spec.ts:34 "status filter narrows"` Playwright strict-mode
+    violation resuelta: `getByLabel('Status')` matcheaba dos selects
+    (el `<label>` envuelve todo → accessible name concatena option
+    text → "StatusAny status..." y "JobAny job..." ambos matchean).
+    Fix con `page.locator('label',{hasText:/^Status/}).locator('select')`
+    — scope por elemento label con regex anclado.
+
+- **F4-009 smoke E2E UC-11** ✅ done — 2026-04-21 — Block 6. `6806323`.
+  `tests/e2e/matching-smoke.spec.ts` (6 tests, todos pasando contra
+  local Supabase): render `/matching/new` form, `/matching/runs/:id`
+  con Alice rank 1 score 100.0 passed gate, drawer con React cell +
+  evidence panel, `/admin/skills` search encuentra link e2e-react,
+  `/admin/skills/uncataloged` surfaces zig alias, `/admin` landing con
+  ambos cards. El path `/matching/new → decompose → run` queda diferido
+  a suite `@deep` con LLM stubeado (no live calls en smoke). `seed.ts`
+  extendido para wipear `job_queries` por content_hash prefix + skills
+  por slug prefix; seedea skill `e2e-react` + Alice + file con
+  `parsed_text` mencionando React/Zig + extraction + experience + 2
+  experience_skills (react resuelto + zig uncataloged) + job_queries
+  con resolved_json/decomposed_json + match_run completed + match_results
+  rank=1 score=100 breakdown_json. `global-setup.ts` escribe los ids
+  seedeados a `playwright/.auth/e2e-ids.json`. **Observación**:
+  `smoke.spec.ts:34 "status filter narrows"` falla con strict mode
+  violation en `getByLabel('Status')` (matchea también el Job select
+  añadido en sesiones anteriores); drift pre-existente no relacionado
+  con F4-009.
+
+- **F4-009 /admin/skills CRUD** ✅ done — 2026-04-21 — Block 5. `1acea1a`.
+  ADR-013 §6. `src/lib/skills/admin-service.ts`:
+  - `listSkills({search, includeDeprecated, limit, offset})` con
+    `.or('slug.ilike...,canonical_name.ilike...')` + nested
+    `skill_aliases(id)` para `alias_count`, orden `slug asc`,
+    paginación por range.
+  - `getSkill(id)` retorna `SkillDetail` con aliases + usage_count
+    desde `experience_skills`.
+  - `updateSkill` — canonical_name + category editables, slug
+    immutable (referenciado por experience_skills.skill_id; rename =
+    deprecate + recreate).
+  - `setDeprecated` soft-delete por `deprecated_at` (ADR-013 §1).
+  - `addAlias` idempotente si mismo skill, `alias_conflict` si otro;
+    `removeAlias` hard delete (solo aliases, nunca skills).
+  - Server actions `updateSkillAction / setDeprecatedAction /
+addAliasAction / removeAliasAction` con `requireRole('admin')` +
+    `revalidatePath` a /admin/skills, /admin/skills/:id, /admin.
+  - Páginas: `/admin/skills` (list con search form, deprecated toggle,
+    paginación, total count) y `/admin/skills/[id]` (editor client
+    con canonical/category inputs, deprecate/undeprecate toggle, alias
+    add/remove mostrando source seed/admin/derived).
+
+- **F4-009 uncataloged admin surface** ✅ done — 2026-04-21 — Block 4.
+  `a3b45c9`→`693cd3b`→`0bc535a`. ADR-013 §5. TDD RED→GREEN:
+  `src/lib/skills/uncataloged.test.ts` (6 tests) drive
+  `aggregateUncataloged(rows, blacklist)`: agrupa por forma
+  normalizada (lowercase + whitespace-collapse), descarta
+  null-normalized, excluye blacklist, mantiene ≤3 samples en
+  first-seen order, sort count desc → alias asc.
+  `src/lib/skills/uncataloged.ts`: `SAMPLES_PER_GROUP=3`,
+  `FETCH_CAP=5000`, `listUncataloged(db)` devuelve `{groups,
+truncated}` sobre `experience_skills` + `skills_blacklist`;
+  `countUncatalogedRows(db)` head count; `addSkillToCatalog(db,
+{slug, canonical_name, category?, aliases})` valida slug contra
+  `SLUG_RE` + pre-flight de slug + alias conflicts + inserta skill +
+  aliases source='admin' + `reconcileUncatalogedSkills`;
+  `blacklistAlias(db, rawAlias)` idempotente via PG 23505 swallow.
+  `UncatalogedAdminError` con codes `invalid_slug | invalid_name |
+invalid_alias | slug_conflict | alias_conflict | db_error |
+reconcile_failed`. Server actions
+  `addToCatalogAction(input): ActionResult<AddSkillResult>` +
+  `blacklistAction(aliasNormalized): ActionResult` con
+  `requireRole('admin')` + revalidatePath de /admin/skills/uncataloged
+  y /admin. Página server `/admin/skills/uncataloged` + client
+  `uncataloged-row.tsx` con `useTransition`, form inline (canonical +
+  slug + category opcional), botones add + blacklist. Landing
+  `/admin/page.tsx` ahora lista dos cards: Uncataloged (con badge de
+  count) y Skills catalog.
 
 - **F4-009 UI — matching flow** ✅ done — 2026-04-21 — Block 3 de
   la sesión. 3 rutas nuevas bajo `src/app/(app)/matching/`:
