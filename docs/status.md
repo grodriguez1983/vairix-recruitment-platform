@@ -4,13 +4,64 @@
 > del estado; no es un registro histórico completo (para eso está
 > el git log).
 
-**Última actualización**: 2026-04-20
-**Última sesión**: 2026-04-20 — **F4-005 cerrado**: derivación de experiences + experience_skills desde `raw_output`. 3 sub-bloques RED→GREEN: sub-A función pura `deriveFromRawOutput` con stitching por `temp_key`; sub-B servicio `deriveExperiences(extractionId, deps)` con DI + idempotencia por `hasExistingExperiences`; sub-C wire al worker F4-004 (insertExtraction ahora retorna `{id}`, hook opcional, errors → sync_errors entity='cv_derivation') + CLI actualizado + integration e2e contra Supabase local (file → extract → derive → rows en SQL). 356 unit + 6 cv integration tests verde. Siguiente: F4-006 (DecompositionProvider + job_queries).
+**Última actualización**: 2026-04-21
+**Última sesión**: 2026-04-21 — **F4-006, F4-007 bis y F4-007 cerrados**. F4-006 sub-A..sub-D: DecompositionProvider (StubDecompositionProvider + OpenAIDecompositionProvider con prompt-v1), content_hash SHA-256 sobre (normalized_text ∥ model ∥ promptVersion) con NUL separator, `decomposeJobQuery(raw_text, deps)` idempotente por hash + resolución de catálogo + persist en `job_queries` + API route POST `/api/matching/decompose` con Zod schema + `requireAuth()`. F4-007 bis: migración `20260420000009_candidate_experiences_description_tsv.sql` + GIN index + integration test (match/miss/null). F4-007 sub-A..sub-D matching ranker: `date-intervals.ts` (MS_PER_YEAR, Interval, toInterval, overlapRatio) compartido; `variant-merger.ts` (284 LOC, COMPANY_SUFFIX_RE, titleCompatible lenient con substring + Jaccard ≥ 0.5, greedy best-match, near-miss diagnostics); `years-calculator.ts` sweep-line; `score-aggregator.ts` con must-have gate (resolved + ratio=0 → failed; unresolved skill_id NO falla gate — ADR-015 §Consecuencias), weights 2.0/1.0 normalizados, language bonus ±5/-10, seniority bucket (<2 junior, 2-5 semi, 5-10 senior, 10+ lead) ±5, clamp [0,100]; `ranker.ts` DeterministicRanker orquestador con sort (score desc, candidate_id asc), catalogSnapshotAt wired como now. 47 matching + 3 F4-007bis = 777 tests verde. Siguiente: F4-008 (API `/api/matching/run` + persistencia match_runs/match_results) y F4-008 bis (match_rescues + fallback FTS ADR-016).
 **Fase activa**: **Fase 4 — Inteligencia** (eje matching). F1 fundación + F2/F3 slices previas siguen done.
 
 ---
 
 ## ✅ Completado
+
+- **F4-007 Deterministic matcher (ranker puro)** ✅ done — 2026-04-21 —
+  `840d8f4`..`072c0dd`.
+  - **Sub-A** (`840d8f4`→`7ab5a63`): `src/lib/matching/variant-merger.ts`
+    pure `mergeVariants(input, options)`. Collapse cv_primary +
+    linkedin_export por misma kind + company normalizada (strip
+    Inc/LLC/SA/etc) + title compatible (igualdad, substring, o Jaccard
+    ≥ 0.5) + overlap > 50% de fechas. Ganador cv_primary (dates,
+    title, description); skills unioned preservando primary casing;
+    `merged_from_ids` lex-sorted para determinismo. Near-miss
+    diagnostics (overlap 0–50%) para UI hint "might be same role"
+    sin auto-merge. Sort final: start_date desc NULLS LAST, id asc.
+    13 tests: ADR tests 12–16 + adversariales (null company/title/
+    dates, sin candidatos a mergear, re-ordering invariance).
+  - **Sub-B** (`d3e8f03`→`298b151`): `src/lib/matching/years-calculator.ts`
+    - `date-intervals.ts` primitives compartidas. `yearsForSkill(skillId,
+experiences, {now})` → sweep-line merge de intervalos de
+      experiencias `kind='work'` con ese skill_id (null skill_id nunca
+      suma, ADR-015 §1 invariant). 13 tests: ADR tests 1–6 + adversariales
+      (null start/end, end ≤ start data bug, contiguous intervals,
+      gap counting).
+  - **Sub-C** (`6e9434f`→`904ba54`): `src/lib/matching/score-aggregator.ts`
+    pure `aggregateScore(jobQuery, candidate, {now})`. Per-requirement
+    breakdown (candidate_years, years_ratio, contribution, status,
+    evidence). Must-have gate rule: `must_have && skill_id !== null &&
+ratio === 0` → failed; unresolved skill_id must-have NO falla
+    gate (catalog drift no debe ocultar candidatos silenciosamente,
+    ADR-015 §Consecuencias). Weights 2.0/1.0 normalizados, language
+    delta ±5/-10, seniority delta ±5/0, clamp [0,100]. 13 tests:
+    ADR tests 1, 7–11 + adversariales (partial ratio, empty reqs,
+    unresolved must-have gate-safe, clamp).
+  - **Sub-D** (`de91899`→`072c0dd`): `src/lib/matching/ranker.ts`
+    `DeterministicRanker` implements `Ranker`. Orquesta: aggregateScore
+    por candidato con catalogSnapshotAt como now, sort (total_score
+    desc, candidate_id asc). Idempotente (ADR test 21). Diagnostics
+    vacío por ahora; sub-bloques F4-008 wirean variant-merge y FTS
+    fallback (ADR-016).
+
+- **F4-007 bis description_tsv generated column** ✅ done — 2026-04-21 —
+  `47889cb`..`a7146fa`. Migración `20260420000009_candidate_experiences_description_tsv.sql`
+  agrega columna `description_tsv tsvector GENERATED ALWAYS AS
+(to_tsvector('simple', coalesce(description, ''))) STORED` +
+  `idx_candidate_experiences_description_tsv` GIN. Integration test
+  `tests/integration/db/candidate-experiences-description-tsv.test.ts`
+  valida match por palabra, miss, y null description → tsvector vacío.
+  Prerequisito de F4-008 bis (fallback FTS ADR-016).
+
+- **F4-006 DecompositionProvider + job_queries** ✅ done — 2026-04-20 —
+  `98dfb41`..`1cff526`. Sub-bloques RED→GREEN consolidados en sesión
+  previa: provider interface + stub + OpenAI provider + prompts +
+  orquestador + API route. Ver git log para detalle por sub-bloque.
 
 - **F4-005 Derivación experiences + experience_skills** ✅ done — 2026-04-20 —
   `66e2045`..`685222a`.
