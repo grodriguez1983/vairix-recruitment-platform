@@ -5,12 +5,42 @@
 > el git log).
 
 **Última actualización**: 2026-04-20
-**Última sesión**: 2026-04-20 — **F4-004 cerrado**: ExtractionProvider + OpenAI/Stub + worker + CLI. 4 sub-bloques RED→GREEN (types/Zod + stub, provider OpenAI + prompt v1, hash + worker + integration suite, CLI `pnpm extract:cvs`). 47 unit tests + 3 integration tests verde, unit suite 335/335. ADR-012 §6 implementado salvo el parser determinístico de LinkedIn (explicitado como Fase 2+). Siguiente: F4-005 (derivación de experiences + experience_skills desde `raw_output`).
+**Última sesión**: 2026-04-20 — **F4-005 cerrado**: derivación de experiences + experience_skills desde `raw_output`. 3 sub-bloques RED→GREEN: sub-A función pura `deriveFromRawOutput` con stitching por `temp_key`; sub-B servicio `deriveExperiences(extractionId, deps)` con DI + idempotencia por `hasExistingExperiences`; sub-C wire al worker F4-004 (insertExtraction ahora retorna `{id}`, hook opcional, errors → sync_errors entity='cv_derivation') + CLI actualizado + integration e2e contra Supabase local (file → extract → derive → rows en SQL). 356 unit + 6 cv integration tests verde. Siguiente: F4-006 (DecompositionProvider + job_queries).
 **Fase activa**: **Fase 4 — Inteligencia** (eje matching). F1 fundación + F2/F3 slices previas siguen done.
 
 ---
 
 ## ✅ Completado
+
+- **F4-005 Derivación experiences + experience_skills** ✅ done — 2026-04-20 —
+  `66e2045`..`685222a`.
+  - **Sub-A** (`66e2045`→`f48777a`): `src/lib/cv/extraction/derivation.ts`
+    como pure function. `deriveFromRawOutput(raw_output, context, catalog)`
+    → `{ experiences, experienceSkills }`. Stitching por `temp_key`
+    (el `experience_id` real solo existe post-insert). Date shape fill:
+    `YYYY-MM → YYYY-MM-01`; null → null. Skills verbatim (ADR-012 §2
+    invariant), `skill_id` vía `resolveSkill` inyectado; hit → id +
+    marker `resolved_at`, miss → null/null. 10 unit tests.
+  - **Sub-B** (`348d3c4`→`f530da5`): `src/lib/cv/extraction/derive-experiences.ts`.
+    `deriveExperiences(extractionId, deps)` orquesta pure + DB.
+    `loadExtraction` → short-circuit si `hasExistingExperiences=true`
+    → `loadCatalog` una vez → `deriveFromRawOutput` →
+    `insertExperiences` → stitch real ids vía `temp_key` map →
+    `insertExperienceSkills` con `resolved_at` stamped real (ISO via
+    `deps.now()`, null para miss). Errors: missing extraction throws,
+    misstitch throws. 7 unit tests.
+  - **Sub-C** (`c606ce0`→`685222a`): worker `runCvExtractions`
+    firma cambiada — `insertExtraction` retorna `{id: string}`, deps
+    opcional `deriveExperiences?`, nuevos counters
+    `experiencesInserted` + `skillsInserted` + `derivationErrored`.
+    Derivation error después de insert exitoso → sync_errors
+    (entity='cv_derivation'), extracción persiste (idempotente por
+    content_hash). CLI `src/scripts/extract-cvs.ts` wirea
+    `buildDeriveDeps(db)` con loadCatalogSnapshot, insert positional
+    N=N guard. Integration e2e `tests/integration/cv/derive-experiences`:
+    2 tests — happy path (2 experiences + 3 skills con exact/alias/null)
+    e idempotencia (segundo run = 0 writes, listPending NOT IN + guard
+    derivación). 11 worker unit + 7 sub-B unit + 2 integration verde.
 
 - **F4-004 ExtractionProvider + persistencia** ✅ done — 2026-04-20 —
   `4c2e4d9`..`9383358`.
@@ -952,10 +982,14 @@ _(nada todavía)_
 
 ## ⏳ Próximo (top 3 del roadmap)
 
-1. **F4-005** — Derivación de experiences + experience_skills desde
-   `candidate_extractions.raw_output` (usa resolver de F4-002).
-2. **F4-006** — Job query decomposition (LLM → `job_queries`).
-3. **F4-007** — Variant merger + years calculator + ranker.
+1. **F4-006** — Job query decomposition (`DecompositionProvider` +
+   `OpenAiDecompositionProvider`, `gpt-4o-mini`, persist a
+   `job_queries` con `decomposed_json` inmutable + `resolved_json`
+   mutable, ADR-014).
+2. **F4-007** — Variant merger + years calculator + ranker
+   determinístico (ADR-015, depende F4-005 + F4-006).
+3. **F4-007bis** — `candidate_experiences.description_tsv` migración
+   aditiva (ADR-016 §3, habilita FTS en evidence panel).
 
 Ver `docs/roadmap.md` para el plan completo de F4-001..F4-009 con
 prompts listos.
