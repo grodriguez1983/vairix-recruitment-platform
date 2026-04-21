@@ -7,6 +7,7 @@ import Link from 'next/link';
 
 import { requireRole } from '@/lib/auth/require';
 import { countNeedsReview } from '@/lib/needs-review/service';
+import { countUncatalogedRows } from '@/lib/skills/uncataloged';
 import { createClient } from '@/lib/supabase/server';
 import { countSyncErrors } from '@/lib/sync-errors/service';
 
@@ -19,9 +20,10 @@ export const dynamic = 'force-dynamic';
 export default async function AdminPage(): Promise<JSX.Element> {
   await requireRole('admin');
   const supabase = createClient();
-  const [unresolvedSyncErrors, pendingNeedsReview] = await Promise.all([
+  const [unresolvedSyncErrors, pendingNeedsReview, uncatalogedSkills] = await Promise.all([
     countSyncErrors(supabase).catch(() => 0),
     countNeedsReview(supabase).catch(() => 0),
+    countUncatalogedRows(supabase).catch(() => 0),
   ]);
 
   return (
@@ -76,6 +78,30 @@ export default async function AdminPage(): Promise<JSX.Element> {
               }
             >
               {pendingNeedsReview} pending
+            </span>
+          </div>
+        </Link>
+        <Link
+          href="/admin/skills/uncataloged"
+          className="rounded-lg border border-border bg-surface p-5 transition-colors hover:border-accent/40"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="font-display text-sm font-semibold text-text-primary">
+                Uncataloged skills
+              </h2>
+              <p className="mt-1 text-xs text-text-muted">
+                Skill strings that don&apos;t resolve against the catalog.
+              </p>
+            </div>
+            <span
+              className={
+                uncatalogedSkills > 0
+                  ? 'rounded-full bg-warning/10 px-2 py-0.5 font-mono text-[10px] font-medium text-warning'
+                  : 'rounded-full bg-bg px-2 py-0.5 font-mono text-[10px] text-text-muted'
+              }
+            >
+              {uncatalogedSkills} unresolved
             </span>
           </div>
         </Link>
