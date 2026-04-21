@@ -1,5 +1,5 @@
 /**
- * `preFilterByMustHave` — F4-008 sub-B (RED stub).
+ * `preFilterByMustHave` — F4-008 sub-B.
  *
  * Narrows the candidate pool to those who have at least one
  * `experience_skills` row per resolved must-have skill, *before*
@@ -18,9 +18,20 @@ export interface PreFilterByMustHaveDeps {
 }
 
 export async function preFilterByMustHave(
-  _jobQuery: ResolvedDecomposition,
-  _tenantId: string | null,
-  _deps: PreFilterByMustHaveDeps,
+  jobQuery: ResolvedDecomposition,
+  tenantId: string | null,
+  deps: PreFilterByMustHaveDeps,
 ): Promise<string[]> {
-  throw new Error('preFilterByMustHave: not implemented (F4-008 sub-B RED)');
+  const resolvedMustHaveSkillIds: string[] = [];
+  for (const req of jobQuery.requirements) {
+    if (req.must_have && req.skill_id !== null) {
+      resolvedMustHaveSkillIds.push(req.skill_id);
+    }
+  }
+
+  if (resolvedMustHaveSkillIds.length === 0) {
+    return deps.fetchAllCandidateIds(tenantId);
+  }
+
+  return deps.fetchCandidatesWithAllSkills(resolvedMustHaveSkillIds, tenantId);
 }
