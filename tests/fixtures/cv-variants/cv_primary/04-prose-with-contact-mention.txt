@@ -1,0 +1,18 @@
+
+Camila Suárez
+DevOps Engineer
+
+Please contact me at camila.suarez@example.com or +54 911 2222 2222 for
+any inquiries regarding the Experience section of this CV.
+
+My Education at the Universidad Tecnológica Nacional (2014 - 2019)
+includes a thesis on Kubernetes operator patterns.
+
+Historia laboral
+— Phi Systems (2021 - 2024): Platform Engineer. Built the internal
+  developer platform on top of Kubernetes and Argo.
+— Chi Cloud (2019 - 2021): SRE. Owned the observability stack.
+
+Certificaciones: CKA (2022), CKAD (2023), Terraform Associate (2024).
+
+Idiomas: español nativo, inglés avanzado.

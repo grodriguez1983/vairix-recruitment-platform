@@ -1,0 +1,26 @@
+
+
+Contact
+ana.perez@example.com
++54 11 4444 4444
+
+Top Skills
+Python
+Django
+PostgreSQL
+
+Experience
+Zeta Corp
+Senior Backend Engineer
+August 2020 - Present (4 years 8 months)
+Owner of the payments platform.
+
+Eta SRL
+Backend Engineer
+February 2017 - July 2020 (3 years 5 months)
+Built the reporting pipeline on Airflow.
+
+Education
+Universidad Nacional de La Plata
+Licenciatura en Informática
+2012 - 2017

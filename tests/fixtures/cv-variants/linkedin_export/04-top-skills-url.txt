@@ -1,0 +1,20 @@
+
+
+Pablo Ramírez
+Full Stack Engineer at Theta Technologies
+
+Top Skills
+JavaScript
+Vue.js
+AWS
+
+linkedin.com/in/pablo-ramirez-dev
+
+Summary
+Full-stack engineer with focus on frontend architecture and cloud infrastructure.
+
+Experience at Theta includes leading the migration to micro-frontends and
+introducing contract testing between services.
+
+Prior to Theta, worked at Iota building the checkout experience for an
+e-commerce platform that served 2M MAU.

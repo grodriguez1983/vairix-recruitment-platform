@@ -1,0 +1,28 @@
+
+NICOLÁS MARTÍNEZ
+Data Scientist | Machine Learning Engineer
+nicolas.martinez@example.com | +54 11 3333 3333 | Ciudad Autónoma de Buenos Aires
+
+PROFESSIONAL SUMMARY
+Data scientist with 8+ years building production ML systems. Shipped
+recommendation engines serving 10M+ daily active users. Specialized in
+NLP and recommendation systems.
+
+WORK HISTORY
+
+Sigma Tech | Lead Data Scientist | 2021 - 2024
+- Built end-to-end recommendation pipeline on Databricks.
+- Mentored 4 junior data scientists.
+
+Tau Analytics | Senior Data Scientist | 2018 - 2021
+- Designed churn prediction models (precision 0.87).
+
+Upsilon AI | Data Scientist | 2016 - 2018
+- Developed NER models for Spanish text corpora.
+
+EDUCATION
+MSc in Machine Learning, Universidad de San Andrés, 2014 - 2016
+Licenciatura en Matemática, UBA, 2008 - 2014
+
+SKILLS
+Python, PyTorch, TensorFlow, SQL, Databricks, Kubernetes, MLflow

@@ -1,0 +1,12 @@
+
+Federico Luna — Backend Engineer — federico.luna@example.com
+
+Experiencia
+Psi Corp (2022 - 2024) · Backend Engineer, Node.js + PostgreSQL
+Omega SA (2020 - 2022) · Backend Engineer Jr, Ruby on Rails
+
+Estudios
+Universidad Nacional del Litoral · Ing. en Sistemas · 2015 - 2020
+
+Skills
+Node.js, TypeScript, PostgreSQL, Redis, Docker

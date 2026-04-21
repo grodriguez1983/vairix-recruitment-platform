@@ -1,0 +1,34 @@
+
+
+Contact
+maria.gomez@example.com
+www.linkedin.com/in/maria-gomez-dev
+
+Top Skills
+TypeScript
+React
+Node.js
+
+Languages
+Spanish (Native or Bilingual)
+English (Full Professional)
+
+Certifications
+AWS Certified Solutions Architect
+
+Experience
+Acme Corp
+Staff Software Engineer
+February 2021 - Present (5 years 2 months)
+Buenos Aires, Argentina
+Led the migration of the core pipeline to a streaming architecture.
+
+Beta Labs
+Senior Engineer
+June 2018 - January 2021 (2 years 8 months)
+Backend services on Node.js and Postgres.
+
+Education
+Universidad de Buenos Aires
+Ingeniería en Sistemas de Información
+2014 - 2019

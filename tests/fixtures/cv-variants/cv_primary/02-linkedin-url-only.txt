@@ -1,0 +1,20 @@
+
+Valentina Torres — Frontend Developer
+
+Contactos: valentina.torres@example.com
+LinkedIn: linkedin.com/in/valentina-torres
+GitHub: github.com/valentina-torres
+
+Perfil profesional
+Frontend developer con 6 años de experiencia en React y TypeScript.
+Experiencia liderando migraciones de legacy a stacks modernos.
+
+Experiencia
+2022 – presente · Omicron Labs — Senior Frontend Engineer
+2019 – 2022 · Pi Digital — Frontend Engineer
+2017 – 2019 · Rho Studios — Junior Frontend Developer
+
+Formación
+2012 – 2017 · UADE — Lic. en Sistemas
+
+Idiomas: Español (nativo), Inglés (avanzado), Portugués (intermedio)

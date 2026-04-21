@@ -1,0 +1,24 @@
+
+Juan Carlos Pérez
+Senior Software Engineer
+
+Perfil
+Ingeniero con 10 años de experiencia en backend distribuido y sistemas
+de alta concurrencia. Apasionado por la observabilidad y la calidad del
+código.
+
+Experiencia profesional
+2020 — 2024 · Mu Corp — Tech Lead
+  Lideré el equipo de plataforma (6 personas). Rediseño del servicio de
+  autenticación con reducción del 40% en latencia p99.
+
+2017 — 2020 · Nu SA — Senior Engineer
+  Construcción del pipeline de datos en Apache Beam.
+
+2014 — 2017 · Xi SRL — Engineer
+  Desarrollo de APIs REST sobre Ruby on Rails.
+
+Educación
+2008 — 2014 · Universidad Nacional de Rosario — Ing. en Sistemas
+
+Contacto: juan.perez@example.com · +54 341 555 5555
