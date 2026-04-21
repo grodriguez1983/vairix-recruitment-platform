@@ -23,8 +23,11 @@
  */
 import type { CatalogSnapshot } from '../../skills/resolver';
 
+import { DecompositionError } from './errors';
+import { decompositionContentHash } from './hash';
+import { preprocess } from './preprocess';
 import type { DecompositionProvider } from './provider';
-import type { ResolvedDecomposition } from './resolve-requirements';
+import { resolveRequirements, type ResolvedDecomposition } from './resolve-requirements';
 import type { DecompositionResult } from './types';
 
 export interface JobQueryInsertRow {
@@ -68,10 +71,106 @@ export interface DecomposeJobQueryResult {
   unresolved_skills: string[];
 }
 
-// RED stub.
+/**
+ * ZodError detection without importing zod here — the service must
+ * not couple to the provider's validation library. Any error whose
+ * `name` is 'ZodError' is a schema-shape failure (our two providers
+ * both rely on Zod).
+ */
+function isZodError(e: unknown): boolean {
+  return e instanceof Error && e.name === 'ZodError';
+}
+
+/**
+ * Verifies ADR-014 §3 rule 3: evidence_snippet must be a literal
+ * substring of the preprocessed raw_text. A mismatch means the LLM
+ * paraphrased or fabricated the evidence — we refuse to persist the
+ * row.
+ */
+function assertLiteralSnippets(decomposed: DecompositionResult, normalized: string): void {
+  for (const req of decomposed.requirements) {
+    if (!normalized.includes(req.evidence_snippet)) {
+      throw new DecompositionError(
+        'hallucinated_snippet',
+        `evidence_snippet for ${req.skill_raw} is not a literal substring of raw_text`,
+      );
+    }
+  }
+}
+
+function sameSet(a: readonly string[], b: readonly string[]): boolean {
+  if (a.length !== b.length) return false;
+  const sa = [...a].sort();
+  const sb = [...b].sort();
+  for (let i = 0; i < sa.length; i += 1) {
+    if (sa[i] !== sb[i]) return false;
+  }
+  return true;
+}
+
 export async function decomposeJobQuery(
-  _rawText: string,
-  _deps: DecomposeJobQueryDeps,
+  rawText: string,
+  deps: DecomposeJobQueryDeps,
 ): Promise<DecomposeJobQueryResult> {
-  throw new Error('decomposeJobQuery: not implemented');
+  const normalized = preprocess(rawText);
+  if (normalized.length === 0) {
+    throw new DecompositionError('empty_input', 'raw_text is empty after preprocess');
+  }
+
+  const { model, promptVersion } = deps.provider;
+  const hash = decompositionContentHash(normalized, model, promptVersion);
+
+  const cached = await deps.findByHash(hash);
+  const catalog = await deps.loadCatalog();
+  const now = deps.now;
+
+  if (cached !== null) {
+    const { resolved, unresolved_skills } = resolveRequirements(
+      cached.decomposed_json,
+      catalog,
+      now === undefined ? {} : { now },
+    );
+    if (!sameSet(cached.unresolved_skills, unresolved_skills)) {
+      await deps.updateResolved(cached.id, resolved, unresolved_skills);
+    }
+    return { query_id: cached.id, cached: true, resolved, unresolved_skills };
+  }
+
+  let decomposed: DecompositionResult;
+  try {
+    decomposed = await deps.provider.decompose(rawText);
+  } catch (e) {
+    if (isZodError(e)) {
+      throw new DecompositionError(
+        'schema_violation',
+        e instanceof Error ? e.message : 'schema violation',
+        { cause: e },
+      );
+    }
+    throw new DecompositionError('provider_failure', e instanceof Error ? e.message : String(e), {
+      cause: e,
+    });
+  }
+
+  assertLiteralSnippets(decomposed, normalized);
+
+  const { resolved, unresolved_skills } = resolveRequirements(
+    decomposed,
+    catalog,
+    now === undefined ? {} : { now },
+  );
+
+  const inserted = await deps.insertJobQuery({
+    content_hash: hash,
+    raw_text: rawText,
+    model,
+    prompt_version: promptVersion,
+    decomposed_json: decomposed,
+    resolved_json: resolved,
+    unresolved_skills,
+    created_by: deps.createdBy,
+    tenant_id: deps.tenantId,
+  });
+
+  return { query_id: inserted.id, cached: false, resolved, unresolved_skills };
 }
