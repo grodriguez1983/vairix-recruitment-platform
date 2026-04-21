@@ -17,10 +17,10 @@ export type Database = {
     Functions: {
       graphql: {
         Args: {
-          operationName?: string
           extensions?: Json
           variables?: Json
           query?: string
+          operationName?: string
         }
         Returns: Json
       }
@@ -1754,6 +1754,18 @@ export type Database = {
             }
             Returns: unknown
           }
+      match_rescue_fts_search: {
+        Args: {
+          candidate_ids_in: string[]
+          skill_slugs_in: string[]
+        }
+        Returns: {
+          snippet: string
+          ts_rank: number
+          candidate_id: string
+          skill_slug: string
+        }[]
+      }
       resolve_skill: {
         Args: {
           raw: string

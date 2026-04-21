@@ -8,6 +8,11 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import {
+  fetchFtsRescues,
+  type FtsHit,
+  type FtsRescueCandidate,
+} from '../rag/complementary-signals';
 import type { ResolvedDecomposition } from '../rag/decomposition/resolve-requirements';
 
 import type { CandidateExperienceRow, CandidateLanguageRow } from './load-candidate-aggregates';
@@ -189,6 +194,69 @@ export function buildRunMatchJobDeps(
         })
         .eq('id', runId);
       if (error) throw new Error(`failMatchRun: ${error.message}`);
+    },
+
+    rescueFailedCandidates: async (params) => {
+      if (params.failed.length === 0) return { rescues_inserted: 0 };
+
+      // Resolve skill_id → slug via skills_catalog (ADR-013).
+      const allIds = Array.from(new Set(params.failed.flatMap((f) => f.missing_skill_ids)));
+      if (allIds.length === 0) return { rescues_inserted: 0 };
+      const { data: skills, error: skillErr } = await supabase
+        .from('skills_catalog')
+        .select('id, slug')
+        .in('id', allIds);
+      if (skillErr) throw new Error(`rescueFailedCandidates: skills_catalog: ${skillErr.message}`);
+      const idToSlug = new Map<string, string>();
+      for (const s of skills ?? []) idToSlug.set(s.id as string, s.slug as string);
+
+      const candidates: FtsRescueCandidate[] = params.failed.map((f) => ({
+        candidate_id: f.candidate_id,
+        missing_skill_slugs: f.missing_skill_ids
+          .map((id) => idToSlug.get(id))
+          .filter((s): s is string => typeof s === 'string'),
+      }));
+
+      // Inject the RPC-backed FTS query into the pure service.
+      const rescues = await fetchFtsRescues(candidates, {
+        queryFts: async ({ candidateIds, skillSlugs }) => {
+          if (candidateIds.length === 0 || skillSlugs.length === 0) return [];
+          const { data, error } = await supabase.rpc('match_rescue_fts_search', {
+            candidate_ids_in: candidateIds,
+            skill_slugs_in: skillSlugs,
+          });
+          if (error) throw new Error(`match_rescue_fts_search: ${error.message}`);
+          const rows = (data ?? []) as Array<{
+            candidate_id: string;
+            skill_slug: string;
+            ts_rank: number | string;
+            snippet: string;
+          }>;
+          return rows.map(
+            (r): FtsHit => ({
+              candidate_id: r.candidate_id,
+              skill_slug: r.skill_slug,
+              ts_rank: Number(r.ts_rank),
+              snippet: r.snippet,
+            }),
+          );
+        },
+      });
+
+      if (rescues.length === 0) return { rescues_inserted: 0 };
+
+      const { error: insertErr } = await supabase.from('match_rescues').insert(
+        rescues.map((r) => ({
+          match_run_id: params.run_id,
+          candidate_id: r.candidate_id,
+          tenant_id: params.tenant_id,
+          missing_skills: r.missing_skills,
+          fts_snippets: r.fts_snippets,
+          fts_max_rank: r.fts_max_rank,
+        })),
+      );
+      if (insertErr) throw new Error(`rescueFailedCandidates: insert: ${insertErr.message}`);
+      return { rescues_inserted: rescues.length };
     },
 
     now: options.now,
