@@ -105,6 +105,21 @@ export default async function AdminPage(): Promise<JSX.Element> {
             </span>
           </div>
         </Link>
+        <Link
+          href="/admin/skills"
+          className="rounded-lg border border-border bg-surface p-5 transition-colors hover:border-accent/40"
+        >
+          <div className="flex items-start justify-between gap-3">
+            <div>
+              <h2 className="font-display text-sm font-semibold text-text-primary">
+                Skills catalog
+              </h2>
+              <p className="mt-1 text-xs text-text-muted">
+                Canonical skills + aliases. Edit, deprecate, manage.
+              </p>
+            </div>
+          </div>
+        </Link>
       </section>
     </div>
   );
