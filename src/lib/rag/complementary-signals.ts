@@ -81,15 +81,43 @@ export interface FetchEvidenceSnippetsOptions {
  *
  * No threshold: the ranker already decided the candidate is worth
  * showing; the panel just explains why. Empty result is fine.
- *
- * Stub for RED; implementation arrives in the GREEN commit.
  */
 export async function fetchEvidenceSnippets(
-  _input: EvidenceSnippetInput,
-  _deps: ComplementarySignalsDeps,
-  _options: FetchEvidenceSnippetsOptions = {},
+  input: EvidenceSnippetInput,
+  deps: ComplementarySignalsDeps,
+  options: FetchEvidenceSnippetsOptions = {},
 ): Promise<EvidenceSnippetRow> {
-  throw new Error('fetchEvidenceSnippets: not implemented (RED)');
+  const limit = options.limit ?? EVIDENCE_SNIPPET_LIMIT;
+  const uniqueSlugs = Array.from(new Set(input.skill_slugs));
+  if (uniqueSlugs.length === 0) {
+    return { candidate_id: input.candidate_id, snippets: {} };
+  }
+
+  const allowed = new Set(uniqueSlugs);
+  const hits = await deps.queryFts({
+    candidateIds: [input.candidate_id],
+    skillSlugs: uniqueSlugs,
+  });
+
+  const bySkill = new Map<string, GroupedHit[]>();
+  for (const hit of hits) {
+    if (hit.candidate_id !== input.candidate_id) continue; // defensive
+    if (!allowed.has(hit.skill_slug)) continue;
+    const list = bySkill.get(hit.skill_slug) ?? [];
+    list.push({ ts_rank: hit.ts_rank, snippet: hit.snippet });
+    bySkill.set(hit.skill_slug, list);
+  }
+
+  const snippets: Record<string, string[]> = {};
+  for (const [slug, group] of bySkill) {
+    const sorted = [...group].sort((a, b) => {
+      if (b.ts_rank !== a.ts_rank) return b.ts_rank - a.ts_rank;
+      return a.snippet.localeCompare(b.snippet);
+    });
+    snippets[slug] = sorted.slice(0, limit).map((g) => g.snippet);
+  }
+
+  return { candidate_id: input.candidate_id, snippets };
 }
 
 export async function fetchFtsRescues(
