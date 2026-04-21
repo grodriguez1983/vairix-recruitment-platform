@@ -9,7 +9,14 @@
  * All I/O is injected so the unit suite doesn't need Supabase. The
  * integration test (sub-D) exercises the real SQL path under RLS.
  */
-import type { CandidateAggregate, ExperienceKind, ExperienceSkill, SourceVariant } from './types';
+import { mergeVariants } from './variant-merger';
+import type {
+  CandidateAggregate,
+  ExperienceInput,
+  ExperienceKind,
+  ExperienceSkill,
+  SourceVariant,
+} from './types';
 
 export interface CandidateExperienceRow {
   candidate_id: string;
@@ -35,9 +42,52 @@ export interface LoadCandidateAggregatesDeps {
   loadLanguages: (candidateIds: string[]) => Promise<CandidateLanguageRow[]>;
 }
 
+function toExperienceInput(row: CandidateExperienceRow): ExperienceInput {
+  return {
+    id: row.id,
+    source_variant: row.source_variant,
+    kind: row.kind,
+    company: row.company,
+    title: row.title,
+    start_date: row.start_date,
+    end_date: row.end_date,
+    description: row.description,
+    skills: row.skills,
+  };
+}
+
 export async function loadCandidateAggregates(
-  _candidateIds: string[],
-  _deps: LoadCandidateAggregatesDeps,
+  candidateIds: string[],
+  deps: LoadCandidateAggregatesDeps,
 ): Promise<CandidateAggregate[]> {
-  throw new Error('loadCandidateAggregates: not implemented (F4-008 sub-A RED)');
+  if (candidateIds.length === 0) return [];
+
+  const [experienceRows, languageRows] = await Promise.all([
+    deps.loadExperiences(candidateIds),
+    deps.loadLanguages(candidateIds),
+  ]);
+
+  const expByCandidate = new Map<string, ExperienceInput[]>();
+  for (const row of experienceRows) {
+    const list = expByCandidate.get(row.candidate_id) ?? [];
+    list.push(toExperienceInput(row));
+    expByCandidate.set(row.candidate_id, list);
+  }
+
+  const langByCandidate = new Map<string, Array<{ name: string; level: string | null }>>();
+  for (const row of languageRows) {
+    const list = langByCandidate.get(row.candidate_id) ?? [];
+    list.push({ name: row.name, level: row.level });
+    langByCandidate.set(row.candidate_id, list);
+  }
+
+  return candidateIds.map((candidate_id) => {
+    const exps = expByCandidate.get(candidate_id) ?? [];
+    const { experiences } = mergeVariants(exps);
+    return {
+      candidate_id,
+      merged_experiences: experiences,
+      languages: langByCandidate.get(candidate_id) ?? [],
+    };
+  });
 }
