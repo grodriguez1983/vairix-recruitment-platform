@@ -47,10 +47,53 @@ export interface PreFilterByMustHaveResult {
 }
 
 export async function preFilterByMustHave(
-  _jobQuery: ResolvedDecomposition,
-  _tenantId: string | null,
-  _deps: PreFilterByMustHaveDeps,
+  jobQuery: ResolvedDecomposition,
+  tenantId: string | null,
+  deps: PreFilterByMustHaveDeps,
 ): Promise<PreFilterByMustHaveResult> {
-  // [RED] stub — GREEN commit fills this in.
-  return { included: [], excluded: [] };
+  const resolvedMustHaveSkillIds: string[] = [];
+  for (const req of jobQuery.requirements) {
+    if (req.must_have && req.skill_id !== null) {
+      resolvedMustHaveSkillIds.push(req.skill_id);
+    }
+  }
+
+  if (resolvedMustHaveSkillIds.length === 0) {
+    const included = await deps.fetchAllCandidateIds(tenantId);
+    return { included, excluded: [] };
+  }
+
+  const mustHaveSet = new Set(resolvedMustHaveSkillIds);
+  const mustHaveCount = mustHaveSet.size;
+
+  const [allIds, coverageRows] = await Promise.all([
+    deps.fetchAllCandidateIds(tenantId),
+    deps.fetchCandidateMustHaveCoverage(resolvedMustHaveSkillIds, tenantId),
+  ]);
+
+  const coverageByCandidate = new Map<string, Set<string>>();
+  for (const row of coverageRows) {
+    const covered = new Set<string>();
+    for (const skillId of row.covered_skill_ids) {
+      if (mustHaveSet.has(skillId)) covered.add(skillId);
+    }
+    coverageByCandidate.set(row.candidate_id, covered);
+  }
+
+  const included: string[] = [];
+  const excluded: PreFilterExcludedCandidate[] = [];
+  for (const candidateId of allIds) {
+    const covered = coverageByCandidate.get(candidateId) ?? new Set<string>();
+    if (covered.size === mustHaveCount) {
+      included.push(candidateId);
+      continue;
+    }
+    const missing: string[] = [];
+    for (const skillId of resolvedMustHaveSkillIds) {
+      if (!covered.has(skillId)) missing.push(skillId);
+    }
+    excluded.push({ candidate_id: candidateId, missing_must_have_skill_ids: missing });
+  }
+
+  return { included, excluded };
 }
