@@ -17,7 +17,7 @@
  */
 import type { ResolvedDecomposition } from '../rag/decomposition/resolve-requirements';
 
-import type { PreFilterByMustHaveResult } from './pre-filter';
+import type { PreFilterByMustHaveResult, PreFilterExcludedCandidate } from './pre-filter';
 import type {
   CandidateAggregate,
   CandidateScore,
@@ -114,6 +114,31 @@ function collectFailedCandidates(results: CandidateScore[]): FailedCandidateInpu
   return out;
 }
 
+/**
+ * Merges gate-failed candidates from the ranker with the pre-filter
+ * excluded pool. The two sets are disjoint by construction (excluded
+ * candidates never reach the ranker) so no dedup is required, but we
+ * guard for it defensively anyway.
+ */
+function mergeRescueInputs(
+  gateFailed: FailedCandidateInput[],
+  preFilterExcluded: PreFilterExcludedCandidate[],
+): FailedCandidateInput[] {
+  const byCandidate = new Map<string, FailedCandidateInput>();
+  for (const gf of gateFailed) {
+    byCandidate.set(gf.candidate_id, gf);
+  }
+  for (const pe of preFilterExcluded) {
+    if (pe.missing_must_have_skill_ids.length === 0) continue;
+    if (byCandidate.has(pe.candidate_id)) continue;
+    byCandidate.set(pe.candidate_id, {
+      candidate_id: pe.candidate_id,
+      missing_skill_ids: pe.missing_must_have_skill_ids,
+    });
+  }
+  return Array.from(byCandidate.values());
+}
+
 function toMatchResultRow(
   score: CandidateScore,
   tenantId: string | null,
@@ -174,10 +199,14 @@ export async function runMatchJob(
 
     // Post-run rescue (ADR-016 §1). Orthogonal to the ranking —
     // errors are swallowed so a flaky FTS never fails the run.
+    // F4-008 ter: also rescue the pre-filter excluded pool, which
+    // never reached the ranker but may have the missing must-have
+    // in files.parsed_text.
     let rescuesInserted: number | undefined;
     if (deps.rescueFailedCandidates !== undefined) {
       rescuesInserted = 0;
-      const failed = collectFailedCandidates(rankResult.results);
+      const gateFailed = collectFailedCandidates(rankResult.results);
+      const failed = mergeRescueInputs(gateFailed, preFilterResult.excluded);
       if (failed.length > 0) {
         try {
           const r = await deps.rescueFailedCandidates({
