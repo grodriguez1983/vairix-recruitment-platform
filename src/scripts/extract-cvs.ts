@@ -39,6 +39,12 @@ import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 import { createOpenAiExtractionProvider } from '../lib/cv/extraction/providers/openai-extractor';
 import { runCvExtractions, type CvExtractionWorkerDeps } from '../lib/cv/extraction/worker';
 import type { ExtractionProvider } from '../lib/cv/extraction/provider';
+import {
+  deriveExperiences,
+  type DeriveExperiencesDeps,
+} from '../lib/cv/extraction/derive-experiences';
+import type { ExtractionResult, SourceVariant } from '../lib/cv/extraction/types';
+import { loadCatalogSnapshot } from '../lib/skills/catalog-loader';
 
 function requireEnv(name: string): string {
   const v = process.env[name];
@@ -123,7 +129,77 @@ function buildDeps(db: SupabaseClient, provider: ExtractionProvider): CvExtracti
       });
       if (error) throw new Error(error.message);
     },
+    deriveExperiences: (extractionId) => deriveExperiences(extractionId, buildDeriveDeps(db)),
     provider,
+  };
+}
+
+/**
+ * Wires the F4-005 derivation service to Supabase. Runs with the
+ * same service-role client as the worker (cross-tenant ETL job,
+ * ADR-003).
+ */
+function buildDeriveDeps(db: SupabaseClient): DeriveExperiencesDeps {
+  return {
+    loadExtraction: async (id) => {
+      const { data, error } = await db
+        .from('candidate_extractions')
+        .select('candidate_id, source_variant, raw_output')
+        .eq('id', id)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      if (data === null) return null;
+      return {
+        candidate_id: data.candidate_id as string,
+        source_variant: data.source_variant as SourceVariant,
+        raw_output: data.raw_output as ExtractionResult,
+      };
+    },
+    loadCatalog: () => loadCatalogSnapshot(db),
+    hasExistingExperiences: async (extractionId) => {
+      const { data, error } = await db
+        .from('candidate_experiences')
+        .select('id')
+        .eq('extraction_id', extractionId)
+        .limit(1);
+      if (error) throw new Error(error.message);
+      return (data ?? []).length > 0;
+    },
+    insertExperiences: async (rows) => {
+      if (rows.length === 0) return [];
+      const payload = rows.map((r) => ({
+        candidate_id: r.candidate_id,
+        extraction_id: r.extraction_id,
+        source_variant: r.source_variant,
+        kind: r.kind,
+        company: r.company,
+        title: r.title,
+        start_date: r.start_date,
+        end_date: r.end_date,
+        description: r.description,
+      }));
+      const { data, error } = await db
+        .from('candidate_experiences')
+        .insert(payload)
+        .select('id, extraction_id, company, kind, start_date');
+      if (error || !data) throw new Error(error?.message ?? 'insertExperiences returned no rows');
+      // The worker guarantees same-order insert → we map positionally.
+      if (data.length !== rows.length) {
+        throw new Error(`insertExperiences: expected ${rows.length} rows, got ${data.length}`);
+      }
+      return data.map((d, i) => ({ temp_key: rows[i]!.temp_key, id: d.id as string }));
+    },
+    insertExperienceSkills: async (rows) => {
+      if (rows.length === 0) return;
+      const payload = rows.map((r) => ({
+        experience_id: r.experience_id,
+        skill_raw: r.skill_raw,
+        skill_id: r.skill_id,
+        resolved_at: r.resolved_at,
+      }));
+      const { error } = await db.from('experience_skills').insert(payload);
+      if (error) throw new Error(error.message);
+    },
   };
 }
 
@@ -146,7 +222,9 @@ async function main(): Promise<void> {
     console.log(
       `[extract:cvs] model=${model} promptVersion=${provider.promptVersion} ` +
         `processed=${stats.processed} extracted=${stats.extracted} ` +
-        `skipped=${stats.skipped} errored=${stats.errored}`,
+        `skipped=${stats.skipped} errored=${stats.errored} ` +
+        `experiences=${stats.experiencesInserted} skills=${stats.skillsInserted} ` +
+        `derivationErrored=${stats.derivationErrored}`,
     );
     process.exit(0);
   } catch (e) {

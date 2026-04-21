@@ -96,11 +96,9 @@ export async function runCvExtractions(
   let extracted = 0;
   let skipped = 0;
   let errored = 0;
-  // F4-005 sub-C wires this; current body does not invoke the
-  // optional `deriveExperiences` dep yet — RED for the new tests.
-  const experiencesInserted = 0;
-  const skillsInserted = 0;
-  const derivationErrored = 0;
+  let experiencesInserted = 0;
+  let skillsInserted = 0;
+  let derivationErrored = 0;
 
   for (const row of pending) {
     const variant = classifyVariant(row.parsed_text).variant;
@@ -115,9 +113,10 @@ export async function runCvExtractions(
       continue;
     }
 
+    let insertedId: string | null = null;
     try {
       const rawOutput = await deps.provider.extract(row.parsed_text);
-      await deps.insertExtraction({
+      const inserted = await deps.insertExtraction({
         candidate_id: row.candidate_id,
         file_id: row.file_id,
         source_variant: variant,
@@ -126,6 +125,7 @@ export async function runCvExtractions(
         content_hash: hash,
         raw_output: rawOutput,
       });
+      insertedId = inserted.id;
       extracted += 1;
     } catch (e) {
       await deps.logRowError({
@@ -134,6 +134,22 @@ export async function runCvExtractions(
         message: e instanceof Error ? e.message : String(e),
       });
       errored += 1;
+      continue;
+    }
+
+    if (deps.deriveExperiences !== undefined && insertedId !== null) {
+      try {
+        const d = await deps.deriveExperiences(insertedId);
+        experiencesInserted += d.experiencesInserted;
+        skillsInserted += d.skillsInserted;
+      } catch (e) {
+        await deps.logRowError({
+          entity: 'cv_derivation',
+          entity_id: insertedId,
+          message: e instanceof Error ? e.message : String(e),
+        });
+        derivationErrored += 1;
+      }
     }
   }
 
