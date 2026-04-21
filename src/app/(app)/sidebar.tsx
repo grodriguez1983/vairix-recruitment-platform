@@ -23,6 +23,7 @@ const NAV_ITEMS: readonly NavItem[] = [
   { href: '/', label: 'Home' },
   { href: '/candidates', label: 'Candidates' },
   { href: '/search/hybrid', label: 'Search' },
+  { href: '/matching/new', label: 'Matching' },
   { href: '/shortlists', label: 'Shortlists' },
   { href: '/admin', label: 'Admin', adminOnly: true },
 ];

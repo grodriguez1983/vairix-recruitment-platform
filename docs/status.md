@@ -5,12 +5,91 @@
 > el git log).
 
 **Última actualización**: 2026-04-21
-**Última sesión**: 2026-04-21 — **F4-008 cerrado (sub-A..sub-D + integration e2e DoD)**. ADR-017 + migración `20260421000001_rls_match_results_insert_own_run.sql` desbloquean la persistencia de `match_results` por el recruiter dueño del run. Integration e2e (`tests/integration/matching/run-match-job.test.ts`) seedéa 20 candidates (5 strong / 10 medium / 5 missing must-have) → decompose stub → runMatchJob → asserts run completado + 15 match_results persistidos (5 excluidos por pre-filter), ranks 1..15 contiguos, scores monotónicos, top-5 = strong set, breakdown_json round-trip. **F4-006, F4-007 bis y F4-007 cerrados**. F4-006 sub-A..sub-D: DecompositionProvider (StubDecompositionProvider + OpenAIDecompositionProvider con prompt-v1), content_hash SHA-256 sobre (normalized_text ∥ model ∥ promptVersion) con NUL separator, `decomposeJobQuery(raw_text, deps)` idempotente por hash + resolución de catálogo + persist en `job_queries` + API route POST `/api/matching/decompose` con Zod schema + `requireAuth()`. F4-007 bis: migración `20260420000009_candidate_experiences_description_tsv.sql` + GIN index + integration test (match/miss/null). F4-007 sub-A..sub-D matching ranker: `date-intervals.ts` (MS_PER_YEAR, Interval, toInterval, overlapRatio) compartido; `variant-merger.ts` (284 LOC, COMPANY_SUFFIX_RE, titleCompatible lenient con substring + Jaccard ≥ 0.5, greedy best-match, near-miss diagnostics); `years-calculator.ts` sweep-line; `score-aggregator.ts` con must-have gate (resolved + ratio=0 → failed; unresolved skill_id NO falla gate — ADR-015 §Consecuencias), weights 2.0/1.0 normalizados, language bonus ±5/-10, seniority bucket (<2 junior, 2-5 semi, 5-10 senior, 10+ lead) ±5, clamp [0,100]; `ranker.ts` DeterministicRanker orquestador con sort (score desc, candidate_id asc), catalogSnapshotAt wired como now. 47 matching + 3 F4-007bis = 777 tests verde. Siguiente: F4-008 (API `/api/matching/run` + persistencia match_runs/match_results) y F4-008 bis (match_rescues + fallback FTS ADR-016).
+**Última sesión**: 2026-04-21 — **Block 1 (languages persistence) + Block 2 (F4-008 bis match_rescues + FTS fallback) + Block 3 (F4-009 UI) cerrados**. Block 1 (`ec53ed6`): `deriveLanguages` cableado en el worker de extracción + `candidate_languages` persistidas + `db-deps.loadLanguages` contra tabla real; 14 worker tests. Block 2 (`6921fe0`→`54825c4`): migraciones `20260421000004_match_rescues.sql` (tabla insert-only via trigger + PK compuesta), `20260421000005_rls_match_rescues.sql` (own-run-or-admin SELECT/INSERT paridad ADR-017; admin-only DELETE), `20260421000006_match_rescue_fts_search.sql` (RPC `security invoker` con ts_rank + ts_headline sobre `files.parsed_text`); servicio puro `src/lib/rag/complementary-signals.ts` con `FTS_RESCUE_THRESHOLD=0.1` + `EVIDENCE_SNIPPET_LIMIT=5` (9 tests); orchestrator `runMatchJob` extendido con `rescueFailedCandidates?` hook que swallowea errores (ADR-016: bucket ortogonal al ranking); `db-deps.rescueFailedCandidates` resuelve skill_id→slug via `skills_catalog`, invoca RPC, persiste en `match_rescues`; GET `/api/matching/runs/:id/rescues` bajo RLS. **Gap conocido** documentado en ADR-016 §"Gap conocido": el pre-filter actual excluye candidatos por catálogo antes del ranker, así que el bucket solo captura gate-failed con must-have parcial (no el caso canónico de "skill solo en parsed_text"); fix postergado a F4-008 ter. Block 3 (esta commit): 3 páginas server-rendered + 1 client form — `/matching/new` (paste JD → decompose → resolved panel con must/years/resolved badges + unresolved list → botón "run match" → redirect), `/matching/runs/:id` (metadata + results table con gate badge + score + drawer expandible con breakdown por skill e evidencia por experience), `/matching/runs/:id/rescues` (bucket FTS con highlighting `«`→`<mark>`). Sidebar extendido con enlace "Matching". RLS hace ownership; fetch de candidate names vía hydrate in-line. 564 unit + 148 integration tests verdes. ADR-017 + migración `20260421000001_rls_match_results_insert_own_run.sql` desbloquean la persistencia de `match_results` por el recruiter dueño del run. Integration e2e (`tests/integration/matching/run-match-job.test.ts`) seedéa 20 candidates (5 strong / 10 medium / 5 missing must-have) → decompose stub → runMatchJob → asserts run completado + 15 match_results persistidos (5 excluidos por pre-filter), ranks 1..15 contiguos, scores monotónicos, top-5 = strong set, breakdown_json round-trip. **F4-006, F4-007 bis y F4-007 cerrados**. F4-006 sub-A..sub-D: DecompositionProvider (StubDecompositionProvider + OpenAIDecompositionProvider con prompt-v1), content_hash SHA-256 sobre (normalized_text ∥ model ∥ promptVersion) con NUL separator, `decomposeJobQuery(raw_text, deps)` idempotente por hash + resolución de catálogo + persist en `job_queries` + API route POST `/api/matching/decompose` con Zod schema + `requireAuth()`. F4-007 bis: migración `20260420000009_candidate_experiences_description_tsv.sql` + GIN index + integration test (match/miss/null). F4-007 sub-A..sub-D matching ranker: `date-intervals.ts` (MS_PER_YEAR, Interval, toInterval, overlapRatio) compartido; `variant-merger.ts` (284 LOC, COMPANY_SUFFIX_RE, titleCompatible lenient con substring + Jaccard ≥ 0.5, greedy best-match, near-miss diagnostics); `years-calculator.ts` sweep-line; `score-aggregator.ts` con must-have gate (resolved + ratio=0 → failed; unresolved skill_id NO falla gate — ADR-015 §Consecuencias), weights 2.0/1.0 normalizados, language bonus ±5/-10, seniority bucket (<2 junior, 2-5 semi, 5-10 senior, 10+ lead) ±5, clamp [0,100]; `ranker.ts` DeterministicRanker orquestador con sort (score desc, candidate_id asc), catalogSnapshotAt wired como now. 47 matching + 3 F4-007bis = 777 tests verde. Siguiente: F4-008 (API `/api/matching/run` + persistencia match_runs/match_results) y F4-008 bis (match_rescues + fallback FTS ADR-016).
 **Fase activa**: **Fase 4 — Inteligencia** (eje matching). F1 fundación + F2/F3 slices previas siguen done.
 
 ---
 
 ## ✅ Completado
+
+- **F4-009 UI — matching flow** ✅ done — 2026-04-21 — Block 3 de
+  la sesión. 3 rutas nuevas bajo `src/app/(app)/matching/`:
+  - `/matching/new` (`page.tsx` + `new-match-form.tsx` client
+    component): textarea con límite 20k, POST
+    `/api/matching/decompose`, panel con seniority + languages +
+    requirements (must/years/category/evidence_snippet/resolved),
+    lista de `unresolved_skills`, botón "Run match" → POST
+    `/api/matching/run` → `router.push('/matching/runs/:id')`.
+  - `/matching/runs/[id]/page.tsx` + `results-table.tsx`: server
+    rendering bajo RLS, metadata (status, candidates_evaluated,
+    count, started_at), hidrata candidate names in-line, tabla con
+    rank + score + `must_have_gate` badge; click expande drawer
+    con breakdown (skill raw + must/unresolved pills + status +
+    years + ratio + contribution + evidence company/date_range),
+    language_match, seniority_match, link a `/candidates/:id`.
+    Link superior a `/matching/runs/:id/rescues` con count.
+  - `/matching/runs/[id]/rescues/page.tsx`: tabla ordenada por
+    `fts_max_rank` desc, snippet highlighting `«…»` →
+    `<mark class="bg-accent/20 text-accent">`, empty state con
+    mensaje ADR-016-aware.
+  - Sidebar (`src/app/(app)/sidebar.tsx`) extendido con
+    `{ href: '/matching/new', label: 'Matching' }` entre Search y
+    Shortlists.
+
+- **F4-008 bis — match_rescues + FTS fallback** ✅ done — 2026-04-21 —
+  Block 2 de la sesión. `6921fe0`..`54825c4`.
+  - Migraciones: `20260421000004_match_rescues.sql` (PK compuesta
+    (match_run_id, candidate_id) + trigger `enforce_match_rescues_insert_only`),
+    `20260421000005_rls_match_rescues.sql` (own-run-or-admin SELECT
+    - INSERT vía join a `match_runs.triggered_by`, parity con
+      ADR-017; admin-only DELETE; sin UPDATE),
+      `20260421000006_match_rescue_fts_search.sql` (RPC SQL stable
+      `security invoker` cross-joineando `candidate_ids × skill_slugs`
+      con `to_tsvector('simple',...)` + `plainto_tsquery` +
+      `ts_rank`::real + `ts_headline` con `StartSel=«,StopSel=»`).
+  - Servicio puro `src/lib/rag/complementary-signals.ts`:
+    `fetchFtsRescues(candidates, deps)` con constantes
+    `FTS_RESCUE_THRESHOLD=0.1` + `EVIDENCE_SNIPPET_LIMIT=5`, filtra
+    estrictamente `> threshold`, descarta cruzados, groupBy
+    `skill_slug` ordenado por ts_rank desc luego snippet asc,
+    orden determinístico por candidate_id asc. 9 unit tests.
+  - Orchestrator (`src/lib/matching/run-match-job.ts`): nuevo hook
+    opcional `rescueFailedCandidates?` invocado post-`completeMatchRun`
+    en try/catch swallow (bucket ortogonal al ranking, ADR-016 §1);
+    `collectFailedCandidates` filtra `must_have_gate='failed'` +
+    breakdown con `must_have && status !== 'match' && skill_id !== null`.
+    `rescues_inserted?: number` añadido al resultado.
+    4 tests nuevos; 13 totales en run-match-job.test.ts.
+  - Wiring (`src/lib/matching/db-deps.ts`): resuelve `skill_id` →
+    `skill_slug` via `skills_catalog`, invoca RPC
+    `match_rescue_fts_search` con cast `ts_rank` number|string →
+    Number, inserta en `match_rescues`.
+  - API route `src/app/api/matching/runs/[id]/rescues/route.ts`:
+    GET con 401/400/404/500 y shape
+    `{ run_id, rescues: [{ candidate_id, missing_skills,
+fts_snippets, fts_max_rank, created_at }] }` ordenado por
+    `fts_max_rank` desc.
+  - **Gap conocido (no bloqueante)** documentado en ADR-016 bajo
+    "Gap conocido — rescue vs pre-filter": el pre-filtro actual
+    (`preFilterByMustHave`) hace AND-intersection sobre
+    `experience_skills`, así que un candidato cuyo CV menciona el
+    skill en `parsed_text` pero cuya extracción LLM lo omitió queda
+    fuera del ranker y nunca llega al bucket. Hoy el bucket cubre
+    gate-failed con must-have parcial (subset menor). Fix propuesto
+    (F4-008 ter): `preFilter` retorna `{included, excluded_ids}`; el
+    rescue opera sobre excluded con must-haves completos como
+    `missing_skill_slugs`.
+
+- **Block 1 — candidate_languages persistence** ✅ done — 2026-04-21 —
+  `ec53ed6`.
+  - `deriveLanguages` cableado al worker de extracción (`src/lib/cv/extraction/worker.ts`):
+    hook opcional invocado solo post-miss (no en cache hit), logea
+    fallo a `sync_errors` con `entity='cv_derivation'` sin abortar
+    la extracción.
+  - `src/lib/matching/db-deps.loadLanguages` cableado contra tabla
+    real `candidate_languages` (no-op previo removido).
+  - 3 worker tests nuevos + `languagesInserted: 0` assertion en
+    tests de empty-pending / backwards-compat. 14 worker tests.
 
 - **F4-008 API + persistencia + e2e** ✅ done — 2026-04-21 —
   `c2c95ff`..`ae26fbc`. Resuelto el gate estructural por ADR-017
