@@ -5,12 +5,39 @@
 > el git log).
 
 **Última actualización**: 2026-04-20
-**Última sesión**: 2026-04-20 — **F4-001 + F4-002 + F4-003 cerrados en un mismo día**. F4-003 (variant classifier determinístico) cerrado en 2 sub-bloques: función pura `src/lib/cv/variant-classifier.ts` con scoring heurístico (+3 headers ordenados / +2 Top Skills / +1 URL / +1 ≥2 fechas "- Present", threshold ≥3 → linkedin_export; default cv_primary como ADR-012 §7), + 10 fixtures sintéticos (5 por variante) manejando shapes realistas. 13 unit tests inline + 11 fixture-driven. Unit suite 288/288 green. Siguiente: F4-004 (extractor LLM con Zod schema).
+**Última sesión**: 2026-04-20 — **F4-004 cerrado**: ExtractionProvider + OpenAI/Stub + worker + CLI. 4 sub-bloques RED→GREEN (types/Zod + stub, provider OpenAI + prompt v1, hash + worker + integration suite, CLI `pnpm extract:cvs`). 47 unit tests + 3 integration tests verde, unit suite 335/335. ADR-012 §6 implementado salvo el parser determinístico de LinkedIn (explicitado como Fase 2+). Siguiente: F4-005 (derivación de experiences + experience_skills desde `raw_output`).
 **Fase activa**: **Fase 4 — Inteligencia** (eje matching). F1 fundación + F2/F3 slices previas siguen done.
 
 ---
 
 ## ✅ Completado
+
+- **F4-004 ExtractionProvider + persistencia** ✅ done — 2026-04-20 —
+  `4c2e4d9`..`9383358`.
+  - **Sub-A** (`4c2e4d9`→`aecd368`): `src/lib/cv/extraction/{types,provider,stub-provider}.ts`.
+    Zod schema ExtractionResult (ADR-012 §2) con dates ISO-8601 partial,
+    strip de keys desconocidas. ExtractionProvider interface mirror del
+    EmbeddingProvider. StubExtractionProvider determinístico (SHA-256
+    del input) con inyección de fixture. 19 unit tests.
+  - **Sub-B** (`90a2439`→`69ac920`): prompts/extract-v1.ts con constante
+    `EXTRACTION_PROMPT_V1='2026-04-v1'` + texto pinneado (kind=work
+    gating, date fallback YYYY-MM, skills verbatim, prohibición PII).
+    providers/openai-extractor.ts usando chat.completions +
+    response_format json_schema + Zod re-validation del content.
+    fetchImpl inyectable. 15 unit tests (34 total).
+  - **Sub-C** (`95c3492`→`9264990` + `6ffc787`): `extractionContentHash`
+    = SHA256(parsed_text∥NUL∥model∥NUL∥promptVersion), NUL separator
+    contra collisions por shift. `runCvExtractions(deps, opts)` con
+    deps-injected I/O (listPending/extractionExistsByHash/insertExtraction/
+    logRowError/provider), classifyVariant por file, skip si hash
+    existe, row errors → sync_errors, batch continúa. 13 unit tests
+    (47 total) + 3 integration tests (idempotencia, model bump
+    invalida hash, provider failure aislado).
+  - **Sub-D** (`9383358`): CLI `pnpm extract:cvs [--batch=N]` con
+    env vars NEXT_PUBLIC_SUPABASE_URL + SUPABASE_SECRET_KEY +
+    OPENAI_API_KEY (OPENAI_EXTRACTION_MODEL opcional). Exit codes
+    0/2/4. LinkedIn parser determinístico postergado a Fase 2+
+    (ADR-012 §2 lo describe, roadmap F4-004 DoD lo saca de scope F1).
 
 - **F4-003 CV variant classifier** ✅ done — 2026-04-20 —
   `adac30c`..`8dcd483`.
@@ -925,11 +952,10 @@ _(nada todavía)_
 
 ## ⏳ Próximo (top 3 del roadmap)
 
-1. **F4-004** — Extractor CV→JSON con `ExtractionProvider`
-   (`gpt-4o-mini`) e idempotencia por `content_hash`.
-2. **F4-005** — Derivación de experiences + experience_skills desde
+1. **F4-005** — Derivación de experiences + experience_skills desde
    `candidate_extractions.raw_output` (usa resolver de F4-002).
-3. **F4-006** — Job query decomposition (LLM → `job_queries`).
+2. **F4-006** — Job query decomposition (LLM → `job_queries`).
+3. **F4-007** — Variant merger + years calculator + ranker.
 
 Ver `docs/roadmap.md` para el plan completo de F4-001..F4-009 con
 prompts listos.
