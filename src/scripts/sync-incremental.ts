@@ -29,11 +29,12 @@ import { stagesSyncer } from '../lib/sync/stages';
 import { usersSyncer } from '../lib/sync/users';
 import { jobsSyncer } from '../lib/sync/jobs';
 import { customFieldsSyncer } from '../lib/sync/custom-fields';
-import { candidatesSyncer } from '../lib/sync/candidates';
+import { makeCandidatesSyncer } from '../lib/sync/candidates';
 import { applicationsSyncer } from '../lib/sync/applications';
 import { notesSyncer } from '../lib/sync/notes';
 import { interviewsSyncer } from '../lib/sync/interviews';
 import { makeUploadsSyncer } from '../lib/sync/uploads';
+import { downloadResumesForCandidates } from '../lib/sync/candidate-resumes';
 import { BUCKET as CV_BUCKET } from '../lib/cv/downloader';
 
 function requireEnv(name: string): string {
@@ -104,23 +105,35 @@ async function loadScopeCandidateTtIds(db: SupabaseClient): Promise<Set<string>>
   return ids;
 }
 
-// The static syncers don't need per-run config. The uploads syncer
-// is special: it requires a live Storage bucket client, so it's
-// constructed inside main() once `db` exists. We keep entity →
-// syncer lookup lazy via a factory.
+// The static syncers don't need per-run config. Candidates and
+// uploads syncers both need a live Storage bucket client (ADR-006,
+// ADR-018), so they're constructed inside `buildSyncers` once `db`
+// exists. We keep entity → syncer lookup lazy via a factory.
 function buildSyncers(db: SupabaseClient): Record<string, EntitySyncer<unknown>> {
+  const storage = db.storage.from(CV_BUCKET);
+  const candidatesSyncerWithResumes = makeCandidatesSyncer({
+    // ADR-018: post-upsert hook downloads candidates.attributes.resume
+    // into `files` with source='candidate_resume'. The URL is only
+    // valid ~60s so the download MUST happen in the candidates pass.
+    downloadResumesForRows: (inputs, candidateIdByTtId) =>
+      downloadResumesForCandidates(inputs, candidateIdByTtId, db, {
+        fetch: globalThis.fetch.bind(globalThis),
+        storage,
+        randomUuid: () => globalThis.crypto.randomUUID(),
+      }),
+  });
   return {
     stages: stagesSyncer as EntitySyncer<unknown>,
     users: usersSyncer as EntitySyncer<unknown>,
     jobs: jobsSyncer as EntitySyncer<unknown>,
     'custom-fields': customFieldsSyncer as EntitySyncer<unknown>,
-    candidates: candidatesSyncer as EntitySyncer<unknown>,
+    candidates: candidatesSyncerWithResumes as EntitySyncer<unknown>,
     applications: applicationsSyncer as EntitySyncer<unknown>,
     notes: notesSyncer as EntitySyncer<unknown>,
     // `/v1/interviews` → evaluations + evaluation_answers.
     evaluations: interviewsSyncer as EntitySyncer<unknown>,
     // `/v1/uploads` → files (binary → candidate-cvs bucket).
-    files: makeUploadsSyncer({ storage: db.storage.from(CV_BUCKET) }) as EntitySyncer<unknown>,
+    files: makeUploadsSyncer({ storage }) as EntitySyncer<unknown>,
   };
 }
 

@@ -23,6 +23,8 @@
  * All I/O is injected (`CandidateResumeDeps`) so unit tests run
  * without network or a live Supabase.
  */
+import type { SupabaseClient } from '@supabase/supabase-js';
+
 import { downloadAndStore, type StorageBucketLike, type DownloadResult } from '../cv/downloader';
 
 export interface CandidateResumeDeps {
@@ -47,24 +49,12 @@ export interface CandidateResumeResult {
   errors: number;
 }
 
-interface DbLike {
-  from(table: string): {
-    select?: (cols: string) => {
-      in: (
-        col: string,
-        ids: string[],
-      ) => Promise<{
-        data: Array<{ id: string; teamtailor_id: string; content_hash: string | null }> | null;
-        error: { message: string } | null;
-      }>;
-    };
-    upsert?: (
-      rows: unknown[],
-      opts?: { onConflict?: string },
-    ) => Promise<{ error: { message: string } | null }>;
-    insert?: (row: unknown) => Promise<{ error: { message: string } | null }>;
-  };
-}
+/**
+ * The module accepts a real `SupabaseClient` in production. Unit
+ * tests cast a minimal fake via `as unknown as SupabaseClient` so
+ * they don't have to stand up the full generics machinery.
+ */
+type DbLike = SupabaseClient;
 
 /**
  * Namespaced teamtailor_id for resume-sourced files rows.
