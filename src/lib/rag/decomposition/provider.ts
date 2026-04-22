@@ -9,7 +9,7 @@
  *     Changing it invalidates every `content_hash` in `job_queries`
  *     (ADR-014 §4).
  *   - `promptVersion` is the constant from the prompt file
- *     (`DECOMPOSITION_PROMPT_V1 = '2026-04-v1'`). Bumping it also
+ *     (`DECOMPOSITION_PROMPT_V1 = '2026-04-v2'`). Bumping it also
  *     invalidates the hash — that's the point.
  *   - `decompose(rawText)` is the only operation. Errors propagate
  *     up as `DecompositionError` codes (`provider_failure`,

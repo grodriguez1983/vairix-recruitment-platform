@@ -6,7 +6,7 @@
  * meaning reformulation does not silently change the decomposer's
  * semantics:
  *
- *   - `DECOMPOSITION_PROMPT_V1` is pinned to '2026-04-v1'. Changing
+ *   - `DECOMPOSITION_PROMPT_V1` is pinned to '2026-04-v2'. Changing
  *     it invalidates every `job_queries.content_hash` (ADR-014 §5),
  *     so bumping the constant should be a conscious decision.
  *   - The prompt covers the four ADR-014 §3 rules: min_years only if

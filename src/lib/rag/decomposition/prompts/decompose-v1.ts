@@ -11,7 +11,7 @@
  * fixes with no semantic change go under the same version.
  */
 
-export const DECOMPOSITION_PROMPT_V1 = '2026-04-v1';
+export const DECOMPOSITION_PROMPT_V1 = '2026-04-v2';
 
 // Kept as a template literal so prettier doesn't reflow the rules
 // into a hard-to-read single line. These are the non-negotiable rules
@@ -40,25 +40,44 @@ Rules (do not break):
    or summarize. If you cannot find a literal substring, do not emit
    the requirement at all.
 
-4. category: use 'technical' for technologies / tools / languages-of-
-   code (React, AWS, Python, Kubernetes), 'language' for human
-   languages (Inglés, English, Portugués), 'soft' for soft skills
-   (liderazgo, comunicación, teamwork), and 'other' for everything
-   else (domain expertise, methodologies, certifications).
+4. skill_raw: MUST be the SHORT canonical name of the skill or
+   technology being required — not a full sentence, not a phrase,
+   not the years-of-experience wording. Keep the name as it is
+   conventionally written (e.g. "Ruby on Rails", "React",
+   "PostgreSQL", "TypeScript", "Node.js", "Docker", "AWS",
+   "Kubernetes"). Rules:
+   - If the text says "5+ años construyendo features en Ruby on
+     Rails (Rails 6+ idealmente)", skill_raw is "Ruby on Rails" and
+     the full phrase goes in evidence_snippet.
+   - If the text says "experiencia con React y TypeScript", emit
+     TWO requirements: {skill_raw: "React"} and
+     {skill_raw: "TypeScript"}. Do not concatenate them.
+   - For soft skills or non-technology requirements, use the
+     shortest noun phrase that names the concept
+     (e.g. "liderazgo", "ownership", "comunicación").
+   - Human languages (English, Spanish, Portuguese, etc.) do NOT
+     go into requirements; they go into languages[] (rule 8 below).
 
-5. Do not invent requirements. If you are not sure whether a phrase
+5. category: use 'technical' for technologies / tools / languages-of-
+   code (React, AWS, Python, Kubernetes), 'soft' for soft skills
+   (liderazgo, comunicación, teamwork), and 'other' for everything
+   else (domain expertise, methodologies, certifications). Do NOT
+   emit requirements with category='language' — human languages
+   belong in languages[] only.
+
+6. Do not invent requirements. If you are not sure whether a phrase
    names a requirement, skip it. Hallucinated requirements are worse
    than missing ones — we prefer false negatives to fabricated
    requirements.
 
-6. seniority: 'junior' / 'semi_senior' / 'senior' / 'lead' / or
+7. seniority: 'junior' / 'semi_senior' / 'senior' / 'lead' / or
    'unspecified' if the text does not name a level.
 
-7. languages: list every human language referenced (English,
+8. languages: list every human language referenced (English,
    Spanish, Portuguese, etc.) with level ∈ {basic, intermediate,
    advanced, native, unspecified} and must_have following rule 2.
 
-8. notes: capture unstructured residue that does not fit the
+9. notes: capture unstructured residue that does not fit the
    schema — availability, location, employment type — as a single
    string. If there is nothing to capture, return null.
 
