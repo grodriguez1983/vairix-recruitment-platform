@@ -21,6 +21,7 @@
  */
 import type { TTParsedResource, TTJsonApiRelationshipData } from '../teamtailor/types';
 import type { EntitySyncer, SyncerDeps } from './run';
+import type { CandidateResumeInput, CandidateResumeResult } from './candidate-resumes';
 import { SyncError } from './errors';
 
 export interface CandidateRow {
@@ -56,6 +57,27 @@ export interface CandidateCustomFieldValueInput {
 export interface CandidateWithValues {
   candidate: CandidateRow;
   customFieldValues: CandidateCustomFieldValueInput[];
+  /**
+   * Short-lived signed URL from `candidates.attributes.resume`
+   * (ADR-018). Non-null when the candidate has a TT-generated PDF;
+   * expires ~60s after the JSON:API response renders, so the resume
+   * downloader MUST be invoked inside the same sync pass.
+   */
+  resume_url: string | null;
+}
+
+export interface CandidatesSyncerFactoryDeps {
+  /**
+   * Optional post-upsert hook (ADR-018). When wired, the syncer
+   * invokes it after candidates are persisted, passing every
+   * row's (candidate_tt_id, resume_url) pair plus the local-id map.
+   * Failures are swallowed so a bad resume URL can't abort the
+   * candidates batch.
+   */
+  downloadResumesForRows?: (
+    inputs: CandidateResumeInput[],
+    candidateIdByTtId: Map<string, string>,
+  ) => Promise<CandidateResumeResult>;
 }
 
 function optionalString(attrs: Record<string, unknown>, key: string): string | null {
@@ -136,6 +158,13 @@ function castValue(
   }
 }
 
+// Stub factory — replaced in the next [GREEN] commit.
+export function makeCandidatesSyncer(
+  _factoryDeps: CandidatesSyncerFactoryDeps = {},
+): EntitySyncer<CandidateWithValues> {
+  return candidatesSyncer;
+}
+
 export const candidatesSyncer: EntitySyncer<CandidateWithValues> = {
   entity: 'candidates',
   includesSideloads: true,
@@ -193,7 +222,8 @@ export const candidatesSyncer: EntitySyncer<CandidateWithValues> = {
       });
     }
 
-    return { candidate, customFieldValues: values };
+    // Stub: resume_url wiring lands in the next [GREEN] commit.
+    return { candidate, customFieldValues: values, resume_url: null };
   },
 
   async upsert(rows: CandidateWithValues[], deps: SyncerDeps): Promise<number> {
