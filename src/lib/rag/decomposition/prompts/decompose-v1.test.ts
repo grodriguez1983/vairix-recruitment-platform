@@ -23,8 +23,8 @@ import { describe, expect, it } from 'vitest';
 import { DECOMPOSITION_PROMPT_V1, DECOMPOSITION_PROMPT_V1_TEXT } from './decompose-v1';
 
 describe('decomposition prompt v1 — ADR-014 semantic invariants', () => {
-  it('pins DECOMPOSITION_PROMPT_V1 to 2026-04-v1', () => {
-    expect(DECOMPOSITION_PROMPT_V1).toBe('2026-04-v1');
+  it('pins DECOMPOSITION_PROMPT_V1 to 2026-04-v2', () => {
+    expect(DECOMPOSITION_PROMPT_V1).toBe('2026-04-v2');
   });
 
   it('prompt text is non-trivial', () => {
@@ -63,5 +63,18 @@ describe('decomposition prompt v1 — ADR-014 semantic invariants', () => {
     expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(
       /do not invent|no inventes|no invent|don't invent/i,
     );
+  });
+
+  it('prompt requires skill_raw to be a short canonical name', () => {
+    // Without this rule the LLM copies full sentences into skill_raw
+    // (e.g. "5+ años construyendo features end-to-end en Ruby on
+    // Rails (Rails 6+ idealmente)"), which the catalog resolver
+    // (ADR-013) cannot match against slug/alias — every requirement
+    // comes back unresolved and the match scorer degenerates to 0.0.
+    expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(/skill_raw/i);
+    expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(/short canonical|canonical name/i);
+    // Explicit negative example: the prompt must warn against
+    // emitting a full sentence or phrase as skill_raw.
+    expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(/not a (full )?sentence|not a phrase/i);
   });
 });
