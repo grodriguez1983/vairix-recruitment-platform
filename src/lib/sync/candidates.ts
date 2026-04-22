@@ -20,8 +20,9 @@
  * Relationships are preserved verbatim (still kebab-case keys).
  */
 import type { TTParsedResource, TTJsonApiRelationshipData } from '../teamtailor/types';
-import type { EntitySyncer, SyncerDeps } from './run';
+import type { EntitySyncer } from './run';
 import type { CandidateResumeInput, CandidateResumeResult } from './candidate-resumes';
+import { upsertCustomFieldValues } from './candidate-custom-fields';
 import { SyncError } from './errors';
 
 export interface CandidateRow {
@@ -111,191 +112,129 @@ function getSingleRelationshipId(
   return data.id;
 }
 
-/**
- * Casts a raw TT value string into the typed column for the given
- * field_type. Returns an input row with `raw_value` always set and
- * the other `value_*` fields null except the one matching the type
- * (when casting succeeds).
- */
-function castValue(
-  fieldType: string,
-  rawValue: unknown,
-): Omit<
-  CandidateCustomFieldValueInput,
-  'teamtailor_value_id' | 'candidate_teamtailor_id' | 'custom_field_teamtailor_id' | 'field_type'
-> {
-  const raw = typeof rawValue === 'string' ? rawValue : rawValue == null ? null : String(rawValue);
-  const base = {
-    value_text: null as string | null,
-    value_date: null as string | null,
-    value_number: null as number | null,
-    value_boolean: null as boolean | null,
-    raw_value: raw,
+function mapResource(
+  resource: TTParsedResource,
+  included: TTParsedResource[],
+): CandidateWithValues {
+  const attrs = resource.attributes;
+  const candidate: CandidateRow = {
+    teamtailor_id: resource.id,
+    first_name: optionalString(attrs, 'firstName'),
+    last_name: optionalString(attrs, 'lastName'),
+    email: optionalString(attrs, 'email'),
+    phone: optionalString(attrs, 'phone'),
+    linkedin_url: optionalString(attrs, 'linkedinUrl'),
+    pitch: optionalString(attrs, 'pitch'),
+    sourced: boolOrFalse(attrs, 'sourced'),
+    raw_data: resource,
   };
-  if (raw === null) return base;
-  switch (fieldType) {
-    case 'CustomField::Text':
-      return { ...base, value_text: raw };
-    case 'CustomField::Date': {
-      // Accept ISO 8601 full or date-only; normalize to YYYY-MM-DD.
-      const d = new Date(raw);
-      if (Number.isNaN(d.getTime())) return base;
-      return { ...base, value_date: d.toISOString().slice(0, 10) };
-    }
-    case 'CustomField::Number': {
-      const n = Number(raw);
-      if (!Number.isFinite(n)) return base;
-      return { ...base, value_number: n };
-    }
-    case 'CustomField::Boolean': {
-      if (raw === 'true') return { ...base, value_boolean: true };
-      if (raw === 'false') return { ...base, value_boolean: false };
-      return base;
-    }
-    default:
-      // Unknown field_type: leave typed columns null, keep raw_value.
-      return base;
-  }
-}
 
-// Stub factory — replaced in the next [GREEN] commit.
-export function makeCandidatesSyncer(
-  _factoryDeps: CandidatesSyncerFactoryDeps = {},
-): EntitySyncer<CandidateWithValues> {
-  return candidatesSyncer;
-}
-
-export const candidatesSyncer: EntitySyncer<CandidateWithValues> = {
-  entity: 'candidates',
-  includesSideloads: true,
-
-  buildInitialRequest(cursor: string | null) {
-    const params: Record<string, string> = {
-      'page[size]': '30',
-      // ADR-010 §2: pull each candidate's custom-field-values and the
-      // nested custom-field definitions so the mapper has enough to
-      // produce candidate_custom_field_values rows.
-      include: 'custom-field-values,custom-field-values.custom-field',
-    };
-    if (cursor) params['filter[updated-at][from]'] = cursor;
-    return { path: '/candidates', params };
-  },
-
-  mapResource(resource: TTParsedResource, included: TTParsedResource[]): CandidateWithValues {
-    const attrs = resource.attributes;
-    const candidate: CandidateRow = {
-      teamtailor_id: resource.id,
-      first_name: optionalString(attrs, 'firstName'),
-      last_name: optionalString(attrs, 'lastName'),
-      email: optionalString(attrs, 'email'),
-      phone: optionalString(attrs, 'phone'),
-      linkedin_url: optionalString(attrs, 'linkedinUrl'),
-      pitch: optionalString(attrs, 'pitch'),
-      sourced: boolOrFalse(attrs, 'sourced'),
-      raw_data: resource,
-    };
-
-    const ownedValueIds = new Set(getRelationshipIds(resource, 'custom-field-values'));
-    const values: CandidateCustomFieldValueInput[] = [];
-    for (const inc of included) {
-      if (inc.type !== 'custom-field-values') continue;
-      if (!ownedValueIds.has(inc.id)) continue;
-      const customFieldId = getSingleRelationshipId(inc, 'custom-field', 'custom-fields');
-      if (!customFieldId) continue;
-      // `custom-field-values` resources in TT expose the value under
-      // attributes.value (string-ish). The typed column cast happens
-      // in upsert() once we have the catalog field_type resolved;
-      // here we only capture raw_value and the FK teamtailor ids.
-      const rawValue = (inc.attributes as Record<string, unknown>).value;
-      values.push({
-        teamtailor_value_id: inc.id,
-        candidate_teamtailor_id: resource.id,
-        custom_field_teamtailor_id: customFieldId,
-        // Sentinel — overwritten in upsert() from the catalog lookup.
-        field_type: '',
-        value_text: null,
-        value_date: null,
-        value_number: null,
-        value_boolean: null,
-        raw_value:
-          typeof rawValue === 'string' ? rawValue : rawValue == null ? null : String(rawValue),
-      });
-    }
-
-    // Stub: resume_url wiring lands in the next [GREEN] commit.
-    return { candidate, customFieldValues: values, resume_url: null };
-  },
-
-  async upsert(rows: CandidateWithValues[], deps: SyncerDeps): Promise<number> {
-    if (rows.length === 0) return 0;
-
-    // 1) Upsert candidates and recover their local UUIDs.
-    const candidateRows = rows.map((r) => r.candidate);
-    const { data: upsertedCandidates, error: candErr } = await deps.db
-      .from('candidates')
-      .upsert(candidateRows, { onConflict: 'teamtailor_id' })
-      .select('id, teamtailor_id');
-    if (candErr) {
-      throw new SyncError('candidates upsert failed', {
-        cause: candErr.message,
-        count: candidateRows.length,
-      });
-    }
-    const candidateIdByTtId = new Map<string, string>(
-      (upsertedCandidates ?? []).map((c) => [c.teamtailor_id, c.id]),
-    );
-
-    // 2) Collect all value inputs and look up their custom_field UUIDs.
-    const valueInputs = rows.flatMap((r) => r.customFieldValues);
-    if (valueInputs.length === 0) return rows.length;
-
-    const neededCatalogIds = Array.from(
-      new Set(valueInputs.map((v) => v.custom_field_teamtailor_id)),
-    );
-    const { data: catalog, error: catErr } = await deps.db
-      .from('custom_fields')
-      .select('id, teamtailor_id, field_type')
-      .in('teamtailor_id', neededCatalogIds);
-    if (catErr) {
-      throw new SyncError('custom_fields lookup failed', { cause: catErr.message });
-    }
-    const catalogByTtId = new Map<string, { id: string; field_type: string }>(
-      (catalog ?? []).map((c) => [c.teamtailor_id, { id: c.id, field_type: c.field_type }]),
-    );
-
-    // 3) Build the final value rows with resolved FKs and cast types.
-    const valueRows = valueInputs.flatMap((v) => {
-      const candUuid = candidateIdByTtId.get(v.candidate_teamtailor_id);
-      const catalogEntry = catalogByTtId.get(v.custom_field_teamtailor_id);
-      if (!candUuid || !catalogEntry) return [];
-      const cast = castValue(catalogEntry.field_type, v.raw_value);
-      return [
-        {
-          candidate_id: candUuid,
-          custom_field_id: catalogEntry.id,
-          teamtailor_value_id: v.teamtailor_value_id,
-          field_type: catalogEntry.field_type,
-          value_text: cast.value_text,
-          value_date: cast.value_date,
-          value_number: cast.value_number,
-          value_boolean: cast.value_boolean,
-          raw_value: cast.raw_value,
-        },
-      ];
+  const ownedValueIds = new Set(getRelationshipIds(resource, 'custom-field-values'));
+  const values: CandidateCustomFieldValueInput[] = [];
+  for (const inc of included) {
+    if (inc.type !== 'custom-field-values') continue;
+    if (!ownedValueIds.has(inc.id)) continue;
+    const customFieldId = getSingleRelationshipId(inc, 'custom-field', 'custom-fields');
+    if (!customFieldId) continue;
+    // `custom-field-values` resources in TT expose the value under
+    // attributes.value (string-ish). The typed column cast happens
+    // in upsert() once we have the catalog field_type resolved;
+    // here we only capture raw_value and the FK teamtailor ids.
+    const rawValue = (inc.attributes as Record<string, unknown>).value;
+    values.push({
+      teamtailor_value_id: inc.id,
+      candidate_teamtailor_id: resource.id,
+      custom_field_teamtailor_id: customFieldId,
+      // Sentinel — overwritten in upsert() from the catalog lookup.
+      field_type: '',
+      value_text: null,
+      value_date: null,
+      value_number: null,
+      value_boolean: null,
+      raw_value:
+        typeof rawValue === 'string' ? rawValue : rawValue == null ? null : String(rawValue),
     });
+  }
 
-    if (valueRows.length > 0) {
-      const { error: valErr } = await deps.db
-        .from('candidate_custom_field_values')
-        .upsert(valueRows, { onConflict: 'teamtailor_value_id' });
-      if (valErr) {
-        throw new SyncError('candidate_custom_field_values upsert failed', {
-          cause: valErr.message,
-          count: valueRows.length,
+  return { candidate, customFieldValues: values, resume_url: optionalString(attrs, 'resume') };
+}
+
+export function makeCandidatesSyncer(
+  factoryDeps: CandidatesSyncerFactoryDeps = {},
+): EntitySyncer<CandidateWithValues> {
+  return {
+    entity: 'candidates',
+    includesSideloads: true,
+
+    buildInitialRequest(cursor: string | null) {
+      const params: Record<string, string> = {
+        'page[size]': '30',
+        // ADR-010 §2: pull each candidate's custom-field-values and
+        // the nested custom-field definitions so the mapper has
+        // enough to produce candidate_custom_field_values rows.
+        include: 'custom-field-values,custom-field-values.custom-field',
+      };
+      if (cursor) params['filter[updated-at][from]'] = cursor;
+      return { path: '/candidates', params };
+    },
+
+    mapResource,
+
+    async upsert(rows, deps) {
+      if (rows.length === 0) return 0;
+
+      // 1) Upsert candidates and recover their local UUIDs.
+      const { data: upsertedCandidates, error: candErr } = await deps.db
+        .from('candidates')
+        .upsert(
+          rows.map((r) => r.candidate),
+          { onConflict: 'teamtailor_id' },
+        )
+        .select('id, teamtailor_id');
+      if (candErr) {
+        throw new SyncError('candidates upsert failed', {
+          cause: candErr.message,
+          count: rows.length,
         });
       }
-    }
+      const candidateIdByTtId = new Map<string, string>(
+        (upsertedCandidates ?? []).map((c) => [c.teamtailor_id, c.id]),
+      );
 
-    return rows.length;
-  },
-};
+      // 2) Upsert sideloaded custom-field-values.
+      await upsertCustomFieldValues(
+        rows.flatMap((r) => r.customFieldValues),
+        candidateIdByTtId,
+        deps,
+      );
+
+      // 3) Post-upsert hook: download candidates.attributes.resume
+      // binaries (ADR-018). Orthogonal to the candidates batch —
+      // errors are swallowed so a flaky S3 signed URL never aborts
+      // the sync. When the hook is unset (legacy static export) we
+      // simply skip this step.
+      if (factoryDeps.downloadResumesForRows) {
+        try {
+          await factoryDeps.downloadResumesForRows(
+            rows.map((r) => ({
+              candidate_tt_id: r.candidate.teamtailor_id,
+              resume_url: r.resume_url,
+            })),
+            candidateIdByTtId,
+          );
+        } catch {
+          // Swallow — resume download is best-effort.
+        }
+      }
+
+      return rows.length;
+    },
+  };
+}
+
+/**
+ * Legacy static export. Does NOT download candidate resumes —
+ * callers that want ADR-018 behavior must use
+ * `makeCandidatesSyncer({ downloadResumesForRows })` instead.
+ */
+export const candidatesSyncer: EntitySyncer<CandidateWithValues> = makeCandidatesSyncer();
