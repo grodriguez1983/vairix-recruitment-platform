@@ -80,9 +80,10 @@ async function recordDownloadError(
   err: unknown,
   runStartedAt: string,
 ): Promise<void> {
-  const insert = db.from('sync_errors').insert;
-  if (!insert) return;
-  const { error } = await insert({
+  // Invoke the builder inline so PostgREST's `this` binding stays
+  // intact — extracting `.insert` into a local loses context and
+  // throws at runtime.
+  const { error } = await db.from('sync_errors').insert({
     entity: 'candidate_resumes',
     teamtailor_id: resumeTeamtailorId(candidateTtId),
     error_code: 'DownloadFailed',
@@ -140,18 +141,18 @@ export async function downloadResumesForCandidates(
 
   const ttIds = withResume.map((i) => resumeTeamtailorId(i.candidate_tt_id));
   const existingByTtId = new Map<string, { id: string; content_hash: string | null }>();
-  const selectBuilder = db.from('files').select?.('id, teamtailor_id, content_hash');
-  if (selectBuilder) {
-    const { data, error } = await selectBuilder.in('teamtailor_id', ttIds);
-    if (error) {
-      throw new Error(`candidate-resumes: failed to load existing files: ${error.message}`);
-    }
-    for (const row of data ?? []) {
-      existingByTtId.set(row.teamtailor_id, {
-        id: row.id,
-        content_hash: row.content_hash ?? null,
-      });
-    }
+  const { data: existingRows, error: selErr } = await db
+    .from('files')
+    .select('id, teamtailor_id, content_hash')
+    .in('teamtailor_id', ttIds);
+  if (selErr) {
+    throw new Error(`candidate-resumes: failed to load existing files: ${selErr.message}`);
+  }
+  for (const row of existingRows ?? []) {
+    existingByTtId.set(row.teamtailor_id, {
+      id: row.id,
+      content_hash: row.content_hash ?? null,
+    });
   }
 
   const runStartedAt = new Date().toISOString();
@@ -211,11 +212,7 @@ export async function downloadResumesForCandidates(
 
   if (rows.length === 0) return result;
 
-  const upsert = db.from('files').upsert;
-  if (!upsert) {
-    throw new Error('candidate-resumes: db.from(files).upsert is unavailable');
-  }
-  const { error: upErr } = await upsert(rows, { onConflict: 'teamtailor_id' });
+  const { error: upErr } = await db.from('files').upsert(rows, { onConflict: 'teamtailor_id' });
   if (upErr) {
     throw new Error(`candidate-resumes: files upsert failed: ${upErr.message}`);
   }

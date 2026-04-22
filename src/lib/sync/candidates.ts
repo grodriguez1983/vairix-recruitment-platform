@@ -222,8 +222,14 @@ export function makeCandidatesSyncer(
             })),
             candidateIdByTtId,
           );
-        } catch {
-          // Swallow — resume download is best-effort.
+        } catch (e) {
+          // Resume download is best-effort: never abort the candidates
+          // batch for a resume failure. But don't swallow silently —
+          // a misconfigured hook (e.g. auth/env issue) would otherwise
+          // produce zero resume files with no trace.
+          console.warn(
+            `[candidates] resume-download hook threw (swallowed): ${e instanceof Error ? e.message : String(e)}`,
+          );
         }
       }
 
