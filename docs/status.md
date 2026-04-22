@@ -12,6 +12,31 @@
 
 ## ✅ Completado
 
+- **ADR-018 — `candidates.attributes.resume` como segunda fuente de CVs** ✅
+  done — 2026-04-21 — Bloque 8. Commits `54716c0` (migración
+  `files.source`), `b8cd734` (RED candidate-resumes), `1eeaa53` (GREEN
+  downloader), `04089b4` (RED factory), `7146c6e` (GREEN factory),
+  `d9b0814` (CLI wiring). Descubrimiento: el ETL solo consumía
+  `/v1/uploads`, ignorando `candidates.attributes.resume` (URL firmada
+  de S3 de ~60s con PDF generado por TT). Smoke test mostró 18/200
+  candidates con CV (~9%); la mayoría de sourced candidates pasaban
+  invisibles al parser. Fix: migración agrega
+  `files.source text not null default 'uploads' check (source in
+('uploads', 'candidate_resume'))`; nuevo módulo
+  `src/lib/sync/candidate-resumes.ts` namespace-a `files.teamtailor_id`
+  como `resume:<candidate_tt_id>` para evitar colisiones con el dominio
+  numérico de uploads; `candidatesSyncer` pasa a factory
+  (`makeCandidatesSyncer({ downloadResumesForRows })`) — el hook corre
+  post-upsert candidates y swallowea errores para no matar el batch;
+  `candidate-custom-fields.ts` extraído de `candidates.ts` para
+  mantenerlo bajo 300 LOC (CLAUDE.md §📏). 11 unit tests nuevos en
+  `candidate-resumes.test.ts` + 6 nuevos en `candidates.test.ts`
+  (mapResource resume_url, factory binding, hook invocation, swallow
+  failures). Tests totales: 608 unit verdes. **Pendiente**: re-sync de
+  los 200 candidatos ya presentes (`update sync_state set
+last_synced_at = null where entity = 'candidates';` + rerun) para
+  traer sus resumes ahora que el pipeline los ve.
+
 - **F4-008 ter — rescue vs pre-filter gap** ✅ done — 2026-04-21 —
   Bloque 7. Commits `1285c4c` (RED pre-filter), `13aa0a0` (GREEN
   pre-filter), `aaeb9de` (RED orchestrator merge), `82d0538` (GREEN

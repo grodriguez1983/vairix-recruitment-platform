@@ -148,7 +148,10 @@ Campos en `attributes` (no exhaustivo, **[VERIFICAR]**):
 - `email`, `phone`
 - `linkedin-url`, `facebook-url`
 - `pitch` (texto libre del candidato)
-- `resume` (URL)
+- `resume` (URL firmada de S3, **expira ~60s** — TT genera el PDF
+  por candidato; para sourced candidates es la **única** fuente de
+  CV. Nuestro ETL la descarga en la misma pasada y persiste el
+  binario en `files` con `source='candidate_resume'`. Ver ADR-018.)
 - `tags` (array de strings)
 - `created-at`, `updated-at`
 - `sourced` (boolean)
