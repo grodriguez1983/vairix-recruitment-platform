@@ -68,6 +68,7 @@ function input(): DecompositionResult {
     seniority: 'senior',
     languages: [{ name: 'English', level: 'intermediate', must_have: false }],
     notes: 'Full-time',
+    role_essentials: [],
   };
 }
 
@@ -145,9 +146,60 @@ describe('resolveRequirements — ADR-014 §5', () => {
       seniority: 'unspecified',
       languages: [],
       notes: null,
+      role_essentials: [],
     };
     const out = resolveRequirements(empty, catalog());
     expect(out.resolved.requirements).toEqual([]);
     expect(out.unresolved_skills).toEqual([]);
+  });
+
+  // ADR-023: role_essentials viaja desde el decomposer con raws; el
+  // resolver los traduce a `skill_id`s usando el mismo catálogo. Un
+  // raw que no matchea queda DROPPED (no explota, no queda `null` en
+  // la lista) — el grupo puede terminar vacío y el scorer lo
+  // interpretará como "no gate" para ese axis.
+  describe('role_essentials resolution (ADR-023)', () => {
+    it('resolves skill_raws to skill_ids and preserves the group label', () => {
+      const dec: DecompositionResult = {
+        ...input(),
+        role_essentials: [
+          { label: 'frontend', skill_raws: ['Node.js'] },
+          { label: 'backend', skill_raws: ['Postgres'] },
+        ],
+      };
+      const out = resolveRequirements(dec, catalog());
+      expect(out.resolved.role_essentials).toEqual([
+        { label: 'frontend', skill_ids: ['skill-node'] },
+        { label: 'backend', skill_ids: ['skill-postgres'] },
+      ]);
+    });
+
+    it('drops unresolved raws from a group (not left as null)', () => {
+      const dec: DecompositionResult = {
+        ...input(),
+        role_essentials: [{ label: 'frontend', skill_raws: ['Node.js', 'Kubernetes'] }],
+      };
+      const out = resolveRequirements(dec, catalog());
+      expect(out.resolved.role_essentials).toEqual([
+        { label: 'frontend', skill_ids: ['skill-node'] },
+      ]);
+    });
+
+    it('preserves a group as empty when NO raws resolve (scorer treats it as no-gate)', () => {
+      const dec: DecompositionResult = {
+        ...input(),
+        role_essentials: [{ label: 'devops', skill_raws: ['Kubernetes', 'Terraform'] }],
+      };
+      const out = resolveRequirements(dec, catalog());
+      expect(out.resolved.role_essentials).toEqual([{ label: 'devops', skill_ids: [] }]);
+    });
+
+    it('returns an empty role_essentials list when the input omits the field (back-compat)', () => {
+      // Simulate a legacy prompt-v5 payload that went through Zod
+      // with role_essentials defaulted to [].
+      const dec: DecompositionResult = { ...input(), role_essentials: [] };
+      const out = resolveRequirements(dec, catalog());
+      expect(out.resolved.role_essentials).toEqual([]);
+    });
   });
 });

@@ -183,7 +183,12 @@ describe('LanguageSchema', () => {
 
 describe('DecompositionResultSchema', () => {
   it('parses a valid result', () => {
-    expect(DecompositionResultSchema.parse(validResult())).toEqual(validResult());
+    // ADR-023: role_essentials default to [] — assert on the same
+    // shape with the default injected so the test doesn't fight Zod.
+    expect(DecompositionResultSchema.parse(validResult())).toEqual({
+      ...validResult(),
+      role_essentials: [],
+    });
   });
 
   it('allows empty requirements and languages', () => {
@@ -219,6 +224,57 @@ describe('DecompositionResultSchema', () => {
   it('rejects requirements that are not an array', () => {
     expect(() =>
       DecompositionResultSchema.parse({ ...validResult(), requirements: null }),
+    ).toThrow();
+  });
+});
+
+// ADR-023: role_essentials — grupos de skills que encarnan el "core"
+// del rol (p.ej. 'frontend' + 'backend' para un full-stack). El
+// scorer los usa como gate por-axis: un candidato sin años en
+// CUALQUIER alternativa de un grupo cae a 0. Lista vacía ≡ sin gate.
+describe('DecompositionResultSchema — ADR-023 role_essentials', () => {
+  it('defaults role_essentials to [] when omitted (backward compat w/ prompt < v6)', () => {
+    const parsed = DecompositionResultSchema.parse(validResult());
+    expect(parsed.role_essentials).toEqual([]);
+  });
+
+  it('accepts a populated role_essentials with multiple groups', () => {
+    const parsed = DecompositionResultSchema.parse({
+      ...validResult(),
+      role_essentials: [
+        { label: 'frontend', skill_raws: ['React', 'Next.js'] },
+        { label: 'backend', skill_raws: ['Node.js'] },
+      ],
+    });
+    expect(parsed.role_essentials).toHaveLength(2);
+    expect(parsed.role_essentials[0]?.label).toBe('frontend');
+    expect(parsed.role_essentials[0]?.skill_raws).toEqual(['React', 'Next.js']);
+  });
+
+  it('rejects an unknown role_essentials label (drift guard)', () => {
+    expect(() =>
+      DecompositionResultSchema.parse({
+        ...validResult(),
+        role_essentials: [{ label: 'marketing', skill_raws: ['SEO'] }],
+      }),
+    ).toThrow();
+  });
+
+  it('rejects a role_essentials group with empty skill_raws', () => {
+    expect(() =>
+      DecompositionResultSchema.parse({
+        ...validResult(),
+        role_essentials: [{ label: 'frontend', skill_raws: [] }],
+      }),
+    ).toThrow();
+  });
+
+  it('rejects a role_essentials group with empty skill_raw string', () => {
+    expect(() =>
+      DecompositionResultSchema.parse({
+        ...validResult(),
+        role_essentials: [{ label: 'frontend', skill_raws: [''] }],
+      }),
     ).toThrow();
   });
 });
