@@ -30,6 +30,12 @@ supabase/volumes/
 # Studio scratch queries — not part of the repo
 supabase/snippets/
 
+# supabase-test (ADR-019) — mirror the ignores
+supabase-test/supabase/.branches
+supabase-test/supabase/.temp/
+supabase-test/supabase/volumes/
+supabase-test/supabase/snippets/
+
 # logs
 *.log
 npm-debug.log*
