@@ -270,6 +270,36 @@ describe('aggregateScore — ADR-015 §3', () => {
     expect(noSeniority.total_score - result.total_score).toBe(5);
   });
 
+  it('test_seniority_above_symmetric_with_match — overqualified candidate gets +5, same as match (ADR-023)', () => {
+    // ADR-023: `above` used to return 0 delta while `match` returned
+    // +5, which made the most senior candidates rank below moderately
+    // senior ones (incident 2026-04-23, job_query ccfd19d3-...). Fix:
+    // `above` is treated as a positive signal equivalent to `match`.
+    const reqs = [
+      mkRequirement({ skill_raw: 'React', skill_id: REACT_ID, min_years: 12, must_have: false }),
+    ];
+    const exp = mkExp({
+      id: 'a',
+      start: '2013-01-01',
+      end: '2025-01-01',
+      skills: [{ skill_id: REACT_ID, skill_raw: 'React' }],
+    });
+    // 12 years of React → total work = 12y → `lead` bucket. Job asks
+    // `senior` → candidate is `above`.
+    const above = aggregateScore(
+      mkJobQuery({ requirements: reqs, seniority: 'senior' }),
+      mkCandidate({ candidate_id: 'c', merged_experiences: [exp] }),
+      { now: NOW },
+    );
+    const noSeniority = aggregateScore(
+      mkJobQuery({ requirements: reqs, seniority: 'unspecified' }),
+      mkCandidate({ candidate_id: 'c', merged_experiences: [exp] }),
+      { now: NOW },
+    );
+    expect(above.seniority_match).toBe('above');
+    expect(above.total_score - noSeniority.total_score).toBe(5);
+  });
+
   // Adversarials.
 
   it('partial match on min_years yields partial status and proportional contribution', () => {
