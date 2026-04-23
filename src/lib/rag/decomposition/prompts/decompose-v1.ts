@@ -11,7 +11,7 @@
  * fixes with no semantic change go under the same version.
  */
 
-export const DECOMPOSITION_PROMPT_V1 = '2026-04-v5';
+export const DECOMPOSITION_PROMPT_V1 = '2026-04-v6';
 
 // Kept as a template literal so prettier doesn't reflow the rules
 // into a hard-to-read single line. These are the non-negotiable rules
@@ -160,6 +160,63 @@ Rules (do not break):
     WRONG (mixed must_have inside a group):
       → { skill_raw: "Tailwind",          must_have: true,  alternative_group_id: "g-css" }
       → { skill_raw: "styled-components", must_have: false, alternative_group_id: "g-css" }  ← WRONG
+
+11. role_essentials (ADR-023): extract the CORE AXES of the role
+    from the JOB TITLE and/or the opening intro line — not from
+    "nice to have" bullets deeper in the text. Each axis becomes a
+    group with:
+    - label ∈ { 'frontend', 'backend', 'mobile', 'data', 'devops' }
+    - skill_raws: a non-empty array of the skill_raw strings that
+      represent that axis in this JD.
+
+    IMPORTANT: every raw inside role_essentials MUST also appear in
+    requirements[].skill_raw — the resolver maps them via the same
+    catalog and a raw with no matching requirement row becomes
+    invisible to the scorer. Keep both lists in lockstep.
+
+    If the title is generic ("Software Engineer", "Backend
+    Engineer") with no multi-axis cue, emit role_essentials: []
+    (empty list disables the axis gate). Do not invent axes from
+    scattered mentions deeper in the JD — under-emit rather than
+    over-emit.
+
+    CORRECT (full-stack title with frontend + backend cues):
+      title: "Senior Full-Stack Engineer (React / Next.js /
+              React Native / Node.js)"
+      requirements: [
+        { skill_raw: "React",        ... },
+        { skill_raw: "Next.js",      ... },
+        { skill_raw: "React Native", ... },
+        { skill_raw: "Node.js",      ... },
+      ]
+      role_essentials: [
+        { label: "frontend", skill_raws: ["React", "Next.js"] },
+        { label: "mobile",   skill_raws: ["React Native"] },
+        { label: "backend",  skill_raws: ["Node.js"] }
+      ]
+
+    CORRECT (generic backend title — no multi-axis gate):
+      title: "Backend Engineer"
+      role_essentials: []
+
+    WRONG (inventing a group from a scattered "nice to have"):
+      title: "Senior Backend Engineer"
+      body:  "... plus deseable: experiencia con React o Vue ..."
+      role_essentials: [
+        { label: "frontend", skill_raws: ["React"] }    ← WRONG
+      ]
+      Rationale: the title is single-axis; a "deseable" mention of
+      React does not make frontend a core axis. Emit [] here.
+
+    WRONG (raw that doesn't appear in requirements[]):
+      role_essentials: [
+        { label: "backend", skill_raws: ["Rust"] }      ← WRONG
+      ]
+      requirements: [ { skill_raw: "Node.js", ... } ]
+      Rationale: "Rust" is never listed as a requirement, so the
+      resolver can't bind it; the axis ends up silently empty and
+      the gate becomes a no-op. Only list raws that are also in
+      requirements[].
 
 Return ONLY the JSON object. No prose, no markdown fences.
 `;

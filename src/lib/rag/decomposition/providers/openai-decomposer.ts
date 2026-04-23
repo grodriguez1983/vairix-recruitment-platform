@@ -35,7 +35,10 @@ const RESPONSE_JSON_SCHEMA = {
   schema: {
     type: 'object',
     additionalProperties: false,
-    required: ['requirements', 'seniority', 'languages', 'notes'],
+    // ADR-023: role_essentials is required in the wire schema so
+    // the model cannot silently drop it (local Zod has a default,
+    // but we want the prompt-v6 contract enforced server-side).
+    required: ['requirements', 'seniority', 'languages', 'notes', 'role_essentials'],
     properties: {
       requirements: {
         type: 'array',
@@ -90,6 +93,28 @@ const RESPONSE_JSON_SCHEMA = {
         },
       },
       notes: { type: ['string', 'null'] },
+      // ADR-023: axes extracted from the JD title. Non-strict vocab
+      // enforcement on `label`, min 1 raw per group so the model
+      // can't emit a no-op `{label: 'x', skill_raws: []}` stub.
+      role_essentials: {
+        type: 'array',
+        items: {
+          type: 'object',
+          additionalProperties: false,
+          required: ['label', 'skill_raws'],
+          properties: {
+            label: {
+              type: 'string',
+              enum: ['frontend', 'backend', 'mobile', 'data', 'devops'],
+            },
+            skill_raws: {
+              type: 'array',
+              minItems: 1,
+              items: { type: 'string' },
+            },
+          },
+        },
+      },
     },
   },
 };
