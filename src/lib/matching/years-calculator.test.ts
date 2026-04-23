@@ -1,13 +1,16 @@
 /**
- * Unit tests for `yearsForSkill()` (ADR-015 §1, F4-007 sub-B).
+ * Unit tests for `yearsForSkill()` (ADR-015 §1 + ADR-020).
  *
- * Sweep-line merge of experience intervals for a given skill. Only
- * `kind='work'` contributes — `side_project` and `education` are
- * excluded per ADR. Experiences with unresolved skills
- * (`skill_id === null`) never contribute even if `skill_raw` matches
- * the requirement's literal string.
+ * Sweep-line merge of experience intervals for a given skill.
+ *   - `kind='work'` contributes at 100% weight.
+ *   - `kind='side_project'` contributes at 25% weight over the
+ *     portion that does NOT overlap with work (ADR-020 set-subtraction
+ *     avoids double-count).
+ *   - `kind='education'` does NOT contribute (unchanged from ADR-015).
  *
- * Tests 1–6 below map 1:1 to ADR-015 §Tests Requeridos.
+ * Experiences with unresolved skills (`skill_id === null`) never
+ * contribute even if `skill_raw` matches the requirement's literal
+ * string.
  */
 import { describe, expect, it } from 'vitest';
 
@@ -86,18 +89,76 @@ describe('yearsForSkill — ADR-015 §1', () => {
     expect(y).toBeCloseTo(3, 1);
   });
 
-  it('test_side_project_excluded_from_years — kind=side_project → 0', () => {
+  it('test_side_project_contributes_at_quarter_weight — 2y side_project → 0.5y (ADR-020)', () => {
     const exp = mkExp({
       id: 'a',
       kind: 'side_project',
-      start: '2020-01-01',
+      start: '2021-01-01',
       end: '2023-01-01',
       skills: [{ skill_id: REACT_ID, skill_raw: 'React' }],
     });
-    expect(yearsForSkill(REACT_ID, [exp], { now: NOW })).toBe(0);
+    // 2 years × 0.25 weight = 0.5 years
+    expect(yearsForSkill(REACT_ID, [exp], { now: NOW })).toBeCloseTo(0.5, 2);
   });
 
-  it('test_education_excluded_from_years — kind=education → 0', () => {
+  it('test_work_overlap_with_side_project_no_double_count — work 2020-2022 + side 2021-2023 → 2.25y (ADR-020)', () => {
+    const work = mkExp({
+      id: 'w',
+      kind: 'work',
+      start: '2020-01-01',
+      end: '2022-01-01',
+      skills: [{ skill_id: REACT_ID, skill_raw: 'React' }],
+    });
+    const side = mkExp({
+      id: 's',
+      kind: 'side_project',
+      start: '2021-01-01',
+      end: '2023-01-01',
+      skills: [{ skill_id: REACT_ID, skill_raw: 'React' }],
+    });
+    // work: 2020-2022 (2y @ 1.0) + side net-of-work: 2022-2023 (1y @ 0.25) = 2.25
+    expect(yearsForSkill(REACT_ID, [work, side], { now: NOW })).toBeCloseTo(2.25, 2);
+  });
+
+  it('test_side_project_fully_contained_in_work_adds_nothing — overlap subtracted to 0 (ADR-020)', () => {
+    const work = mkExp({
+      id: 'w',
+      kind: 'work',
+      start: '2020-01-01',
+      end: '2024-01-01',
+      skills: [{ skill_id: REACT_ID, skill_raw: 'React' }],
+    });
+    const side = mkExp({
+      id: 's',
+      kind: 'side_project',
+      start: '2021-01-01',
+      end: '2022-01-01',
+      skills: [{ skill_id: REACT_ID, skill_raw: 'React' }],
+    });
+    // work: 4y @ 1.0 + side net-of-work: 0y @ 0.25 = 4
+    expect(yearsForSkill(REACT_ID, [work, side], { now: NOW })).toBeCloseTo(4, 2);
+  });
+
+  it('test_multiple_disjoint_side_projects — two disjoint 2y side_projects → 1y (ADR-020)', () => {
+    const a = mkExp({
+      id: 'a',
+      kind: 'side_project',
+      start: '2018-01-01',
+      end: '2020-01-01',
+      skills: [{ skill_id: REACT_ID, skill_raw: 'React' }],
+    });
+    const b = mkExp({
+      id: 'b',
+      kind: 'side_project',
+      start: '2022-01-01',
+      end: '2024-01-01',
+      skills: [{ skill_id: REACT_ID, skill_raw: 'React' }],
+    });
+    // (2 + 2) × 0.25 = 1
+    expect(yearsForSkill(REACT_ID, [a, b], { now: NOW })).toBeCloseTo(1, 2);
+  });
+
+  it('test_education_still_excluded — kind=education → 0 (ADR-020 regression guard)', () => {
     const exp = mkExp({
       id: 'a',
       kind: 'education',
