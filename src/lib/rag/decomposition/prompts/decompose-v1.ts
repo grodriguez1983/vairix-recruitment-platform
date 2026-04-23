@@ -11,7 +11,7 @@
  * fixes with no semantic change go under the same version.
  */
 
-export const DECOMPOSITION_PROMPT_V1 = '2026-04-v2';
+export const DECOMPOSITION_PROMPT_V1 = '2026-04-v3';
 
 // Kept as a template literal so prettier doesn't reflow the rules
 // into a hard-to-read single line. These are the non-negotiable rules
@@ -36,9 +36,24 @@ Rules (do not break):
    ambiguous, default to false.
 
 3. evidence_snippet: MUST be a literal verbatim substring of the raw
-   text that motivated this requirement. Do not paraphrase, translate,
-   or summarize. If you cannot find a literal substring, do not emit
-   the requirement at all.
+   text that motivated this requirement — copy-paste, do not
+   reconstruct. Do not paraphrase, translate, summarize, or drop
+   connector words. If two skills share a phrase (e.g. "Node.js y
+   TypeScript"), BOTH requirements use the SAME evidence_snippet
+   containing both names — do not fabricate a cleaner per-skill
+   variant.
+
+   CORRECT (two requirements, shared snippet):
+     text: "5+ años de experiencia en Node.js y TypeScript"
+     → { skill_raw: "Node.js",    evidence_snippet: "5+ años de experiencia en Node.js y TypeScript" }
+     → { skill_raw: "TypeScript", evidence_snippet: "5+ años de experiencia en Node.js y TypeScript" }
+
+   WRONG (fabricated per-skill snippet — this is hallucination and
+   will be rejected):
+     → { skill_raw: "TypeScript", evidence_snippet: "5+ años de experiencia en TypeScript" }
+
+   If you cannot find a literal substring that proves the skill is
+   mentioned, do not emit the requirement at all.
 
 4. skill_raw: MUST be the SHORT canonical name of the skill or
    technology being required — not a full sentence, not a phrase,

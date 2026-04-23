@@ -87,10 +87,18 @@ function isZodError(e: unknown): boolean {
  * substring of the preprocessed raw_text. A mismatch means the LLM
  * paraphrased or fabricated the evidence — we refuse to persist the
  * row.
+ *
+ * The snippet is normalized with the same `preprocess` used on
+ * raw_text so that whitespace differences (the LLM sees the original
+ * raw_text, which may contain newlines/indent, while `normalized`
+ * has collapsed them) do not produce false positives. Only pure
+ * whitespace collapsing is forgiven — any lexical drift in the
+ * snippet still trips the guard.
  */
 function assertLiteralSnippets(decomposed: DecompositionResult, normalized: string): void {
   for (const req of decomposed.requirements) {
-    if (!normalized.includes(req.evidence_snippet)) {
+    const snippet = preprocess(req.evidence_snippet);
+    if (!normalized.includes(snippet)) {
       throw new DecompositionError(
         'hallucinated_snippet',
         `evidence_snippet for ${req.skill_raw} is not a literal substring of raw_text`,
