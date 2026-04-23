@@ -66,6 +66,27 @@ test.describe('@smoke matching UC-11', () => {
     await expect(page.getByText(/evidence/i)).toBeVisible();
   });
 
+  test('evidence drawer for Alice transitions from loading to showing snippets', async ({
+    page,
+  }) => {
+    // Regression: the fetch effect used to capture the parent's inline
+    // `onEvidenceLoaded` callback in its deps array. Every parent re-render
+    // produced a new identity, which (a) fired the effect's cleanup and
+    // flipped `cancelled=true` on the in-flight fetch, and (b) re-ran the
+    // effect with `evidence !== undefined`, bailing early. The UI stuck
+    // on "evidence · loading…" even though GET /api/matching/runs/:id/evidence
+    // returned snippets.
+    const { matchRunId } = loadIds();
+    await page.goto(`/matching/runs/${matchRunId}`);
+    await page.getByRole('button', { name: /Alice Lang/ }).click();
+    // The loading placeholder must disappear once the fetch resolves.
+    await expect(page.getByText('evidence · loading…')).toBeHidden({ timeout: 8_000 });
+    // Alice's seeded parsed_text mentions React; the FTS RPC wraps
+    // the hit with «…» which the UI replaces with <mark>. Asserting
+    // the `<mark>` confirms the snippet path rendered successfully.
+    await expect(page.locator('mark').first()).toBeVisible();
+  });
+
   test('/admin/skills lists the seeded React skill', async ({ page }) => {
     await page.goto('/admin/skills');
     await expect(page.getByRole('heading', { name: /Skills catalog/i })).toBeVisible();
