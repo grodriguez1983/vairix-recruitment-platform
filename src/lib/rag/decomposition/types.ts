@@ -29,6 +29,20 @@ export const SeniorityEnum = z.enum(['junior', 'semi_senior', 'senior', 'lead', 
 
 export const RequirementCategoryEnum = z.enum(['technical', 'language', 'soft', 'other']);
 
+// ADR-023: funciones del rol extraídas del título/intro del JD. Cada
+// grupo es "al menos una de estas skills debe estar presente para
+// calificar" (OR dentro del grupo; AND entre grupos). Lista vacía
+// desactiva el gate.
+export const RoleEssentialLabelEnum = z.enum(['frontend', 'backend', 'mobile', 'data', 'devops']);
+
+export const RoleEssentialGroupSchema = z.object({
+  label: RoleEssentialLabelEnum,
+  // `skill_raw` values (pre-resolution). Cada uno DEBE aparecer
+  // también en `requirements[].skill_raw` para que el resolver los
+  // mapee a `skill_id`s del catálogo.
+  skill_raws: z.array(z.string().min(1)).min(1),
+});
+
 export const LanguageLevelEnum = z.enum([
   'basic',
   'intermediate',
@@ -64,6 +78,9 @@ export const DecompositionResultSchema = z.object({
   seniority: SeniorityEnum,
   languages: z.array(LanguageSchema),
   notes: z.string().nullable(),
+  // ADR-023: backward-compat — default a lista vacía si el provider
+  // viejo (prompt < v6) no lo emite. Empty array ≡ "no gate".
+  role_essentials: z.array(RoleEssentialGroupSchema).default([]),
 });
 
 export type Seniority = z.infer<typeof SeniorityEnum>;
@@ -71,4 +88,6 @@ export type RequirementCategory = z.infer<typeof RequirementCategoryEnum>;
 export type LanguageLevel = z.infer<typeof LanguageLevelEnum>;
 export type Requirement = z.infer<typeof RequirementSchema>;
 export type JobQueryLanguage = z.infer<typeof LanguageSchema>;
+export type RoleEssentialLabel = z.infer<typeof RoleEssentialLabelEnum>;
+export type RoleEssentialGroup = z.infer<typeof RoleEssentialGroupSchema>;
 export type DecompositionResult = z.infer<typeof DecompositionResultSchema>;

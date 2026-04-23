@@ -220,6 +220,7 @@ function stubFixture(): DecompositionResult {
     seniority: 'senior',
     languages: [],
     notes: null,
+    role_essentials: [],
   };
 }
 

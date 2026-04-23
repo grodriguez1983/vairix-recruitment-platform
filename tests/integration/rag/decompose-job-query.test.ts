@@ -79,6 +79,7 @@ function fixtureResult(): DecompositionResult {
     seniority: 'senior',
     languages: [],
     notes: null,
+    role_essentials: [],
   };
 }
 

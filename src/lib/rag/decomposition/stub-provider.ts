@@ -51,6 +51,7 @@ function deterministicResult(rawText: string): DecompositionResult {
     seniority: 'unspecified',
     languages: [],
     notes: null,
+    role_essentials: [],
   };
 }
 

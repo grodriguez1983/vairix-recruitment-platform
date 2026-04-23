@@ -48,6 +48,7 @@ function validResult(): DecompositionResult {
     seniority: 'senior',
     languages: [{ name: 'English', level: 'intermediate', must_have: false }],
     notes: null,
+    role_essentials: [],
   };
 }
 

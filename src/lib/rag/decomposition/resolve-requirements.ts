@@ -19,11 +19,28 @@
  */
 import { resolveSkill, type CatalogSnapshot } from '../../skills/resolver';
 
-import type { DecompositionResult, JobQueryLanguage, Requirement, Seniority } from './types';
+import type {
+  DecompositionResult,
+  JobQueryLanguage,
+  Requirement,
+  RoleEssentialLabel,
+  Seniority,
+} from './types';
 
 export interface ResolvedRequirement extends Requirement {
   skill_id: string | null;
   resolved_at: string | null;
+}
+
+// ADR-023: `role_essentials` con skill_ids resueltos. Los skill_raws
+// que no resuelven contra el catálogo son DROPPED silenciosamente
+// (los tests cubren el caso) — un grupo queda sin alternativas →
+// `skill_ids: []` → se trata como "no gate" (empty group, match). Si
+// todas las alternativas no resuelven el grupo se vuelve vacuo, no
+// bloquea el match.
+export interface ResolvedRoleEssentialGroup {
+  label: RoleEssentialLabel;
+  skill_ids: string[];
 }
 
 export interface ResolvedDecomposition {
@@ -31,6 +48,7 @@ export interface ResolvedDecomposition {
   seniority: Seniority;
   languages: JobQueryLanguage[];
   notes: string | null;
+  role_essentials: ResolvedRoleEssentialGroup[];
 }
 
 export interface ResolveRequirementsResult {
@@ -65,12 +83,24 @@ export function resolveRequirements(
     return { ...r, skill_id: null, resolved_at: null };
   });
 
+  // ADR-023: resolver cada `role_essentials` a skill_ids. Los raws que
+  // no matcheen el catálogo se descartan; un grupo sin ids resueltos
+  // se preserva con `skill_ids: []` (el scorer lo interpreta como
+  // "grupo vacuo, no bloquea").
+  const roleEssentials = (decomposition.role_essentials ?? []).map((g) => ({
+    label: g.label,
+    skill_ids: g.skill_raws
+      .map((raw) => resolveSkill(raw, catalog)?.skill_id ?? null)
+      .filter((id): id is string => id !== null),
+  }));
+
   return {
     resolved: {
       requirements,
       seniority: decomposition.seniority,
       languages: decomposition.languages,
       notes: decomposition.notes,
+      role_essentials: roleEssentials,
     },
     unresolved_skills: unresolvedOrder,
   };

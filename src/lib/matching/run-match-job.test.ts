@@ -42,6 +42,7 @@ function jobQuery(): ResolvedDecomposition {
     seniority: 'unspecified',
     languages: [],
     notes: null,
+    role_essentials: [],
   };
 }
 

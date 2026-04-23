@@ -74,6 +74,7 @@ function sampleResult(skillRaw: string): DecompositionResult {
     seniority: 'senior',
     languages: [],
     notes: null,
+    role_essentials: [],
   };
 }
 
@@ -242,6 +243,7 @@ describe('decomposeJobQuery — cache hit', () => {
       seniority: 'unspecified' as const,
       languages: [],
       notes: null,
+      role_essentials: [],
     };
     const deps = baseDeps({
       findByHash: vi.fn(async () => ({
@@ -317,6 +319,7 @@ describe('decomposeJobQuery — error mapping', () => {
             seniority: 'senior',
             languages: [],
             notes: null,
+            role_essentials: [],
           }),
         ),
       },

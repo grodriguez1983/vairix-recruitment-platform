@@ -69,6 +69,7 @@ describe('createStubDecompositionProvider', () => {
       seniority: 'lead',
       languages: [],
       notes: null,
+      role_essentials: [],
     };
     const p = createStubDecompositionProvider({ fixture });
     const a = await p.decompose('anything');

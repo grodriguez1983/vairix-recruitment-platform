@@ -175,6 +175,7 @@ describe('buildRunMatchJobDeps — pagination past PostgREST max_rows', () => {
         languages: [],
         seniority: 'unspecified',
         notes: null,
+        role_essentials: [],
       },
       null,
     );

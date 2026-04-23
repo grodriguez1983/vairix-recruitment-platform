@@ -42,6 +42,7 @@ function jobQuery(overrides: Partial<ResolvedDecomposition> = {}): ResolvedDecom
     seniority: overrides.seniority ?? 'unspecified',
     languages: overrides.languages ?? [],
     notes: overrides.notes ?? null,
+    role_essentials: overrides.role_essentials ?? [],
   };
 }
 
