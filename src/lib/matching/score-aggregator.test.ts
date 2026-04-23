@@ -722,3 +722,244 @@ describe('aggregateScore — ADR-022 seniority-derived min_years baseline', () =
     expect(hernan.breakdown[0]!.contribution).toBeGreaterThan(lucas.breakdown[0]!.contribution);
   });
 });
+
+/**
+ * ADR-023 — role_essentials gate + 2× weight.
+ *
+ * Incident (2026-04-23, job_query ccfd19d3-...): "Senior Full-Stack
+ * Engineer (React / Next.js / React Native / Node.js)". Lucas Diez
+ * ranked #1 with zero Node.js experience because:
+ *   (1) all requirements came back `must_have: false, min_years: null`
+ *       so the old must-have gate never fired on Node;
+ *   (2) four infra partials (Docker/AWS/MongoDB/GraphQL) at identical
+ *       2.81y each summed into a score that beat Victor Abeledo's
+ *       full core stack;
+ *   (3) seniority `above` returned 0 instead of +5 (Step 1 fix).
+ *
+ * The role_essentials gate closes (1) and the 2× weight closes (2):
+ *   - Gate: for each `{label, skill_ids}` group, at least ONE
+ *     candidate `yearsForSkill(id) > 0` or `must_have_gate = failed`.
+ *     A group with empty `skill_ids` (all raws dropped by the
+ *     resolver, catalog drift) does NOT fire the gate — same
+ *     principle as ADR-015 §Consecuencias for must-have groups.
+ *   - Weight: a requirement whose `skill_id` is named in ANY
+ *     role_essentials group gets weight 2.0, same as a must-have.
+ *     Mathematically this doubles the denominator contribution the
+ *     core stack carries vs a 1.0 infra partial.
+ *
+ * Empty `role_essentials: []` must not change scoring — back-compat
+ * with prompt < v6 and with JDs that legitimately have no multi-axis
+ * gate (generic titles).
+ */
+describe('aggregateScore — ADR-023 role_essentials gate + 2× weight', () => {
+  it('gate fails when candidate has zero years on every member of a role_essentials group', () => {
+    // Requirements carry nice-to-haves (no must-have gate to trip).
+    // Role essential backend = [Node.js]. Candidate has React but
+    // zero Node → gate must fail → score = 0.
+    const reqs = [
+      mkRequirement({ skill_raw: 'React', skill_id: REACT_ID, min_years: null, must_have: false }),
+      mkRequirement({ skill_raw: 'Node.js', skill_id: KUBE_ID, min_years: null, must_have: false }),
+    ];
+    const exp = mkExp({
+      id: 'a',
+      start: '2022-01-01',
+      end: '2025-01-01',
+      skills: [{ skill_id: REACT_ID, skill_raw: 'React' }],
+    });
+    const result = aggregateScore(
+      mkJobQuery({
+        requirements: reqs,
+        role_essentials: [{ label: 'backend', skill_ids: [KUBE_ID] }],
+      }),
+      mkCandidate({ candidate_id: 'c', merged_experiences: [exp] }),
+      { now: NOW },
+    );
+    expect(result.must_have_gate).toBe('failed');
+    expect(result.total_score).toBe(0);
+  });
+
+  it('gate passes when at least one alternative in the group has candidate years > 0', () => {
+    // Group has two alts (frontend = [React, Tailwind]); candidate
+    // has React only. That satisfies the axis, gate passes.
+    const reqs = [
+      mkRequirement({ skill_raw: 'React', skill_id: REACT_ID, min_years: 1, must_have: false }),
+      mkRequirement({
+        skill_raw: 'Tailwind',
+        skill_id: TAILWIND_ID,
+        min_years: 1,
+        must_have: false,
+      }),
+    ];
+    const exp = mkExp({
+      id: 'a',
+      start: '2022-01-01',
+      end: '2025-01-01',
+      skills: [{ skill_id: REACT_ID, skill_raw: 'React' }],
+    });
+    const result = aggregateScore(
+      mkJobQuery({
+        requirements: reqs,
+        role_essentials: [{ label: 'frontend', skill_ids: [REACT_ID, TAILWIND_ID] }],
+      }),
+      mkCandidate({ candidate_id: 'c', merged_experiences: [exp] }),
+      { now: NOW },
+    );
+    expect(result.must_have_gate).toBe('passed');
+    expect(result.total_score).toBeGreaterThan(0);
+  });
+
+  it('empty skill_ids in a group is a no-op (catalog drift must not silently filter)', () => {
+    // A group whose raws all failed to resolve (skill_ids: []) is
+    // the "no signal" case — it must not fail the gate. Otherwise
+    // the scorer hides every candidate the moment catalog drifts.
+    const reqs = [
+      mkRequirement({ skill_raw: 'React', skill_id: REACT_ID, min_years: 1, must_have: false }),
+    ];
+    const exp = mkExp({
+      id: 'a',
+      start: '2023-01-01',
+      end: '2025-01-01',
+      skills: [{ skill_id: REACT_ID, skill_raw: 'React' }],
+    });
+    const result = aggregateScore(
+      mkJobQuery({
+        requirements: reqs,
+        role_essentials: [{ label: 'devops', skill_ids: [] }],
+      }),
+      mkCandidate({ candidate_id: 'c', merged_experiences: [exp] }),
+      { now: NOW },
+    );
+    expect(result.must_have_gate).toBe('passed');
+    expect(result.total_score).toBeGreaterThan(0);
+  });
+
+  it('role-essential skill_id forces weight 2.0 on an otherwise nice-to-have requirement', () => {
+    // Two nice-to-haves, same ratio (both fully satisfied). Without
+    // role_essentials they carry equal weight (1.0 each). Declaring
+    // one of them as a role-essential bumps its weight to 2.0, so
+    // its contribution to total_score grows.
+    //
+    // With role_essentials=[{frontend, [REACT_ID]}]:
+    //   - React:  weight 2.0, ratio 1.0 → contribution 2.0
+    //   - Kube:   weight 1.0, ratio 1.0 → contribution 1.0
+    //   Total = 3 / 3 = 100  (denominator = 2.0 + 1.0)
+    // Without role_essentials:
+    //   - React:  weight 1.0, ratio 1.0 → contribution 1.0
+    //   - Kube:   weight 1.0, ratio 1.0 → contribution 1.0
+    //   Total = 2 / 2 = 100
+    // So both hit 100 when both are fully satisfied. We need an
+    // asymmetric scenario: React fully satisfied, Kube not at all.
+    //   With role_essentials on React:
+    //     denom = 2.0 + 1.0 = 3.0; numer = 2.0 + 0 = 2.0 → 66.67
+    //   Without:
+    //     denom = 1.0 + 1.0 = 2.0; numer = 1.0 + 0 = 1.0 → 50.0
+    const reqs = [
+      mkRequirement({ skill_raw: 'React', skill_id: REACT_ID, min_years: 1, must_have: false }),
+      mkRequirement({ skill_raw: 'Kube', skill_id: KUBE_ID, min_years: 1, must_have: false }),
+    ];
+    const exp = mkExp({
+      id: 'a',
+      start: '2022-01-01',
+      end: '2025-01-01',
+      skills: [{ skill_id: REACT_ID, skill_raw: 'React' }],
+    });
+    const withEssential = aggregateScore(
+      mkJobQuery({
+        requirements: reqs,
+        role_essentials: [{ label: 'frontend', skill_ids: [REACT_ID] }],
+      }),
+      mkCandidate({ candidate_id: 'c', merged_experiences: [exp] }),
+      { now: NOW },
+    );
+    const withoutEssential = aggregateScore(
+      mkJobQuery({ requirements: reqs }),
+      mkCandidate({ candidate_id: 'c', merged_experiences: [exp] }),
+      { now: NOW },
+    );
+    expect(withoutEssential.total_score).toBeCloseTo(50, 0);
+    expect(withEssential.total_score).toBeGreaterThan(withoutEssential.total_score);
+    expect(withEssential.total_score).toBeCloseTo((2 / 3) * 100, 0);
+  });
+
+  it('empty role_essentials list leaves scoring identical to pre-ADR-023 (regression guard)', () => {
+    // If role_essentials is [], the scorer must behave exactly as
+    // before: same gate, same weights, same total. We build a
+    // scenario with a mix of ratios and assert bit-for-bit equality.
+    const reqs = [
+      mkRequirement({ skill_raw: 'React', skill_id: REACT_ID, min_years: 2, must_have: true }),
+      mkRequirement({ skill_raw: 'Kube', skill_id: KUBE_ID, min_years: 2, must_have: false }),
+    ];
+    const exp = mkExp({
+      id: 'a',
+      start: '2023-01-01',
+      end: '2025-01-01',
+      skills: [
+        { skill_id: REACT_ID, skill_raw: 'React' },
+        { skill_id: KUBE_ID, skill_raw: 'Kube' },
+      ],
+    });
+    const result = aggregateScore(
+      mkJobQuery({ requirements: reqs, role_essentials: [] }),
+      mkCandidate({ candidate_id: 'c', merged_experiences: [exp] }),
+      { now: NOW },
+    );
+    expect(result.must_have_gate).toBe('passed');
+    // Pre-ADR-023: React (must, w=2, ratio=1, c=2) + Kube (nice, w=1,
+    // ratio=1, c=1) → (2+1)/(2+1)*100 = 100. Confirms no drift.
+    expect(result.total_score).toBe(100);
+  });
+
+  it('Lucas Diez vs Victor scenario — role_essentials=backend[Node] gates out Lucas (0y Node), Victor passes', () => {
+    // Canonical regression test from the 2026-04-23 incident. Two
+    // candidates against a full-stack JD:
+    //   - Lucas: React + infra partials, 0y Node.js
+    //   - Victor: React + Node.js full stack
+    // With role_essentials=[{backend,[Node]}, {frontend,[React]}]
+    // Lucas fails the backend gate; Victor passes both.
+    const NODE_ID = '00000000-0000-0000-0000-000000000099';
+    const reqs = [
+      mkRequirement({ skill_raw: 'React', skill_id: REACT_ID, min_years: null, must_have: false }),
+      mkRequirement({ skill_raw: 'Node.js', skill_id: NODE_ID, min_years: null, must_have: false }),
+    ];
+    const jq = mkJobQuery({
+      requirements: reqs,
+      seniority: 'senior',
+      role_essentials: [
+        { label: 'frontend', skill_ids: [REACT_ID] },
+        { label: 'backend', skill_ids: [NODE_ID] },
+      ],
+    });
+
+    const lucasExp = mkExp({
+      id: 'lucas',
+      start: '2018-01-01',
+      end: '2025-01-01',
+      skills: [{ skill_id: REACT_ID, skill_raw: 'React' }], // no Node.js
+    });
+    const victorExp = mkExp({
+      id: 'victor',
+      start: '2018-01-01',
+      end: '2025-01-01',
+      skills: [
+        { skill_id: REACT_ID, skill_raw: 'React' },
+        { skill_id: NODE_ID, skill_raw: 'Node.js' },
+      ],
+    });
+
+    const lucas = aggregateScore(
+      jq,
+      mkCandidate({ candidate_id: 'lucas', merged_experiences: [lucasExp] }),
+      { now: NOW },
+    );
+    const victor = aggregateScore(
+      jq,
+      mkCandidate({ candidate_id: 'victor', merged_experiences: [victorExp] }),
+      { now: NOW },
+    );
+
+    expect(lucas.must_have_gate).toBe('failed');
+    expect(lucas.total_score).toBe(0);
+    expect(victor.must_have_gate).toBe('passed');
+    expect(victor.total_score).toBeGreaterThan(0);
+  });
+});
