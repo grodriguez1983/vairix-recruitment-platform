@@ -26,18 +26,68 @@ export interface BuildRunMatchJobDepsOptions {
   now?: () => Date;
 }
 
+/**
+ * PostgREST hard-caps each SELECT response at `max_rows = 1000`
+ * (supabase/config.toml). Any row-returning fetch MUST loop over
+ * `.range(offset, offset + PAGE_SIZE - 1)` until a short page
+ * signals EOF — otherwise rows past row 1000 are silently dropped.
+ * Kept strictly below 1000 so "fewer rows than requested" is an
+ * unambiguous EOF signal even under the cap.
+ */
+const PAGE_SIZE = 500;
+
+/**
+ * Cap for `.in('col', ids)` input arrays. Supabase-js renders these
+ * as a comma-separated list in the querystring, which at ~50 chars
+ * per UUID hits the server's URI length limit well before 1_000 ids
+ * (observed "URI too long" at ~1_100 in the pagination RED test).
+ * 200 keeps the encoded list under ~10KB, comfortably below the
+ * default 8KB–16KB URI cap across the stack.
+ */
+const IN_CHUNK_SIZE = 200;
+
 export function buildRunMatchJobDeps(
   supabase: SupabaseClient,
   options: BuildRunMatchJobDepsOptions = {},
 ): RunMatchJobDeps {
   const ranker = new DeterministicRanker();
 
+  /**
+   * Drive a range-paginated SELECT until a short page (< PAGE_SIZE)
+   * signals EOF. `runPage(from, to)` is re-invoked per page so the
+   * caller can rebuild any filters on the query — supabase-js
+   * builders are not reusable once awaited.
+   */
+  async function paginateRange<T>(
+    label: string,
+    runPage: (
+      from: number,
+      to: number,
+    ) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
+  ): Promise<T[]> {
+    const out: T[] = [];
+    let offset = 0;
+    // Hard upper bound (5M rows) as a safety net against an infinite
+    // loop if PostgREST ever returns a full page past end-of-data.
+    const MAX_ITERATIONS = 10_000;
+    for (let i = 0; i < MAX_ITERATIONS; i += 1) {
+      const { data, error } = await runPage(offset, offset + PAGE_SIZE - 1);
+      if (error) throw new Error(`${label}: ${error.message}`);
+      const rows = data ?? [];
+      for (const r of rows) out.push(r);
+      if (rows.length < PAGE_SIZE) return out;
+      offset += PAGE_SIZE;
+    }
+    throw new Error(`${label}: exceeded MAX_ITERATIONS paginating`);
+  }
+
   async function fetchAllCandidateIds(_tenantId: string | null): Promise<string[]> {
     // RLS already scopes candidates; tenant_id hedge (ADR-003) is a
     // no-op in F1 and stays at the DB layer for Fase 2+.
-    const { data, error } = await supabase.from('candidates').select('id');
-    if (error) throw new Error(`fetchAllCandidateIds: ${error.message}`);
-    return (data ?? []).map((r) => r.id as string);
+    const rows = await paginateRange<{ id: string }>('fetchAllCandidateIds', (from, to) =>
+      supabase.from('candidates').select('id').range(from, to),
+    );
+    return rows.map((r) => r.id);
   }
 
   async function fetchCandidateMustHaveCoverage(
@@ -47,20 +97,34 @@ export function buildRunMatchJobDeps(
     // Fetch (candidate_id, skill_id) pairs for the resolved
     // must-have set and let the pure filter derive both included
     // (full coverage) and excluded (partial / zero coverage) in JS.
-    // For F1 scale (~100 candidates × ~N resolved must-haves) this
-    // is well below the RLS join cost of a dedicated RPC.
+    // `skillIds` is typically tiny (≤ ~10 resolved must-haves) so we
+    // chunk input defensively; the row count (one per experience
+    // touching a must-have skill) can easily exceed max_rows on a
+    // sizable candidate pool, so each chunk is range-paginated.
     if (skillIds.length === 0) return [];
-    const { data, error } = await supabase
-      .from('experience_skills')
-      .select('skill_id, candidate_experiences!inner(candidate_id)')
-      .in('skill_id', skillIds);
-    if (error) throw new Error(`fetchCandidateMustHaveCoverage: ${error.message}`);
+
+    type Row = {
+      skill_id: string | null;
+      candidate_experiences: unknown;
+    };
+    const allRows: Row[] = [];
+    for (let i = 0; i < skillIds.length; i += IN_CHUNK_SIZE) {
+      const chunk = skillIds.slice(i, i + IN_CHUNK_SIZE);
+      const rows = await paginateRange<Row>('fetchCandidateMustHaveCoverage', (from, to) =>
+        supabase
+          .from('experience_skills')
+          .select('skill_id, candidate_experiences!inner(candidate_id)')
+          .in('skill_id', chunk)
+          .range(from, to),
+      );
+      for (const r of rows) allRows.push(r);
+    }
 
     const byCandidate = new Map<string, Set<string>>();
-    for (const row of data ?? []) {
+    for (const row of allRows) {
       const ce = row.candidate_experiences as unknown as { candidate_id: string } | null;
       if (ce === null) continue;
-      const skillId = row.skill_id as string | null;
+      const skillId = row.skill_id;
       if (skillId === null) continue;
       const set = byCandidate.get(ce.candidate_id) ?? new Set<string>();
       set.add(skillId);
@@ -75,23 +139,45 @@ export function buildRunMatchJobDeps(
 
   async function loadExperiences(candidateIds: string[]): Promise<CandidateExperienceRow[]> {
     if (candidateIds.length === 0) return [];
-    const { data, error } = await supabase
-      .from('candidate_experiences')
-      .select(
-        'id, candidate_id, source_variant, kind, company, title, start_date, end_date, description, experience_skills(skill_id, skill_raw)',
-      )
-      .in('candidate_id', candidateIds);
-    if (error) throw new Error(`loadExperiences: ${error.message}`);
-    return (data ?? []).map((row) => ({
-      candidate_id: row.candidate_id as string,
-      id: row.id as string,
+
+    type Row = {
+      id: string;
+      candidate_id: string;
+      source_variant: string;
+      kind: string;
+      company: string | null;
+      title: string | null;
+      start_date: string | null;
+      end_date: string | null;
+      description: string | null;
+      experience_skills: Array<{ skill_id: string | null; skill_raw: string }> | null;
+    };
+
+    const all: Row[] = [];
+    for (let i = 0; i < candidateIds.length; i += IN_CHUNK_SIZE) {
+      const chunk = candidateIds.slice(i, i + IN_CHUNK_SIZE);
+      const rows = await paginateRange<Row>('loadExperiences', (from, to) =>
+        supabase
+          .from('candidate_experiences')
+          .select(
+            'id, candidate_id, source_variant, kind, company, title, start_date, end_date, description, experience_skills(skill_id, skill_raw)',
+          )
+          .in('candidate_id', chunk)
+          .range(from, to),
+      );
+      for (const r of rows) all.push(r);
+    }
+
+    return all.map((row) => ({
+      candidate_id: row.candidate_id,
+      id: row.id,
       source_variant: row.source_variant as SourceVariant,
       kind: row.kind as ExperienceKind,
-      company: (row.company as string | null) ?? null,
-      title: (row.title as string | null) ?? null,
-      start_date: (row.start_date as string | null) ?? null,
-      end_date: (row.end_date as string | null) ?? null,
-      description: (row.description as string | null) ?? null,
+      company: row.company ?? null,
+      title: row.title ?? null,
+      start_date: row.start_date ?? null,
+      end_date: row.end_date ?? null,
+      description: row.description ?? null,
       skills: ((row.experience_skills ?? []) as ExperienceSkill[]).map((s) => ({
         skill_id: s.skill_id ?? null,
         skill_raw: s.skill_raw,
@@ -101,15 +187,25 @@ export function buildRunMatchJobDeps(
 
   async function loadLanguages(candidateIds: string[]): Promise<CandidateLanguageRow[]> {
     if (candidateIds.length === 0) return [];
-    const { data, error } = await supabase
-      .from('candidate_languages')
-      .select('candidate_id, name, level')
-      .in('candidate_id', candidateIds);
-    if (error) throw new Error(`loadLanguages: ${error.message}`);
-    return (data ?? []).map((r) => ({
-      candidate_id: r.candidate_id as string,
-      name: r.name as string,
-      level: (r.level as string | null) ?? null,
+
+    type Row = { candidate_id: string; name: string; level: string | null };
+    const all: Row[] = [];
+    for (let i = 0; i < candidateIds.length; i += IN_CHUNK_SIZE) {
+      const chunk = candidateIds.slice(i, i + IN_CHUNK_SIZE);
+      const rows = await paginateRange<Row>('loadLanguages', (from, to) =>
+        supabase
+          .from('candidate_languages')
+          .select('candidate_id, name, level')
+          .in('candidate_id', chunk)
+          .range(from, to),
+      );
+      for (const r of rows) all.push(r);
+    }
+
+    return all.map((r) => ({
+      candidate_id: r.candidate_id,
+      name: r.name,
+      level: r.level ?? null,
     }));
   }
 
