@@ -63,11 +63,11 @@ export function JobQueryPanel({ rawText, resolved, unresolvedSkills }: Props): J
           <h2 className="mb-2 font-mono text-[10px] uppercase tracking-widest text-text-muted">
             extracted requirements · {requirements.length}
           </h2>
-          <ul className="flex flex-col gap-1.5">
+          <ul className="flex flex-wrap items-center gap-1.5">
             {groupsOrdered.map(([key, bucket]) => (
-              <li key={key} className="flex flex-wrap items-center gap-1.5">
+              <li key={key} className="inline-flex items-center gap-1.5">
                 {bucket.map((r, i) => (
-                  <span key={`${key}-${i}`} className="contents">
+                  <span key={`${key}-${i}`} className="inline-flex items-center gap-1.5">
                     {i > 0 && (
                       <span className="font-mono text-[10px] uppercase tracking-wider text-text-muted">
                         or
