@@ -264,4 +264,100 @@ describe('resolveSkill — ADR-013 §2 pipeline', () => {
     );
     expect(catalog.aliasMap.get('jquery-ui')).toBe(JQUERY);
   });
+
+  // ──────────────────────────────────────────────────────────────
+  // ADR-024: collapse `-`/`_` between alphanumerics to space
+  // ──────────────────────────────────────────────────────────────
+  // The canonical incident: a CV with `skill_raw="React-Native"` was
+  // being dropped because the normalizer only lowercased and
+  // collapsed whitespace — never bridged the hyphen form to the slug
+  // `"react native"`. The new pass is `([a-z0-9])[-_](?=[a-z0-9])
+  // → '$1 '`, applied after lowercase and before slug lookup, so
+  // `"React-Native"` → `"react-native"` → `"react native"` → match.
+
+  describe('ADR-024 — hyphen / underscore collapse between alphanumerics', () => {
+    it('resolves "React-Native" to the slug "react native" via collapse', () => {
+      const catalog = makeCatalog(
+        [{ id: REACT_NATIVE, slug: 'react native', deprecated: false }],
+        [],
+      );
+      expect(resolveSkill('React-Native', catalog)?.skill_id).toBe(REACT_NATIVE);
+      expect(resolveSkill('react-native', catalog)?.skill_id).toBe(REACT_NATIVE);
+      expect(resolveSkill('REACT-NATIVE', catalog)?.skill_id).toBe(REACT_NATIVE);
+    });
+
+    it('resolves "React_Native" (underscore) to the slug "react native"', () => {
+      const catalog = makeCatalog(
+        [{ id: REACT_NATIVE, slug: 'react native', deprecated: false }],
+        [],
+      );
+      expect(resolveSkill('React_Native', catalog)?.skill_id).toBe(REACT_NATIVE);
+      expect(resolveSkill('react_native', catalog)?.skill_id).toBe(REACT_NATIVE);
+    });
+
+    it('collapses repeated hyphens in a single pass (a-b-c → a b c)', () => {
+      // Regression: a naive `replace(/[-_]/g, ' ')` or a non-
+      // lookahead pattern with /g may leave `a b-c` after the first
+      // match consumes the anchor char. Use lookahead so the
+      // alphanumeric after the hyphen is preserved for the next
+      // iteration.
+      const RUBY_ON_RAILS = '00000000-0000-0000-0000-0000000000aa';
+      const catalog = makeCatalog(
+        [{ id: RUBY_ON_RAILS, slug: 'ruby on rails', deprecated: false }],
+        [],
+      );
+      expect(resolveSkill('ruby-on-rails', catalog)?.skill_id).toBe(RUBY_ON_RAILS);
+      expect(resolveSkill('Ruby-On-Rails', catalog)?.skill_id).toBe(RUBY_ON_RAILS);
+      expect(resolveSkill('ruby_on_rails', catalog)?.skill_id).toBe(RUBY_ON_RAILS);
+    });
+
+    it('does NOT collapse hyphen at the start or end of the string', () => {
+      // A leading/trailing hyphen has no alphanum on one side so the
+      // lookahead/lookbehind fails — the char stays put. Keeps the
+      // slug match behavior for edge cases like `--react` stable.
+      const catalog = makeCatalog([{ id: REACT, slug: 'react', deprecated: false }], []);
+      expect(resolveSkill('-react', catalog)).toBeNull();
+      expect(resolveSkill('react-', catalog)).toBeNull();
+    });
+
+    it('preserves non-alphanum internal punctuation (node.js, c++, ci/cd)', () => {
+      // The collapse is scoped to `-` / `_` specifically. Dots,
+      // plusses, slashes, hashes must keep working as ADR-013 §2
+      // defines.
+      const catalog = makeCatalog(
+        [
+          { id: NODE, slug: 'node.js', deprecated: false },
+          { id: CPP, slug: 'c++', deprecated: false },
+          { id: CICD, slug: 'ci/cd', deprecated: false },
+        ],
+        [],
+      );
+      expect(resolveSkill('node.js', catalog)?.skill_id).toBe(NODE);
+      expect(resolveSkill('c++', catalog)?.skill_id).toBe(CPP);
+      expect(resolveSkill('ci/cd', catalog)?.skill_id).toBe(CICD);
+    });
+
+    it('resolves aliases that carry hyphens after their stored form is normalized to spaces', () => {
+      // Post-migration, an alias stored as "gitlab ci" must resolve
+      // both the stored form and the hyphenated input form. The
+      // resolver never needs a literal "gitlab-ci" alias row because
+      // the input collapses before lookup.
+      const GITLAB_CI = '00000000-0000-0000-0000-0000000000bb';
+      const catalog = makeCatalog(
+        [{ id: GITLAB_CI, slug: 'gitlab ci', deprecated: false }],
+        [{ skill_id: GITLAB_CI, alias_normalized: 'gitlab ci' }],
+      );
+      expect(resolveSkill('gitlab-ci', catalog)?.skill_id).toBe(GITLAB_CI);
+      expect(resolveSkill('GitLab-CI', catalog)?.skill_id).toBe(GITLAB_CI);
+      expect(resolveSkill('gitlab_ci', catalog)?.skill_id).toBe(GITLAB_CI);
+    });
+
+    it('keeps hyphen between alphanumeric and symbol untouched', () => {
+      // "c-#" is pathological but checking the edge: the hyphen is
+      // between `c` and `#`, and `#` is NOT alphanumeric, so the
+      // collapse rule does not fire. Stays `c-#`.
+      const catalog = makeCatalog([{ id: CSHARP, slug: 'c#', deprecated: false }], []);
+      expect(resolveSkill('c-#', catalog)).toBeNull();
+    });
+  });
 });
