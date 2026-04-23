@@ -185,6 +185,11 @@ export function aggregateScore(
   // justified baseline.
   const seniorityBaseline = defaultMinYearsFor(jobQuery.seniority);
 
+  // ADR-023: flatten role_essentials into the set of skill_ids that
+  // deserve the 2× weight bump. Empty set = no-op (back-compat with
+  // prompt < v6 or generic JDs).
+  const roleEssentialIds = new Set<string>(jobQuery.role_essentials.flatMap((g) => g.skill_ids));
+
   const breakdown: RequirementBreakdown[] = jobQuery.requirements.map((req) => {
     const years =
       req.skill_id !== null
@@ -202,7 +207,12 @@ export function aggregateScore(
     } else {
       ratio = Math.min(years / effectiveMinYears, 1);
     }
-    const weight = req.must_have ? WEIGHT_MUST_HAVE : WEIGHT_NICE;
+    // ADR-023: role-essential requirements carry must-have weight
+    // regardless of their must_have boolean — the axis matters as
+    // much as an explicit excluyente. must_have still wins when
+    // both apply (same value).
+    const isRoleEssential = req.skill_id !== null && roleEssentialIds.has(req.skill_id);
+    const weight = req.must_have || isRoleEssential ? WEIGHT_MUST_HAVE : WEIGHT_NICE;
     const contribution = weight * ratio;
     const evidence =
       req.skill_id !== null ? collectEvidence(req.skill_id, candidate.merged_experiences) : [];
@@ -240,7 +250,7 @@ export function aggregateScore(
   }
   const groups = [...groupsByKey.values()];
 
-  const gateFailed = groups.some((g) => {
+  const mustHaveGateFailed = groups.some((g) => {
     if (!g.must_have) return false;
     // A group with every alternative unresolved does NOT fail the
     // gate (ADR-015). Only groups with ≥1 resolved alternative are
@@ -253,6 +263,22 @@ export function aggregateScore(
     );
     return !anySatisfied;
   });
+
+  // ADR-023: axis gate. For each non-empty role_essentials group,
+  // at least one alt must have candidate years > 0 (binary
+  // presence, NOT years_ratio — the axis is about coverage of the
+  // role, not about hitting the JD's year threshold). Empty
+  // skill_ids short-circuit to pass to avoid silently hiding
+  // candidates when the catalog drifts.
+  const roleGateFailed = jobQuery.role_essentials.some((group) => {
+    if (group.skill_ids.length === 0) return false;
+    const anySatisfied = group.skill_ids.some(
+      (id) => yearsForSkill(id, candidate.merged_experiences, { now }) > 0,
+    );
+    return !anySatisfied;
+  });
+
+  const gateFailed = mustHaveGateFailed || roleGateFailed;
   const must_have_gate: MustHaveGate = gateFailed ? 'failed' : 'passed';
 
   const langStats = computeLanguageMatch(jobQuery, candidate);
@@ -275,7 +301,15 @@ export function aggregateScore(
     let totalWeight = 0;
     let totalContribution = 0;
     for (const g of groups) {
-      const groupWeight = g.must_have ? WEIGHT_MUST_HAVE : WEIGHT_NICE;
+      // ADR-023: the group inherits the 2× weight if any alt's
+      // skill_id is a role-essential. Without this, the numerator
+      // would include a bumped per-entry contribution (up to 2.0)
+      // while the denominator would still count the group at 1.0,
+      // inflating the normalized score past 100.
+      const isGroupRoleEssential = g.entries.some(
+        (e) => e.requirement.skill_id !== null && roleEssentialIds.has(e.requirement.skill_id),
+      );
+      const groupWeight = g.must_have || isGroupRoleEssential ? WEIGHT_MUST_HAVE : WEIGHT_NICE;
       // max contribution across alternatives in the group. Using
       // max (not sum) keeps the group's contribution bounded by the
       // group weight.
