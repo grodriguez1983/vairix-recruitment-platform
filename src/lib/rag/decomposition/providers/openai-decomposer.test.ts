@@ -159,6 +159,56 @@ describe('createOpenAiDecompositionProvider — ADR-014 §3', () => {
     await expect(p.decompose('some text')).rejects.toThrow();
   });
 
+  // ADR-023: the server-side JSON schema must include
+  // `role_essentials` as a required property so that OpenAI's
+  // response_format actually enforces its presence. Otherwise the
+  // model can silently omit it and the local Zod `.default([])` will
+  // paper over a prompt-v6 miss.
+  it('json_schema declares role_essentials as required and typed (ADR-023)', async () => {
+    const fetchImpl = fetchStub(wrapOpenAi(validResult()));
+    const p = createOpenAiDecompositionProvider({
+      apiKey: 'sk-test',
+      model: 'gpt-4o-mini',
+      fetchImpl,
+    });
+    await p.decompose('some text');
+    const call = (fetchImpl as unknown as { mock: { calls: unknown[][] } }).mock.calls[0]!;
+    const [, init] = call as [string, RequestInit];
+    const body = JSON.parse(init.body as string) as {
+      response_format: {
+        json_schema: {
+          schema: {
+            required: string[];
+            properties: {
+              role_essentials?: {
+                type: string;
+                items: {
+                  type: string;
+                  required: string[];
+                  properties: {
+                    label: { enum: string[] };
+                    skill_raws: { type: string; items: { type: string } };
+                  };
+                };
+              };
+            };
+          };
+        };
+      };
+    };
+    const schema = body.response_format.json_schema.schema;
+    expect(schema.required).toContain('role_essentials');
+    const re = schema.properties.role_essentials;
+    expect(re).toBeDefined();
+    expect(re!.type).toBe('array');
+    expect(re!.items.required).toEqual(expect.arrayContaining(['label', 'skill_raws']));
+    expect(re!.items.properties.label.enum.sort()).toEqual(
+      ['backend', 'data', 'devops', 'frontend', 'mobile'].sort(),
+    );
+    expect(re!.items.properties.skill_raws.type).toBe('array');
+    expect(re!.items.properties.skill_raws.items.type).toBe('string');
+  });
+
   it('sends Authorization header with bearer token', async () => {
     const fetchImpl = fetchStub(wrapOpenAi(validResult()));
     const p = createOpenAiDecompositionProvider({

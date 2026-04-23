@@ -23,8 +23,8 @@ import { describe, expect, it } from 'vitest';
 import { DECOMPOSITION_PROMPT_V1, DECOMPOSITION_PROMPT_V1_TEXT } from './decompose-v1';
 
 describe('decomposition prompt v1 — ADR-014 semantic invariants', () => {
-  it('pins DECOMPOSITION_PROMPT_V1 to 2026-04-v5', () => {
-    expect(DECOMPOSITION_PROMPT_V1).toBe('2026-04-v5');
+  it('pins DECOMPOSITION_PROMPT_V1 to 2026-04-v6 (ADR-023 role_essentials)', () => {
+    expect(DECOMPOSITION_PROMPT_V1).toBe('2026-04-v6');
   });
 
   it('prompt text is non-trivial', () => {
@@ -115,5 +115,63 @@ describe('decomposition prompt v1 — ADR-014 semantic invariants', () => {
     // Explicit negative example: the prompt must warn against
     // emitting a full sentence or phrase as skill_raw.
     expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(/not a (full )?sentence|not a phrase/i);
+  });
+
+  // ADR-023: role_essentials — extracted from the JD title/intro as
+  // axis gates. The canonical incident is the "Senior Full-Stack
+  // Engineer (React / Next.js / React Native / Node.js)" JD where
+  // Lucas Diez ranked #1 with zero Node.js experience because no
+  // part of the pipeline encoded that "Node.js" was not a
+  // nice-to-have but a core axis of the role.
+  describe('role_essentials (ADR-023)', () => {
+    it('prompt names role_essentials and enumerates the label enum', () => {
+      expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(/role_essentials/);
+      // Five labels from RoleEssentialLabelEnum — drift guard.
+      for (const label of ['frontend', 'backend', 'mobile', 'data', 'devops']) {
+        expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(new RegExp(`['"\`]?${label}['"\`]?`));
+      }
+    });
+
+    it('prompt instructs to derive role_essentials from the JD title / intro', () => {
+      // The signal must come from title-level context, not from
+      // random "nice to have" requirements further down the page.
+      expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(/title|título|headline|intro/i);
+    });
+
+    it('prompt documents the full-stack CORRECT example with frontend + backend groups', () => {
+      // Canonical positive case: title contains both frontend and
+      // backend skills → two groups, each with the skill_raws that
+      // appear in requirements[].
+      expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(/full[- ]?stack/i);
+      // Groups must carry skill_raws, not skill_ids (ids only exist
+      // post-resolution; the LLM speaks raws).
+      expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(/skill_raws/);
+    });
+
+    it('prompt includes a WRONG example that warns against a mis-label', () => {
+      // Regression pin: the prompt must give the model an explicit
+      // negative (e.g. "don't put a soft skill under a label", or
+      // "don't invent a group just because a skill is mentioned").
+      expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(/WRONG/);
+    });
+
+    it('prompt instructs to emit an empty role_essentials list when the title is generic', () => {
+      // Without this, the model invents axes from random hints
+      // ("if Python is mentioned, add a data group") and the gate
+      // excludes candidates the recruiter actually wants.
+      expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(
+        /role_essentials.{0,80}(\[\]|empty|vacío|generic)/s,
+      );
+    });
+
+    it('prompt requires every raw inside role_essentials to also appear in requirements[]', () => {
+      // The resolver ADR-023 drops unresolved raws silently; but
+      // missing from requirements means the axis has NO weight even
+      // if it passes the gate. Keeping them in lockstep is the
+      // prompt's responsibility.
+      expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(
+        /also.{0,20}(in |appear).{0,30}requirements|both.{0,30}requirements/i,
+      );
+    });
   });
 });
