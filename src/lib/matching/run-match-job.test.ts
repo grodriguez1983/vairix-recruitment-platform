@@ -50,6 +50,7 @@ function mkRequirementBreakdown(
   skillRaw: string,
   mustHave: boolean,
   status: 'match' | 'partial' | 'missing',
+  alternativeGroupId: string | null = null,
 ): RequirementBreakdown {
   return {
     requirement: {
@@ -61,7 +62,7 @@ function mkRequirementBreakdown(
       must_have: mustHave,
       evidence_snippet: skillRaw,
       category: 'technical',
-      alternative_group_id: null,
+      alternative_group_id: alternativeGroupId,
     },
     candidate_years: status === 'match' ? 5 : 0,
     years_ratio: status === 'match' ? 1 : 0,
@@ -316,6 +317,52 @@ describe('runMatchJob — F4-008 sub-C', () => {
       ],
     });
     expect(out.rescues_inserted).toBe(1);
+  });
+
+  it('rescue collects skill_ids at the GROUP level, not per requirement (ADR-021)', async () => {
+    // Gate-failed candidate where only g-css is actually unsatisfied.
+    // The g-gql group has GraphQL matched, so even though Apollo Client
+    // shows status !== 'match', the group is covered and neither
+    // alternative should appear in missing_skill_ids.
+    const TAIL = '20000000-0000-0000-0000-000000000001';
+    const STYL = '20000000-0000-0000-0000-000000000002';
+    const REACT = '20000000-0000-0000-0000-000000000003';
+    const GRAPHQL = '20000000-0000-0000-0000-000000000004';
+    const APOLLO = '20000000-0000-0000-0000-000000000005';
+    const failedScore: CandidateScore = {
+      candidate_id: 'c-partial-group',
+      total_score: 5,
+      must_have_gate: 'failed',
+      breakdown: [
+        // Failed OR group: neither alternative satisfied.
+        mkRequirementBreakdown(TAIL, 'Tailwind', true, 'missing', 'g-css'),
+        mkRequirementBreakdown(STYL, 'styled-components', true, 'missing', 'g-css'),
+        // Singleton satisfied.
+        mkRequirementBreakdown(REACT, 'React', true, 'match'),
+        // OR group satisfied — GraphQL matched, Apollo partial; the
+        // partial Apollo row must NOT be emitted for rescue because
+        // GraphQL already covers g-gql.
+        mkRequirementBreakdown(GRAPHQL, 'GraphQL', true, 'match', 'g-gql'),
+        mkRequirementBreakdown(APOLLO, 'Apollo Client', true, 'partial', 'g-gql'),
+      ],
+      language_match: { required: 0, matched: 0 },
+      seniority_match: 'unknown',
+    };
+    const rescueHook = vi.fn(async () => ({ rescues_inserted: 1 }));
+    const deps = mkDeps({
+      rank: vi.fn(async () => ({ results: [failedScore], diagnostics: [] })),
+      rescueFailedCandidates: rescueHook,
+    });
+    await runMatchJob(input(), deps);
+
+    expect(rescueHook).toHaveBeenCalledTimes(1);
+    const calls = (rescueHook as unknown as { mock: { calls: unknown[][] } }).mock.calls;
+    const arg = calls[0]?.[0] as {
+      failed: Array<{ candidate_id: string; missing_skill_ids: string[] }>;
+    };
+    expect(arg.failed).toHaveLength(1);
+    expect(arg.failed[0]?.candidate_id).toBe('c-partial-group');
+    expect(arg.failed[0]?.missing_skill_ids.sort()).toEqual([TAIL, STYL].sort());
   });
 
   it('rescue bucket merges pre-filter excluded with gate-failed from the ranker (F4-008 ter)', async () => {
