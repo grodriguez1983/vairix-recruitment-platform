@@ -11,7 +11,7 @@
  * fixes with no semantic change go under the same version.
  */
 
-export const DECOMPOSITION_PROMPT_V1 = '2026-04-v4';
+export const DECOMPOSITION_PROMPT_V1 = '2026-04-v5';
 
 // Kept as a template literal so prettier doesn't reflow the rules
 // into a hard-to-read single line. These are the non-negotiable rules
@@ -75,14 +75,15 @@ Rules (do not break):
      umbrella. The concrete tools are the resolvable skills; the
      umbrella is not in the catalog.
 
-     CORRECT (umbrella + parenthetical alternatives):
+     CORRECT (umbrella + parenthetical alternatives — OR group,
+     see rule 10 below for alternative_group_id):
        text: "Manejo de CSS moderno (Tailwind o styled-components)"
-       → { skill_raw: "Tailwind",          evidence_snippet: "Manejo de CSS moderno (Tailwind o styled-components)" }
-       → { skill_raw: "styled-components", evidence_snippet: "Manejo de CSS moderno (Tailwind o styled-components)" }
+       → { skill_raw: "Tailwind",          evidence_snippet: "Manejo de CSS moderno (Tailwind o styled-components)", alternative_group_id: "g-css" }
+       → { skill_raw: "styled-components", evidence_snippet: "Manejo de CSS moderno (Tailwind o styled-components)", alternative_group_id: "g-css" }
 
        text: "Experiencia con testing (Jest, Playwright)"
-       → { skill_raw: "Jest",       evidence_snippet: "Experiencia con testing (Jest, Playwright)" }
-       → { skill_raw: "Playwright", evidence_snippet: "Experiencia con testing (Jest, Playwright)" }
+       → { skill_raw: "Jest",       evidence_snippet: "Experiencia con testing (Jest, Playwright)", alternative_group_id: "g-testing" }
+       → { skill_raw: "Playwright", evidence_snippet: "Experiencia con testing (Jest, Playwright)", alternative_group_id: "g-testing" }
 
      WRONG (umbrella kept as skill_raw — loses the real skills and
      produces an unresolved generic):
@@ -117,6 +118,48 @@ Rules (do not break):
 9. notes: capture unstructured residue that does not fit the
    schema — availability, location, employment type — as a single
    string. If there is nothing to capture, return null.
+
+10. alternative_group_id: every requirement MUST emit this field
+    (non-nullable in the schema; the value can be the string id or
+    literal null).
+    - Singleton requirement (no alternatives in the JD): use
+      alternative_group_id: null.
+    - Group of OR alternatives: invent a short stable id (e.g.
+      "g-css", "g-testing", "g-cloud") and emit it on EVERY member
+      of the group. Same JD fragment → same group id on all
+      alternatives. Different groups → different ids.
+    - Every member of the same group MUST share the same must_have
+      boolean. A group with mixed must_have is an error — if the
+      alternatives are in the "excluyente" section, all true; if in
+      "deseable", all false. Do not split must_have within a group.
+    - Use a group ONLY when the JD explicitly offers alternatives
+      ("A o B", "A / B", "A, B" inside a parenthetical list). If
+      two skills are in conjunction ("A y B" — React y TypeScript),
+      they are NOT a group; both emit alternative_group_id: null.
+
+    CORRECT (singleton — no alternatives):
+      text: "React"
+      → { skill_raw: "React", ..., alternative_group_id: null }
+
+    CORRECT (alternatives in "excluyente" section):
+      text: "Requisitos excluyentes: Next.js o Remix"
+      → { skill_raw: "Next.js", ..., must_have: true, alternative_group_id: "g-ssr" }
+      → { skill_raw: "Remix",   ..., must_have: true, alternative_group_id: "g-ssr" }
+
+    CORRECT (alternatives in "deseable" section):
+      text: "Deseable: GraphQL o Apollo Client"
+      → { skill_raw: "GraphQL",       ..., must_have: false, alternative_group_id: "g-graphql" }
+      → { skill_raw: "Apollo Client", ..., must_have: false, alternative_group_id: "g-graphql" }
+
+    WRONG (conjunction — not a group):
+      text: "React y TypeScript"
+      → { skill_raw: "React",      ..., alternative_group_id: "g-fe" }  ← WRONG
+      → { skill_raw: "TypeScript", ..., alternative_group_id: "g-fe" }  ← WRONG
+    Correct version: both emit alternative_group_id: null.
+
+    WRONG (mixed must_have inside a group):
+      → { skill_raw: "Tailwind",          must_have: true,  alternative_group_id: "g-css" }
+      → { skill_raw: "styled-components", must_have: false, alternative_group_id: "g-css" }  ← WRONG
 
 Return ONLY the JSON object. No prose, no markdown fences.
 `;
