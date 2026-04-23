@@ -111,6 +111,56 @@ describe('RequirementSchema', () => {
     } as unknown);
     expect(parsed).not.toHaveProperty('confidence');
   });
+
+  // ADR-021: OR alternatives via flat `alternative_group_id`. Two
+  // requirements sharing the same non-null id form a group; the
+  // matching pipeline treats the group as OR. `null` means
+  // singleton (no alternatives).
+  it('preserves alternative_group_id: null (singleton requirement)', () => {
+    const parsed = RequirementSchema.parse({
+      ...validRequirement(),
+      alternative_group_id: null,
+    }) as unknown as { alternative_group_id: string | null };
+    expect(parsed.alternative_group_id).toBeNull();
+  });
+
+  it('preserves a non-null alternative_group_id string', () => {
+    const parsed = RequirementSchema.parse({
+      ...validRequirement(),
+      alternative_group_id: 'g1',
+    }) as unknown as { alternative_group_id: string | null };
+    expect(parsed.alternative_group_id).toBe('g1');
+  });
+
+  it('rejects an empty alternative_group_id (ambiguous with singleton)', () => {
+    // Empty string is ambiguous with null — reject it explicitly so
+    // the prompt cannot sneak a "no group" signal past the schema.
+    expect(() =>
+      RequirementSchema.parse({ ...validRequirement(), alternative_group_id: '' }),
+    ).toThrow();
+  });
+});
+
+describe('DecompositionResultSchema — ADR-021 OR groups', () => {
+  it('accepts two requirements sharing an alternative_group_id', () => {
+    const parsed = DecompositionResultSchema.parse({
+      requirements: [
+        { ...validRequirement(), skill_raw: 'Tailwind', alternative_group_id: 'g-css' },
+        {
+          ...validRequirement(),
+          skill_raw: 'styled-components',
+          alternative_group_id: 'g-css',
+        },
+      ],
+      seniority: 'senior',
+      languages: [],
+      notes: null,
+    });
+    expect(parsed.requirements).toHaveLength(2);
+    const reqs = parsed.requirements as unknown as Array<{ alternative_group_id: string | null }>;
+    expect(reqs[0]?.alternative_group_id).toBe('g-css');
+    expect(reqs[1]?.alternative_group_id).toBe('g-css');
+  });
 });
 
 describe('LanguageSchema', () => {
