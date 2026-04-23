@@ -276,7 +276,7 @@ describe('aggregateScore — ADR-015 §3', () => {
     // senior ones (incident 2026-04-23, job_query ccfd19d3-...). Fix:
     // `above` is treated as a positive signal equivalent to `match`.
     const reqs = [
-      mkRequirement({ skill_raw: 'React', skill_id: REACT_ID, min_years: 12, must_have: false }),
+      mkRequirement({ skill_raw: 'React', skill_id: REACT_ID, min_years: 24, must_have: false }),
     ];
     const exp = mkExp({
       id: 'a',
@@ -284,8 +284,9 @@ describe('aggregateScore — ADR-015 §3', () => {
       end: '2025-01-01',
       skills: [{ skill_id: REACT_ID, skill_raw: 'React' }],
     });
-    // 12 years of React → total work = 12y → `lead` bucket. Job asks
-    // `senior` → candidate is `above`.
+    // 12 years of React (base ratio 12/24 = 0.5 → base score 50, so
+    // the ±5 delta isn't swallowed by the clamp). Total work = 12y →
+    // `lead` bucket; job asks `senior` → candidate is `above`.
     const above = aggregateScore(
       mkJobQuery({ requirements: reqs, seniority: 'senior' }),
       mkCandidate({ candidate_id: 'c', merged_experiences: [exp] }),

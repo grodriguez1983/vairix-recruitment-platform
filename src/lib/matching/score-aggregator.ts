@@ -31,9 +31,12 @@
  *
  * Seniority delta (only when job query is not `unspecified`):
  *   - `+5` candidate bucket == job bucket
+ *   - `+5` candidate bucket is above the job bucket (ADR-023:
+ *     overqualified is a positive signal; treated symmetrically
+ *     with `match` because returning 0 is an implicit -5 penalty
+ *     relative to match and inverts rankings against the most
+ *     senior candidates).
  *   - `-5` candidate bucket is below the job bucket
- *   - `0` candidate bucket is above the job bucket (overqualified
- *     shouldn't be penalized; not explicitly tested).
  *
  * Seniority buckets are derived from total work years (sweep-line of
  * all `kind='work'` experiences): <2 junior, 2–5 semi_senior, 5–10
@@ -294,8 +297,11 @@ export function aggregateScore(
   }
 
   let senDelta = 0;
-  if (seniority_match === 'match') senDelta = SENIORITY_MATCH_BONUS;
-  else if (seniority_match === 'below') senDelta = -SENIORITY_BELOW_PENALTY;
+  if (seniority_match === 'match' || seniority_match === 'above') {
+    senDelta = SENIORITY_MATCH_BONUS;
+  } else if (seniority_match === 'below') {
+    senDelta = -SENIORITY_BELOW_PENALTY;
+  }
 
   const total = Math.max(0, Math.min(100, baseScore + langDelta + senDelta));
 
