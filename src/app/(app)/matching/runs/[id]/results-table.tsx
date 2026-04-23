@@ -9,7 +9,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 
 import { cn } from '@/lib/shared/cn';
 import type { CandidateScore, RequirementBreakdown } from '@/lib/matching/types';
@@ -114,10 +114,20 @@ function BreakdownPanel({
   evidence: EvidenceState | undefined;
   onEvidenceLoaded: (state: EvidenceState) => void;
 }): JSX.Element {
+  // Keep `onEvidenceLoaded` in a ref so it stays out of the effect's
+  // deps. The parent passes a fresh inline callback on every render;
+  // including it in deps would re-fire cleanup on every parent
+  // re-render, flipping `cancelled=true` on the in-flight fetch so
+  // its resolution would bail and the UI would stick on
+  // "evidence · loading…". Reading from the ref inside the async
+  // block always uses the latest callback without destabilising the
+  // effect.
+  const onEvidenceLoadedRef = useRef(onEvidenceLoaded);
+  onEvidenceLoadedRef.current = onEvidenceLoaded;
+
   useEffect(() => {
-    if (evidence !== undefined) return;
     let cancelled = false;
-    onEvidenceLoaded({ status: 'loading' });
+    onEvidenceLoadedRef.current({ status: 'loading' });
     (async () => {
       try {
         const res = await fetch(
@@ -130,16 +140,16 @@ function BreakdownPanel({
         };
         if (cancelled) return;
         if (!res.ok) {
-          onEvidenceLoaded({
+          onEvidenceLoadedRef.current({
             status: 'error',
             message: body.message ?? body.error ?? `evidence fetch failed (${res.status})`,
           });
           return;
         }
-        onEvidenceLoaded({ status: 'ok', snippets: body.snippets ?? {} });
+        onEvidenceLoadedRef.current({ status: 'ok', snippets: body.snippets ?? {} });
       } catch (err) {
         if (cancelled) return;
-        onEvidenceLoaded({
+        onEvidenceLoadedRef.current({
           status: 'error',
           message: err instanceof Error ? err.message : String(err),
         });
@@ -148,7 +158,7 @@ function BreakdownPanel({
     return () => {
       cancelled = true;
     };
-  }, [row.candidate_id, runId, evidence, onEvidenceLoaded]);
+  }, [row.candidate_id, runId]);
 
   return (
     <div className="flex flex-col gap-3 border-t border-border bg-bg px-4 py-3">
