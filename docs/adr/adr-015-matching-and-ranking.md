@@ -1,11 +1,20 @@
 # ADR-015 — Matching & ranking de candidatos contra un job query
 
-- **Estado**: Aceptado
+- **Estado**: Aceptado (§1 invariant sobre `kind='work'` **supersedido
+  parcialmente por ADR-020** — ver nota al pie)
 - **Fecha**: 2026-04-20
 - **Decisores**: Owner VAIRIX + Claude Code
 - **Relacionado con**: `use-cases.md` UC-11, ADR-012 (extracción
   de CVs), ADR-013 (catálogo de skills), ADR-014 (descomposición
-  de job description), ADR-003 (RLS), `spec.md` §2.6
+  de job description), ADR-003 (RLS), `spec.md` §2.6,
+  **ADR-020** (side_project weighted-years)
+
+> **Supersede note (2026-04-23)**: el invariant original de §1
+> _"solo `kind='work'` cuenta para years"_ fue ajustado por ADR-020.
+> Hoy `side_project` también contribuye, con peso 0.25 sobre el
+> tramo que no solapa con `work`. `education` sigue excluido. Los
+> demás invariants de §1 (skill_id=null invisible, fechas inválidas
+> skippeadas, sweep-line merge) siguen vigentes.
 
 ---
 
