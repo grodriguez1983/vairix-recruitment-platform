@@ -33,6 +33,8 @@ import type { PreFilterByMustHaveDeps } from './pre-filter';
 const REACT_ID = '00000000-0000-0000-0000-000000000001';
 const NODE_ID = '00000000-0000-0000-0000-000000000002';
 const SQL_ID = '00000000-0000-0000-0000-000000000003';
+const TAILWIND_ID = '00000000-0000-0000-0000-000000000004';
+const STYLED_ID = '00000000-0000-0000-0000-000000000005';
 
 function jobQuery(overrides: Partial<ResolvedDecomposition> = {}): ResolvedDecomposition {
   return {
@@ -303,6 +305,218 @@ describe('preFilterByMustHave — F4-008 sub-B + ter', () => {
     );
     expect(out.included).toEqual([]);
     expect(out.excluded).toEqual([]);
+  });
+
+  // ----------------------------------------------------------
+  // ADR-021: alternative_group_id. Within a group the semantics
+  // flip from AND to OR — a candidate covers the group if they
+  // have at least one resolved alternative. Between groups it
+  // stays AND.
+  // ----------------------------------------------------------
+
+  it('OR group: candidate with any ONE alternative passes the group', async () => {
+    // g-css = {Tailwind, styled-components}, both must_have.
+    // a has Tailwind only → passes (covers g-css via Tailwind).
+    // b has styled-components only → passes.
+    // c has both → passes.
+    // d has neither → excluded; missing surfaces ALL alternatives so the
+    //   rescue layer can FTS each one in files.parsed_text.
+    const deps = mkDeps({
+      all: ['a', 'b', 'c', 'd'],
+      coverage: [
+        { candidate_id: 'a', covered_skill_ids: [TAILWIND_ID] },
+        { candidate_id: 'b', covered_skill_ids: [STYLED_ID] },
+        { candidate_id: 'c', covered_skill_ids: [TAILWIND_ID, STYLED_ID] },
+      ],
+    });
+    const out = await preFilterByMustHave(
+      jobQuery({
+        requirements: [
+          {
+            skill_raw: 'Tailwind',
+            skill_id: TAILWIND_ID,
+            resolved_at: '2025-01-01T00:00:00Z',
+            min_years: 1,
+            max_years: null,
+            must_have: true,
+            evidence_snippet: 'CSS moderno (Tailwind o styled-components)',
+            category: 'technical',
+            alternative_group_id: 'g-css',
+          },
+          {
+            skill_raw: 'styled-components',
+            skill_id: STYLED_ID,
+            resolved_at: '2025-01-01T00:00:00Z',
+            min_years: 1,
+            max_years: null,
+            must_have: true,
+            evidence_snippet: 'CSS moderno (Tailwind o styled-components)',
+            category: 'technical',
+            alternative_group_id: 'g-css',
+          },
+        ],
+      }),
+      null,
+      deps,
+    );
+    expect(out.included.sort()).toEqual(['a', 'b', 'c']);
+    expect(out.excluded).toHaveLength(1);
+    expect(out.excluded[0]?.candidate_id).toBe('d');
+    expect(out.excluded[0]?.missing_must_have_skill_ids.sort()).toEqual(
+      [TAILWIND_ID, STYLED_ID].sort(),
+    );
+  });
+
+  it('singleton + OR group: candidate needs singleton AND one from the group', async () => {
+    // React (singleton, must_have) + g-css {Tailwind, styled-components}.
+    //  - a: React + Tailwind → included.
+    //  - b: React + styled-components → included.
+    //  - c: React only → excluded; missing = both alternatives.
+    //  - d: Tailwind only → excluded; missing = React.
+    //  - e: nothing → excluded; missing = React + both alternatives.
+    const deps = mkDeps({
+      all: ['a', 'b', 'c', 'd', 'e'],
+      coverage: [
+        { candidate_id: 'a', covered_skill_ids: [REACT_ID, TAILWIND_ID] },
+        { candidate_id: 'b', covered_skill_ids: [REACT_ID, STYLED_ID] },
+        { candidate_id: 'c', covered_skill_ids: [REACT_ID] },
+        { candidate_id: 'd', covered_skill_ids: [TAILWIND_ID] },
+      ],
+    });
+    const out = await preFilterByMustHave(
+      jobQuery({
+        requirements: [
+          {
+            skill_raw: 'React',
+            skill_id: REACT_ID,
+            resolved_at: '2025-01-01T00:00:00Z',
+            min_years: 1,
+            max_years: null,
+            must_have: true,
+            evidence_snippet: 'React',
+            category: 'technical',
+            alternative_group_id: null,
+          },
+          {
+            skill_raw: 'Tailwind',
+            skill_id: TAILWIND_ID,
+            resolved_at: '2025-01-01T00:00:00Z',
+            min_years: 1,
+            max_years: null,
+            must_have: true,
+            evidence_snippet: 'Tailwind o styled-components',
+            category: 'technical',
+            alternative_group_id: 'g-css',
+          },
+          {
+            skill_raw: 'styled-components',
+            skill_id: STYLED_ID,
+            resolved_at: '2025-01-01T00:00:00Z',
+            min_years: 1,
+            max_years: null,
+            must_have: true,
+            evidence_snippet: 'Tailwind o styled-components',
+            category: 'technical',
+            alternative_group_id: 'g-css',
+          },
+        ],
+      }),
+      null,
+      deps,
+    );
+    expect(out.included.sort()).toEqual(['a', 'b']);
+    const byCandidate = new Map(
+      out.excluded.map((e) => [e.candidate_id, [...e.missing_must_have_skill_ids].sort()]),
+    );
+    expect(byCandidate.get('c')).toEqual([TAILWIND_ID, STYLED_ID].sort());
+    expect(byCandidate.get('d')).toEqual([REACT_ID]);
+    expect(byCandidate.get('e')).toEqual([REACT_ID, TAILWIND_ID, STYLED_ID].sort());
+  });
+
+  it('OR group with one unresolved alternative: only resolved drives coverage', async () => {
+    // g-css = {Tailwind (resolved), styled-components (unresolved)}.
+    // The unresolved alternative contributes nothing to the filter —
+    // the group is satisfied iff the candidate has Tailwind.
+    const deps = mkDeps({
+      all: ['a', 'b'],
+      coverage: [{ candidate_id: 'a', covered_skill_ids: [TAILWIND_ID] }],
+    });
+    const out = await preFilterByMustHave(
+      jobQuery({
+        requirements: [
+          {
+            skill_raw: 'Tailwind',
+            skill_id: TAILWIND_ID,
+            resolved_at: '2025-01-01T00:00:00Z',
+            min_years: 1,
+            max_years: null,
+            must_have: true,
+            evidence_snippet: 'Tailwind o styled-components',
+            category: 'technical',
+            alternative_group_id: 'g-css',
+          },
+          {
+            skill_raw: 'styled-components',
+            skill_id: null,
+            resolved_at: null,
+            min_years: 1,
+            max_years: null,
+            must_have: true,
+            evidence_snippet: 'Tailwind o styled-components',
+            category: 'technical',
+            alternative_group_id: 'g-css',
+          },
+        ],
+      }),
+      null,
+      deps,
+    );
+    expect(out.included).toEqual(['a']);
+    expect(out.excluded).toEqual([
+      { candidate_id: 'b', missing_must_have_skill_ids: [TAILWIND_ID] },
+    ]);
+    // The coverage query only asks for the resolved alternative.
+    expect(deps.fetchCandidateMustHaveCoverage).toHaveBeenCalledWith([TAILWIND_ID], null);
+  });
+
+  it('OR group fully unresolved → does not filter (consistent with ADR-015)', async () => {
+    // All alternatives unresolved → the group drops out of the
+    // filter entirely. Full candidate pool passes through; the
+    // group is the rescue layer's problem.
+    const deps = mkDeps({ all: ['a', 'b'] });
+    const out = await preFilterByMustHave(
+      jobQuery({
+        requirements: [
+          {
+            skill_raw: 'Remix',
+            skill_id: null,
+            resolved_at: null,
+            min_years: 1,
+            max_years: null,
+            must_have: true,
+            evidence_snippet: 'Next.js o Remix',
+            category: 'technical',
+            alternative_group_id: 'g-ssr',
+          },
+          {
+            skill_raw: 'Next.js',
+            skill_id: null,
+            resolved_at: null,
+            min_years: 1,
+            max_years: null,
+            must_have: true,
+            evidence_snippet: 'Next.js o Remix',
+            category: 'technical',
+            alternative_group_id: 'g-ssr',
+          },
+        ],
+      }),
+      null,
+      deps,
+    );
+    expect(out.included).toEqual(['a', 'b']);
+    expect(out.excluded).toEqual([]);
+    expect(deps.fetchCandidateMustHaveCoverage).not.toHaveBeenCalled();
   });
 
   it('coverage row with zero covered_skill_ids → still treated as excluded with all missing', async () => {
