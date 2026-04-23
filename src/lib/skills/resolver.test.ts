@@ -223,9 +223,14 @@ describe('resolveSkill — ADR-013 §2 pipeline', () => {
     // integrity is preserved. The SQL helper's current behavior is
     // to check deprecation only for slug match (step 2), not for
     // alias match (step 3). We mirror that literally.
+    //
+    // Post-ADR-024: aliases are stored in canonical form (spaces,
+    // no hyphens between alphanumerics). Input `"jquery-ui"` is
+    // normalized to `"jquery ui"` before the alias lookup, so the
+    // fixture must store the alias under its canonical form too.
     const catalog = makeCatalog(
       [{ id: JQUERY, slug: 'jquery', deprecated: true }],
-      [{ skill_id: JQUERY, alias_normalized: 'jquery-ui' }],
+      [{ skill_id: JQUERY, alias_normalized: 'jquery ui' }],
     );
     expect(resolveSkill('jquery-ui', catalog)).toEqual({
       skill_id: JQUERY,
@@ -258,11 +263,14 @@ describe('resolveSkill — ADR-013 §2 pipeline', () => {
   });
 
   it('buildCatalogSnapshot indexes aliases regardless of parent deprecation', () => {
+    // Aliases are indexed under their stored form; after ADR-024
+    // the stored form is already canonical (no hyphen between
+    // alphanumerics), so the map key has a space.
     const catalog = makeCatalog(
       [{ id: JQUERY, slug: 'jquery', deprecated: true }],
-      [{ skill_id: JQUERY, alias_normalized: 'jquery-ui' }],
+      [{ skill_id: JQUERY, alias_normalized: 'jquery ui' }],
     );
-    expect(catalog.aliasMap.get('jquery-ui')).toBe(JQUERY);
+    expect(catalog.aliasMap.get('jquery ui')).toBe(JQUERY);
   });
 
   // ──────────────────────────────────────────────────────────────

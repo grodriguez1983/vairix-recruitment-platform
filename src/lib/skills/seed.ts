@@ -119,7 +119,7 @@ export const CURATED_SKILLS: readonly SeedSkill[] = [
     canonical_name: 'C#',
     slug: 'c#',
     category: 'language',
-    aliases: ['csharp', 'c-sharp'],
+    aliases: ['csharp', 'c sharp'],
   },
   {
     canonical_name: 'C++',
@@ -391,7 +391,7 @@ export const CURATED_SKILLS: readonly SeedSkill[] = [
     canonical_name: 'CI/CD',
     slug: 'ci/cd',
     category: 'devops',
-    aliases: ['cicd', 'ci-cd', 'continuous integration', 'continuous delivery'],
+    aliases: ['cicd', 'ci cd', 'continuous integration', 'continuous delivery'],
   },
   {
     canonical_name: 'GitHub Actions',
@@ -403,7 +403,7 @@ export const CURATED_SKILLS: readonly SeedSkill[] = [
     canonical_name: 'GitLab CI',
     slug: 'gitlab ci',
     category: 'devops',
-    aliases: ['gitlab-ci'],
+    aliases: ['gitlab ci'],
   },
   {
     canonical_name: 'Jenkins',

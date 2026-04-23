@@ -41,11 +41,11 @@ import type {
 import { serviceClient } from '../../rls/helpers';
 
 const TEST_EMAIL = 'f4-008-e2e@example.test';
-// The resolver normalizes skill_raw via lowercase+whitespace-collapse
-// but preserves internal hyphens. So to match on slug we keep the
-// hyphen-token form identical between `skill_raw` and `slug`.
-const SKILL_NODEJS_SLUG = 'f4008-e2e-nodejs';
-const SKILL_POSTGRES_SLUG = 'f4008-e2e-postgres';
+// ADR-024: the resolver collapses `-`/`_` between alphanumerics to a
+// single space, so stored slugs must use the space form. The raw
+// skill values keep hyphens to exercise the normalization.
+const SKILL_NODEJS_SLUG = 'f4008 e2e nodejs';
+const SKILL_POSTGRES_SLUG = 'f4008 e2e postgres';
 const SKILL_NODEJS_RAW = 'F4008-E2E-NodeJS';
 const SKILL_POSTGRES_RAW = 'F4008-E2E-Postgres';
 const SKILL_NODEJS_NAME = 'F4008 E2E NodeJS';

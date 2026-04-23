@@ -85,6 +85,14 @@ const INPUTS: readonly (string | null)[] = [
   'ci-cd',
   '.net',
   'dotnet',
+  // ADR-024: hyphen/underscore between alphanumerics collapses to
+  // a single space so these variants resolve the same as the slug.
+  'React-Native',
+  'react-native',
+  'REACT-NATIVE',
+  'React_Native',
+  'ruby-on-rails',
+  'Ruby_On_Rails',
   // Aliases.
   'reactjs',
   'react.js',

@@ -40,8 +40,12 @@ const SUPABASE_SERVICE_ROLE_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU';
 
 const CANDIDATE_TT_ID = 'derive-e2e-test';
-const TEST_SKILL_SLUG = 'derive-e2e-typescript';
-const TEST_ALIAS = 'derive-e2e-react.js';
+// ADR-024: inputs with `-`/`_` between alphanumerics collapse to a
+// single space before lookup, so the stored slug / alias uses the
+// space form. The raw skill values still come in with hyphens (as a
+// CV parser would produce them) to exercise that normalization.
+const TEST_SKILL_SLUG = 'derive e2e typescript';
+const TEST_ALIAS = 'derive e2e react.js';
 
 function svc(): SupabaseClient {
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {

@@ -11,10 +11,12 @@
  *   2. trim any whitespace (spaces, tabs, \r, \n).
  *   3. lowercase.
  *   4. collapse internal whitespace to a single space.
- *   5. strip terminal punctuation (., ,, ;, :) — preserve internal.
- *   6. exact match against skills.slug (ignoring deprecated).
- *   7. alias match against skill_aliases.alias_normalized.
- *   8. no match → null.
+ *   5. collapse `-` / `_` between alphanumerics to a single space
+ *      (ADR-024). "react-native" → "react native".
+ *   6. strip terminal punctuation (., ,, ;, :) — preserve internal.
+ *   7. exact match against skills.slug (ignoring deprecated).
+ *   8. alias match against skill_aliases.alias_normalized.
+ *   9. no match → null.
  *
  * The snapshot is built once per batch from two DB reads. Inside a
  * batch it's immutable; if the catalog changes the worker rebuilds
@@ -89,7 +91,18 @@ export function normalizeSkillInput(raw: string | null | undefined): string | nu
   // Step 3: collapse internal whitespace.
   s = s.replace(/\s+/g, ' ');
 
-  // Step 4: strip terminal punctuation (., ,, ;, :). Internal
+  // Step 4 (ADR-024): collapse `-` and `_` between alphanumerics to
+  // a single space so "react-native" and "react_native" resolve the
+  // same as "react native". Lookahead keeps the second alphanum
+  // unconsumed so `a-b-c` is handled in one pass (a naive /g replace
+  // on `([a-z0-9])[-_]([a-z0-9])` would leave `a b-c` because the
+  // trailing `b` is consumed by the first match). Scope is narrow:
+  // hyphens/underscores between non-alphanum chars (e.g. `-react`,
+  // `c-#`) and other internal punctuation (`.`, `+`, `/`, `#`) are
+  // untouched so node.js, c++, c#, ci/cd keep working.
+  s = s.replace(/([a-z0-9])[-_](?=[a-z0-9])/g, '$1 ');
+
+  // Step 5: strip terminal punctuation (., ,, ;, :). Internal
   // punctuation (the dot in "node.js", the + in "c++", the / in
   // "ci/cd") is preserved.
   s = s.replace(/[.,;:]+$/, '');

@@ -35,7 +35,10 @@ const SUPABASE_SERVICE_ROLE_KEY =
   'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZS1kZW1vIiwicm9sZSI6InNlcnZpY2Vfcm9sZSIsImV4cCI6MTk4MzgxMjk5Nn0.EGIM96RAZx35lJzdJsyH-qQwv8Hdp7fsn3W0YpN81IU';
 
 const TEST_EMAIL = 'decompose-e2e@example.test';
-const TEST_SKILL_SLUG = 'decompose-e2e-nodejs';
+// ADR-024: resolver collapses `-`/`_` between alphanumerics → space,
+// so the stored slug uses the space form. Raw values keep hyphens to
+// exercise the normalization pipeline end-to-end.
+const TEST_SKILL_SLUG = 'decompose e2e nodejs';
 
 function svc(): SupabaseClient {
   return createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY, {
@@ -234,7 +237,7 @@ describe('decomposeJobQuery (integration)', () => {
     const frozenDecomposed = before!.decomposed_json;
 
     // Add a matching skill to the catalog — normalized form of
-    // 'Decompose-E2E-NodeJS' is 'decompose-e2e-nodejs'.
+    // 'Decompose-E2E-NodeJS' is 'decompose e2e nodejs' (ADR-024).
     const { data: skill, error } = await db
       .from('skills')
       .insert({ slug: TEST_SKILL_SLUG, canonical_name: 'Decompose E2E NodeJS' })
