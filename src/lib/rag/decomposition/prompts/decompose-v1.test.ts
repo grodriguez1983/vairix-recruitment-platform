@@ -23,8 +23,8 @@ import { describe, expect, it } from 'vitest';
 import { DECOMPOSITION_PROMPT_V1, DECOMPOSITION_PROMPT_V1_TEXT } from './decompose-v1';
 
 describe('decomposition prompt v1 — ADR-014 semantic invariants', () => {
-  it('pins DECOMPOSITION_PROMPT_V1 to 2026-04-v4', () => {
-    expect(DECOMPOSITION_PROMPT_V1).toBe('2026-04-v4');
+  it('pins DECOMPOSITION_PROMPT_V1 to 2026-04-v5', () => {
+    expect(DECOMPOSITION_PROMPT_V1).toBe('2026-04-v5');
   });
 
   it('prompt text is non-trivial', () => {
@@ -77,6 +77,31 @@ describe('decomposition prompt v1 — ADR-014 semantic invariants', () => {
     expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(/styled-components/);
     expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(/Jest/);
     expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(/Playwright/);
+  });
+
+  it('prompt documents alternative_group_id for OR alternatives (ADR-021)', () => {
+    // ADR-021: when the JD says "A o B" or "A / B" as an OR, every
+    // emitted requirement in the group must carry the same non-null
+    // `alternative_group_id`. Singletons use null. The prompt must
+    // name the field AND enumerate at least one positive example of
+    // grouping two alternatives under the same id.
+    expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(/alternative_group_id/);
+    // A grouped example: both Tailwind and styled-components sharing
+    // one id (the canonical incident from ADR-021).
+    expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(
+      /alternative_group_id:\s*["'`]?(g-|grp-|css|alt-)/i,
+    );
+    // Null for singletons must be mentioned.
+    expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(/alternative_group_id:\s*null/);
+  });
+
+  it('prompt forbids mixed must_have inside an OR group (ADR-021)', () => {
+    // Every alternative in the same group must share must_have; a
+    // group with mixed must_have is ambiguous (is the group
+    // excluyente or deseable?) and the prompt must reject it.
+    expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(
+      /same must_have|mismo must_have|same `must_have`/i,
+    );
   });
 
   it('prompt requires skill_raw to be a short canonical name', () => {
