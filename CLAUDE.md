@@ -175,6 +175,10 @@ importa de `rag`). Si dos dominios necesitan algo en común, va a
   documentar. Naming: `test_rejects_<cosa_mala>`,
   `test_denies_cross_tenant_access`, no `test_basic_flow`.
 - Tests contra **interfaces**, nunca contra implementación interna.
+- **Test DB dedicada** (ADR-019). Toda la suite corre contra la
+  instancia `supabase-test` en ports 64321/64322, **no** contra la
+  de dev en 54321/54322. Arranque con `pnpm test:db:start`. Schema
+  se comparte por symlink — migrar dev migra test.
 
 ---
 

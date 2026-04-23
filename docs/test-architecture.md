@@ -56,12 +56,22 @@ utilidades.
 
 ### Against DB (Supabase local)
 
-Setup: `supabase start` arranca una instancia local.
+**Instancia dedicada para tests** (ADR-019). Los tests corren contra
+una segunda instancia de Supabase, independiente de la de dev.
 
-- Migraciones corren antes de la suite (`supabase db reset`).
-- Cada test runs en una transacción que se rollbackea (fixture
-  `withTx`).
+- **Arranque**: `pnpm test:db:start` (wrapper de
+  `supabase start --workdir supabase-test`).
+- **Reset**: `pnpm test:db:reset` es seguro de correr siempre — no
+  toca la DB de dev.
+- **Puertos**: dev = 54321/54322, test = 64321/64322. `.env.test`
+  apunta `SUPABASE_TEST_*` al bloque 64xxx.
+- **Migraciones**: `supabase-test/supabase/migrations` es un
+  symlink a `supabase/migrations` — single source of truth.
 - Auth se simula con JWTs generados vía helper `makeTestJwt({role})`.
+
+**Por qué**: correr tests contra la DB de dev destruía data
+productiva local (incidente 2026-04-22). Los tests siguen
+hitteando Postgres real — solo que ahora uno disposable.
 
 **Ejemplos obligatorios**:
 
