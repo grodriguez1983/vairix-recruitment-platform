@@ -19,6 +19,8 @@ const REACT_ID = '00000000-0000-0000-0000-000000000001';
 const TS_ID = '00000000-0000-0000-0000-000000000002';
 const AWS_ID = '00000000-0000-0000-0000-000000000003';
 const KUBE_ID = '00000000-0000-0000-0000-000000000004';
+const TAILWIND_ID = '00000000-0000-0000-0000-000000000005';
+const STYLED_ID = '00000000-0000-0000-0000-000000000006';
 
 const NOW = new Date('2025-01-01T00:00:00Z');
 
@@ -354,6 +356,158 @@ describe('aggregateScore — ADR-015 §3', () => {
     expect(result.must_have_gate).toBe('passed');
     expect(result.breakdown[0]!.status).toBe('missing');
     expect(result.breakdown[0]!.candidate_years).toBe(0);
+  });
+
+  // ----------------------------------------------------------
+  // ADR-021: alternative_group_id. Alternatives in an OR group
+  // collapse to a single contribution (max of alternatives) with
+  // one group's weight (not N×weight). The gate fails only if NO
+  // alternative in the group is satisfied.
+  // ----------------------------------------------------------
+
+  it('OR group must-have: covering one alternative passes the gate', () => {
+    // g-css = {Tailwind, styled-components}, both must_have, min_years=1.
+    // Candidate has styled-components for 2 years, no Tailwind.
+    // Pre-21 behavior: Tailwind's must-have row has years_ratio=0 → gate fails.
+    // Post-21 behavior: the group is covered by styled-components → gate passes.
+    const reqs = [
+      mkRequirement({
+        skill_raw: 'Tailwind',
+        skill_id: TAILWIND_ID,
+        min_years: 1,
+        must_have: true,
+        alternative_group_id: 'g-css',
+      }),
+      mkRequirement({
+        skill_raw: 'styled-components',
+        skill_id: STYLED_ID,
+        min_years: 1,
+        must_have: true,
+        alternative_group_id: 'g-css',
+      }),
+    ];
+    const exp = mkExp({
+      id: 'a',
+      start: '2023-01-01',
+      end: '2025-01-01',
+      skills: [{ skill_id: STYLED_ID, skill_raw: 'styled-components' }],
+    });
+    const result = aggregateScore(
+      mkJobQuery({ requirements: reqs }),
+      mkCandidate({ candidate_id: 'c', merged_experiences: [exp] }),
+      { now: NOW },
+    );
+    expect(result.must_have_gate).toBe('passed');
+  });
+
+  it('OR group must-have: group weight = one alternative (max contribution)', () => {
+    // One OR group with two alternatives vs one singleton must-have.
+    // Candidate fully satisfies both: score should be 100, not less,
+    // because the group weight must match a single must-have (2.0).
+    // If the group weight were 2×2=4, the singleton's contribution
+    // would be undernormalized relative to the group.
+    const reqs = [
+      mkRequirement({
+        skill_raw: 'React',
+        skill_id: REACT_ID,
+        min_years: 1,
+        must_have: true,
+        alternative_group_id: null,
+      }),
+      mkRequirement({
+        skill_raw: 'Tailwind',
+        skill_id: TAILWIND_ID,
+        min_years: 1,
+        must_have: true,
+        alternative_group_id: 'g-css',
+      }),
+      mkRequirement({
+        skill_raw: 'styled-components',
+        skill_id: STYLED_ID,
+        min_years: 1,
+        must_have: true,
+        alternative_group_id: 'g-css',
+      }),
+    ];
+    const exp = mkExp({
+      id: 'a',
+      start: '2020-01-01',
+      end: '2025-01-01',
+      skills: [
+        { skill_id: REACT_ID, skill_raw: 'React' },
+        { skill_id: TAILWIND_ID, skill_raw: 'Tailwind' },
+        { skill_id: STYLED_ID, skill_raw: 'styled-components' },
+      ],
+    });
+    const result = aggregateScore(
+      mkJobQuery({ requirements: reqs }),
+      mkCandidate({ candidate_id: 'c', merged_experiences: [exp] }),
+      { now: NOW },
+    );
+    expect(result.must_have_gate).toBe('passed');
+    expect(result.total_score).toBe(100);
+  });
+
+  it('OR group: gate fails only when NO resolved alternative is satisfied', () => {
+    // Both alternatives resolved, candidate has neither → gate fails.
+    const reqs = [
+      mkRequirement({
+        skill_raw: 'Tailwind',
+        skill_id: TAILWIND_ID,
+        min_years: 1,
+        must_have: true,
+        alternative_group_id: 'g-css',
+      }),
+      mkRequirement({
+        skill_raw: 'styled-components',
+        skill_id: STYLED_ID,
+        min_years: 1,
+        must_have: true,
+        alternative_group_id: 'g-css',
+      }),
+    ];
+    const result = aggregateScore(
+      mkJobQuery({ requirements: reqs }),
+      mkCandidate({ candidate_id: 'c', merged_experiences: [] }),
+      { now: NOW },
+    );
+    expect(result.must_have_gate).toBe('failed');
+  });
+
+  it('OR group: unresolved alternatives alongside a resolved one do not fail the gate', () => {
+    // Group has one resolved (Tailwind) + one unresolved (styled-components,
+    // skill_id=null). Candidate has Tailwind with years → gate passes, and
+    // the unresolved row does NOT pull down the score (it's collapsed into
+    // the group's max contribution, which is Tailwind's).
+    const reqs = [
+      mkRequirement({
+        skill_raw: 'Tailwind',
+        skill_id: TAILWIND_ID,
+        min_years: 1,
+        must_have: true,
+        alternative_group_id: 'g-css',
+      }),
+      mkRequirement({
+        skill_raw: 'styled-components',
+        skill_id: null,
+        min_years: 1,
+        must_have: true,
+        alternative_group_id: 'g-css',
+      }),
+    ];
+    const exp = mkExp({
+      id: 'a',
+      start: '2022-01-01',
+      end: '2025-01-01',
+      skills: [{ skill_id: TAILWIND_ID, skill_raw: 'Tailwind' }],
+    });
+    const result = aggregateScore(
+      mkJobQuery({ requirements: reqs }),
+      mkCandidate({ candidate_id: 'c', merged_experiences: [exp] }),
+      { now: NOW },
+    );
+    expect(result.must_have_gate).toBe('passed');
+    expect(result.total_score).toBe(100);
   });
 
   it('total score is clamped to [0, 100] after bonuses', () => {
