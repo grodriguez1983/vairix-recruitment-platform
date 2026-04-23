@@ -11,7 +11,7 @@
  * fixes with no semantic change go under the same version.
  */
 
-export const DECOMPOSITION_PROMPT_V1 = '2026-04-v3';
+export const DECOMPOSITION_PROMPT_V1 = '2026-04-v4';
 
 // Kept as a template literal so prettier doesn't reflow the rules
 // into a hard-to-read single line. These are the non-negotiable rules
@@ -67,6 +67,28 @@ Rules (do not break):
    - If the text says "experiencia con React y TypeScript", emit
      TWO requirements: {skill_raw: "React"} and
      {skill_raw: "TypeScript"}. Do not concatenate them.
+   - When the text names a GENERIC umbrella ("testing", "CSS
+     moderno", "cloud", "bases de datos") and immediately
+     enumerates specific tools in parentheses or after a colon
+     ("testing (Jest, Playwright)", "bases de datos: Postgres,
+     MySQL"), emit ONE requirement PER CONCRETE TOOL — drop the
+     umbrella. The concrete tools are the resolvable skills; the
+     umbrella is not in the catalog.
+
+     CORRECT (umbrella + parenthetical alternatives):
+       text: "Manejo de CSS moderno (Tailwind o styled-components)"
+       → { skill_raw: "Tailwind",          evidence_snippet: "Manejo de CSS moderno (Tailwind o styled-components)" }
+       → { skill_raw: "styled-components", evidence_snippet: "Manejo de CSS moderno (Tailwind o styled-components)" }
+
+       text: "Experiencia con testing (Jest, Playwright)"
+       → { skill_raw: "Jest",       evidence_snippet: "Experiencia con testing (Jest, Playwright)" }
+       → { skill_raw: "Playwright", evidence_snippet: "Experiencia con testing (Jest, Playwright)" }
+
+     WRONG (umbrella kept as skill_raw — loses the real skills and
+     produces an unresolved generic):
+       → { skill_raw: "CSS moderno", ... }
+       → { skill_raw: "testing",     ... }
+
    - For soft skills or non-technology requirements, use the
      shortest noun phrase that names the concept
      (e.g. "liderazgo", "ownership", "comunicación").
