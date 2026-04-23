@@ -37,6 +37,37 @@ export function toInterval(start: string | null, end: string | null, now: Date):
 }
 
 /**
+ * Set-subtraction: returns `a - b` as a list of non-overlapping
+ * intervals. Both inputs must be already merged and sorted by `start`
+ * ascending (caller's responsibility — typically `mergeIntervals`).
+ *
+ * Used by ADR-020 to compute the side_project duration that does NOT
+ * overlap with work time, so the weighted contribution never
+ * double-counts the same calendar window.
+ */
+export function subtractIntervals(a: readonly Interval[], b: readonly Interval[]): Interval[] {
+  if (a.length === 0) return [];
+  if (b.length === 0) return a.map((iv) => ({ ...iv }));
+  const out: Interval[] = [];
+  for (const base of a) {
+    let cursor = base.start;
+    for (const sub of b) {
+      if (sub.end <= cursor) continue;
+      if (sub.start >= base.end) break;
+      if (sub.start > cursor) {
+        out.push({ start: cursor, end: Math.min(sub.start, base.end) });
+      }
+      cursor = Math.max(cursor, sub.end);
+      if (cursor >= base.end) break;
+    }
+    if (cursor < base.end) {
+      out.push({ start: cursor, end: base.end });
+    }
+  }
+  return out;
+}
+
+/**
  * Ratio of overlap to the shortest of the two intervals. Used by the
  * variant merger to decide if two experiences describe the same role.
  */

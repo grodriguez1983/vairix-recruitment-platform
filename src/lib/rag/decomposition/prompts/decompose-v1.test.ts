@@ -23,8 +23,8 @@ import { describe, expect, it } from 'vitest';
 import { DECOMPOSITION_PROMPT_V1, DECOMPOSITION_PROMPT_V1_TEXT } from './decompose-v1';
 
 describe('decomposition prompt v1 — ADR-014 semantic invariants', () => {
-  it('pins DECOMPOSITION_PROMPT_V1 to 2026-04-v2', () => {
-    expect(DECOMPOSITION_PROMPT_V1).toBe('2026-04-v2');
+  it('pins DECOMPOSITION_PROMPT_V1 to 2026-04-v3', () => {
+    expect(DECOMPOSITION_PROMPT_V1).toBe('2026-04-v3');
   });
 
   it('prompt text is non-trivial', () => {
