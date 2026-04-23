@@ -537,3 +537,156 @@ describe('aggregateScore — ADR-015 §3', () => {
     expect(result.total_score).toBe(100);
   });
 });
+
+/**
+ * ADR-022 — Seniority-derived `min_years` baseline.
+ *
+ * Context (Bloque 12, 2026-04-23): a Senior JD that lists its stack
+ * without explicit "X+ años" phrases produces requirements with
+ * `min_years: null` across the board. Under the legacy binary
+ * fallback (`ratio = years > 0 ? 1 : 0`) a candidate with 4 months
+ * of React scores identically to one with 7 years. The fix: when
+ * `min_years` is null AND the JD carries a concrete seniority, the
+ * scorer uses the seniority's canonical baseline (junior=1,
+ * semi_senior=2, senior=3, lead=5) as the denominator; otherwise
+ * it keeps the binary fallback (no seniority signal ⇒ no justified
+ * baseline).
+ */
+describe('aggregateScore — ADR-022 seniority-derived min_years baseline', () => {
+  it('test_seniority_senior_null_min_years_uses_three_year_baseline — 1y/3y baseline → ratio ≈ 0.33', () => {
+    const reqs = [
+      mkRequirement({ skill_raw: 'React', skill_id: REACT_ID, min_years: null, must_have: false }),
+    ];
+    const exp = mkExp({
+      id: 'a',
+      start: '2024-01-01',
+      end: '2025-01-01', // exactly 1y against NOW=2025-01-01
+      skills: [{ skill_id: REACT_ID, skill_raw: 'React' }],
+    });
+    const result = aggregateScore(
+      mkJobQuery({ requirements: reqs, seniority: 'senior' }),
+      mkCandidate({ candidate_id: 'c', merged_experiences: [exp] }),
+      { now: NOW },
+    );
+    // 1y / 3y baseline ≈ 0.333. Under the legacy binary this is 1.0.
+    expect(result.breakdown[0]!.years_ratio).toBeCloseTo(1 / 3, 2);
+    expect(result.breakdown[0]!.status).toBe('partial');
+  });
+
+  it('test_seniority_lead_null_min_years_uses_five_year_baseline — 2y/5y baseline → ratio = 0.4', () => {
+    const reqs = [
+      mkRequirement({ skill_raw: 'React', skill_id: REACT_ID, min_years: null, must_have: false }),
+    ];
+    const exp = mkExp({
+      id: 'a',
+      start: '2023-01-01',
+      end: '2025-01-01', // 2y against NOW=2025-01-01
+      skills: [{ skill_id: REACT_ID, skill_raw: 'React' }],
+    });
+    const result = aggregateScore(
+      mkJobQuery({ requirements: reqs, seniority: 'lead' }),
+      mkCandidate({ candidate_id: 'c', merged_experiences: [exp] }),
+      { now: NOW },
+    );
+    expect(result.breakdown[0]!.years_ratio).toBeCloseTo(0.4, 2);
+    expect(result.breakdown[0]!.status).toBe('partial');
+  });
+
+  it('test_seniority_senior_null_min_years_saturates_above_baseline — 5y/3y baseline → ratio = 1', () => {
+    const reqs = [
+      mkRequirement({ skill_raw: 'React', skill_id: REACT_ID, min_years: null, must_have: false }),
+    ];
+    const exp = mkExp({
+      id: 'a',
+      start: '2020-01-01',
+      end: '2025-01-01', // 5y
+      skills: [{ skill_id: REACT_ID, skill_raw: 'React' }],
+    });
+    const result = aggregateScore(
+      mkJobQuery({ requirements: reqs, seniority: 'senior' }),
+      mkCandidate({ candidate_id: 'c', merged_experiences: [exp] }),
+      { now: NOW },
+    );
+    expect(result.breakdown[0]!.years_ratio).toBe(1);
+    expect(result.breakdown[0]!.status).toBe('match');
+  });
+
+  it('test_seniority_unspecified_keeps_binary_null_behavior — 4m + unspecified → ratio = 1 (regression guard)', () => {
+    const reqs = [
+      mkRequirement({ skill_raw: 'React', skill_id: REACT_ID, min_years: null, must_have: false }),
+    ];
+    const exp = mkExp({
+      id: 'a',
+      start: '2024-09-01',
+      end: '2025-01-01', // ~4 months
+      skills: [{ skill_id: REACT_ID, skill_raw: 'React' }],
+    });
+    const result = aggregateScore(
+      mkJobQuery({ requirements: reqs, seniority: 'unspecified' }),
+      mkCandidate({ candidate_id: 'c', merged_experiences: [exp] }),
+      { now: NOW },
+    );
+    // No seniority signal ⇒ binary presence stays in effect.
+    expect(result.breakdown[0]!.years_ratio).toBe(1);
+    expect(result.breakdown[0]!.status).toBe('match');
+  });
+
+  it('test_explicit_min_years_wins_over_seniority_default — senior + min_years=1 + 1.5y → ratio = 1 (regression guard)', () => {
+    // The JD that DOES specify per-skill years must not be second-
+    // guessed by the seniority default; regression guard.
+    const reqs = [
+      mkRequirement({ skill_raw: 'React', skill_id: REACT_ID, min_years: 1, must_have: false }),
+    ];
+    const exp = mkExp({
+      id: 'a',
+      start: '2023-07-01',
+      end: '2025-01-01', // 1.5y
+      skills: [{ skill_id: REACT_ID, skill_raw: 'React' }],
+    });
+    const result = aggregateScore(
+      mkJobQuery({ requirements: reqs, seniority: 'senior' }),
+      mkCandidate({ candidate_id: 'c', merged_experiences: [exp] }),
+      { now: NOW },
+    );
+    expect(result.breakdown[0]!.years_ratio).toBe(1);
+    expect(result.breakdown[0]!.status).toBe('match');
+  });
+
+  it('test_seniority_derived_baseline_lucas_vs_hernan_scenario — 4m-React junior loses to 7y-React senior under Senior JD', () => {
+    // Mirrors the 2026-04-23 prod incident (job_query 2d4d6faa):
+    // a Senior JD with every requirement `min_years: null` ranked
+    // Lucas Pereyra (0.34y React) above Hernán Garzón (7.48y
+    // React). Under ADR-022 the Senior baseline of 3y must collapse
+    // Lucas's React contribution while keeping Hernán's at 1.0.
+    const reqs = [
+      mkRequirement({ skill_raw: 'React', skill_id: REACT_ID, min_years: null, must_have: false }),
+    ];
+    const lucasExp = mkExp({
+      id: 'lucas',
+      start: '2024-09-01',
+      end: '2025-01-01', // 4 months
+      skills: [{ skill_id: REACT_ID, skill_raw: 'React' }],
+    });
+    const hernanExp = mkExp({
+      id: 'hernan',
+      start: '2017-07-01',
+      end: '2025-01-01', // ~7.5y
+      skills: [{ skill_id: REACT_ID, skill_raw: 'React' }],
+    });
+    const lucas = aggregateScore(
+      mkJobQuery({ requirements: reqs, seniority: 'senior' }),
+      mkCandidate({ candidate_id: 'lucas', merged_experiences: [lucasExp] }),
+      { now: NOW },
+    );
+    const hernan = aggregateScore(
+      mkJobQuery({ requirements: reqs, seniority: 'senior' }),
+      mkCandidate({ candidate_id: 'hernan', merged_experiences: [hernanExp] }),
+      { now: NOW },
+    );
+    expect(hernan.breakdown[0]!.years_ratio).toBe(1);
+    expect(lucas.breakdown[0]!.years_ratio).toBeLessThan(0.5);
+    // (seniority-match deltas are orthogonal; assert the base ratio
+    // is what inverts the ranking, not the ±5 bonus.)
+    expect(hernan.breakdown[0]!.contribution).toBeGreaterThan(lucas.breakdown[0]!.contribution);
+  });
+});
