@@ -8,10 +8,20 @@
  *
  * Determinism: `now` is injectable. No side effects.
  *
- * Gate rule (tests + ADR §3.1): a must-have requirement with a
- * resolved `skill_id` fails the gate when its `years_ratio === 0`.
- * Unresolved (`skill_id = null`) must-haves do NOT fail the gate —
- * catalog drift should not silently hide candidates (ADR §Consecuencias).
+ * Gate rule (tests + ADR §3.1 + ADR-021): must-have requirements
+ * are evaluated per group (see `alternative_group_id`). A group
+ * fails the gate when every resolved alternative in the group has
+ * `years_ratio === 0`. A group whose alternatives are ALL
+ * unresolved does NOT fail the gate (catalog drift must not
+ * silently hide candidates — ADR-015 §Consecuencias).
+ *
+ * Score aggregation (ADR-021): alternatives inside a group
+ * collapse to a single contribution = `max` of the per-alternative
+ * contributions, and the group's weight is ONE alternative's
+ * weight (2.0 for a must-have group, 1.0 for a nice group), not
+ * N×weight. This keeps the denominator the same as if the group
+ * were a single requirement; otherwise OR groups would be
+ * undernormalized against singletons.
  *
  * Language delta:
  *   - `-10` if any must_have language is missing on the candidate.
@@ -192,9 +202,43 @@ export function aggregateScore(
     };
   });
 
-  const gateFailed = breakdown.some(
-    (b) => b.requirement.must_have && b.requirement.skill_id !== null && b.years_ratio === 0,
-  );
+  // ADR-021: collapse the breakdown into groups for the gate + score.
+  // Singletons (alternative_group_id = null) become unique groups so
+  // they behave exactly as before.
+  interface ScoreGroup {
+    entries: RequirementBreakdown[];
+    must_have: boolean;
+  }
+  const groupsByKey = new Map<string, ScoreGroup>();
+  let syntheticSingletonIdx = 0;
+  for (const entry of breakdown) {
+    const id = entry.requirement.alternative_group_id;
+    const key = id === null ? `__singleton_${syntheticSingletonIdx++}` : `g:${id}`;
+    const existing = groupsByKey.get(key);
+    if (existing) {
+      existing.entries.push(entry);
+    } else {
+      groupsByKey.set(key, {
+        entries: [entry],
+        must_have: entry.requirement.must_have,
+      });
+    }
+  }
+  const groups = [...groupsByKey.values()];
+
+  const gateFailed = groups.some((g) => {
+    if (!g.must_have) return false;
+    // A group with every alternative unresolved does NOT fail the
+    // gate (ADR-015). Only groups with ≥1 resolved alternative are
+    // held to the years_ratio check.
+    const hasResolved = g.entries.some((b) => b.requirement.skill_id !== null);
+    if (!hasResolved) return false;
+    // Fail iff every resolved alternative has years_ratio === 0.
+    const anySatisfied = g.entries.some(
+      (b) => b.requirement.skill_id !== null && b.years_ratio > 0,
+    );
+    return !anySatisfied;
+  });
   const must_have_gate: MustHaveGate = gateFailed ? 'failed' : 'passed';
 
   const langStats = computeLanguageMatch(jobQuery, candidate);
@@ -213,12 +257,21 @@ export function aggregateScore(
   }
 
   let baseScore = 0;
-  if (breakdown.length > 0) {
-    const totalWeight = breakdown.reduce(
-      (sum, b) => sum + (b.requirement.must_have ? WEIGHT_MUST_HAVE : WEIGHT_NICE),
-      0,
-    );
-    const totalContribution = breakdown.reduce((sum, b) => sum + b.contribution, 0);
+  if (groups.length > 0) {
+    let totalWeight = 0;
+    let totalContribution = 0;
+    for (const g of groups) {
+      const groupWeight = g.must_have ? WEIGHT_MUST_HAVE : WEIGHT_NICE;
+      // max contribution across alternatives in the group. Using
+      // max (not sum) keeps the group's contribution bounded by the
+      // group weight.
+      let maxContribution = 0;
+      for (const entry of g.entries) {
+        if (entry.contribution > maxContribution) maxContribution = entry.contribution;
+      }
+      totalWeight += groupWeight;
+      totalContribution += maxContribution;
+    }
     baseScore = totalWeight > 0 ? (totalContribution / totalWeight) * 100 : 0;
   }
 
