@@ -23,8 +23,8 @@ import { describe, expect, it } from 'vitest';
 import { DECOMPOSITION_PROMPT_V1, DECOMPOSITION_PROMPT_V1_TEXT } from './decompose-v1';
 
 describe('decomposition prompt v1 — ADR-014 semantic invariants', () => {
-  it('pins DECOMPOSITION_PROMPT_V1 to 2026-04-v3', () => {
-    expect(DECOMPOSITION_PROMPT_V1).toBe('2026-04-v3');
+  it('pins DECOMPOSITION_PROMPT_V1 to 2026-04-v4', () => {
+    expect(DECOMPOSITION_PROMPT_V1).toBe('2026-04-v4');
   });
 
   it('prompt text is non-trivial', () => {
@@ -63,6 +63,20 @@ describe('decomposition prompt v1 — ADR-014 semantic invariants', () => {
     expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(
       /do not invent|no inventes|no invent|don't invent/i,
     );
+  });
+
+  it('prompt documents the "X (A o B)" alternative-list expansion', () => {
+    // Regression: on v3, JDs like "Manejo de CSS moderno (Tailwind o
+    // styled-components)" or "testing (Jest, Playwright)" collapsed
+    // into a single generic requirement (`"CSS moderno"`, `"testing"`)
+    // that the catalog could not resolve. The prompt must explicitly
+    // tell the model to split those parentheticals into one
+    // requirement per alternative, sharing the same evidence_snippet
+    // (same contract as the "React y TypeScript" case).
+    expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(/Tailwind/);
+    expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(/styled-components/);
+    expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(/Jest/);
+    expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(/Playwright/);
   });
 
   it('prompt requires skill_raw to be a short canonical name', () => {
