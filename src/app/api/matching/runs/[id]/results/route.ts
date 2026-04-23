@@ -63,12 +63,17 @@ export async function GET(
 
   const from = parsed.offset;
   const to = parsed.offset + parsed.limit - 1;
+  // Gate-failed candidates (must_have_gate='failed') are persisted
+  // but hidden from the default results listing — UI treats passed-
+  // only as the canonical shortlist. The rescue bucket is a
+  // separate endpoint.
   const { data, error, count } = await supabase
     .from('match_results')
     .select('candidate_id, total_score, must_have_gate, rank, breakdown_json', {
       count: 'exact',
     })
     .eq('match_run_id', params.id)
+    .eq('must_have_gate', 'passed')
     .order('rank', { ascending: true })
     .range(from, to);
   if (error) {

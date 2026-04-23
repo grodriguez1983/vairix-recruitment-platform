@@ -11,8 +11,10 @@ import Link from 'next/link';
 import { notFound } from 'next/navigation';
 
 import type { RequirementBreakdown } from '@/lib/matching/types';
+import type { ResolvedDecomposition } from '@/lib/rag/decomposition/resolve-requirements';
 import { createClient } from '@/lib/supabase/server';
 
+import { JobQueryPanel } from './job-query-panel';
 import { ResultsTable, type DisplayResult } from './results-table';
 
 export const dynamic = 'force-dynamic';
@@ -49,12 +51,24 @@ export default async function MatchRunPage({ params }: PageProps): Promise<JSX.E
 
   if (!run) notFound();
 
+  // JD header: raw_text + decomposed requirements come from the
+  // parent `job_queries` row. RLS already admits us via match_runs.
+  const { data: jobQuery } = await supabase
+    .from('job_queries')
+    .select('raw_text, raw_text_retained, resolved_json, unresolved_skills')
+    .eq('id', run.job_query_id as string)
+    .maybeSingle();
+
+  // Only surface gate=passed in the default view. Gate-failed
+  // candidates (partial must-have coverage) stay out of the ranking
+  // table; rescues-from-parsed-text bucket is the separate page.
   const { data: resultsRaw, count } = await supabase
     .from('match_results')
     .select('candidate_id, total_score, must_have_gate, rank, breakdown_json', {
       count: 'exact',
     })
     .eq('match_run_id', params.id)
+    .eq('must_have_gate', 'passed')
     .order('rank', { ascending: true })
     .range(0, RESULTS_LIMIT - 1);
 
@@ -129,9 +143,19 @@ export default async function MatchRunPage({ params }: PageProps): Promise<JSX.E
           label="candidates"
           value={String((run.candidates_evaluated as number | null) ?? rows.length)}
         />
-        <MetaCell label="results shown" value={`${rows.length}/${count ?? rows.length}`} />
+        <MetaCell label="passed" value={`${rows.length}/${count ?? rows.length}`} />
         <MetaCell label="started" value={shortTs(run.started_at as string | null)} />
       </section>
+
+      <JobQueryPanel
+        rawText={
+          jobQuery && (jobQuery.raw_text_retained as boolean)
+            ? ((jobQuery.raw_text as string | null) ?? null)
+            : null
+        }
+        resolved={(jobQuery?.resolved_json as ResolvedDecomposition | null) ?? null}
+        unresolvedSkills={(jobQuery?.unresolved_skills as string[] | null) ?? []}
+      />
 
       <ResultsTable runId={params.id} rows={rows} />
     </div>
