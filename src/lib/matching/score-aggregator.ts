@@ -43,6 +43,7 @@ import type { ResolvedDecomposition } from '../rag/decomposition/resolve-require
 import type { Seniority } from '../rag/decomposition/types';
 
 import { MS_PER_YEAR, toInterval, type Interval } from './date-intervals';
+import { defaultMinYearsFor } from './seniority-defaults';
 import type {
   CandidateAggregate,
   CandidateScore,
@@ -173,20 +174,30 @@ export function aggregateScore(
 ): CandidateScore {
   const now = options.now ?? new Date();
 
+  // ADR-022: if the JD carries a concrete seniority, its canonical
+  // baseline (junior=1, semi_senior=2, senior=3, lead=5) becomes the
+  // implicit piso for any requirement with `min_years: null`. When
+  // the JD is silent on seniority (`unspecified`) the legacy binary
+  // presence fallback stays in effect — no seniority signal, no
+  // justified baseline.
+  const seniorityBaseline = defaultMinYearsFor(jobQuery.seniority);
+
   const breakdown: RequirementBreakdown[] = jobQuery.requirements.map((req) => {
     const years =
       req.skill_id !== null
         ? yearsForSkill(req.skill_id, candidate.merged_experiences, { now })
         : 0;
+    const effectiveMinYears = req.min_years ?? seniorityBaseline;
     let ratio: number;
     if (req.skill_id === null) {
       ratio = 0;
-    } else if (req.min_years === null) {
-      ratio = years > 0 ? 1 : 0;
-    } else if (req.min_years === 0) {
+    } else if (effectiveMinYears === null || effectiveMinYears === 0) {
+      // Binary presence fallback: either the JD has no seniority
+      // signal (min_years explicitly null + seniority=unspecified)
+      // or the JD explicitly set min_years=0.
       ratio = years > 0 ? 1 : 0;
     } else {
-      ratio = Math.min(years / req.min_years, 1);
+      ratio = Math.min(years / effectiveMinYears, 1);
     }
     const weight = req.must_have ? WEIGHT_MUST_HAVE : WEIGHT_NICE;
     const contribution = weight * ratio;
