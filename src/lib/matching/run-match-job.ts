@@ -98,16 +98,48 @@ export interface RunMatchJobDeps {
   now?: () => Date;
 }
 
+/**
+ * Pluck the resolved must-have skill_ids from the breakdown that
+ * belong to FAILED groups — a group is "satisfied" iff at least one
+ * alternative has status === 'match'. Per ADR-021, rescue only
+ * needs to re-check the groups that actually failed.
+ */
 function collectFailedCandidates(results: CandidateScore[]): FailedCandidateInput[] {
   const out: FailedCandidateInput[] = [];
   for (const score of results) {
     if (score.must_have_gate !== 'failed') continue;
-    const missing = score.breakdown
-      .filter(
-        (b: RequirementBreakdown) =>
-          b.requirement.must_have && b.status !== 'match' && b.requirement.skill_id !== null,
-      )
-      .map((b) => b.requirement.skill_id as string);
+
+    // Bucket must-have rows with a resolved skill_id by group. A
+    // null alternative_group_id means the row is its own singleton
+    // group; we synthesize unique keys so siblings do not collide.
+    interface GroupBucket {
+      skillIds: string[];
+      satisfied: boolean;
+    }
+    const buckets = new Map<string, GroupBucket>();
+    let singletonIdx = 0;
+    for (const b of score.breakdown as RequirementBreakdown[]) {
+      if (!b.requirement.must_have) continue;
+      if (b.requirement.skill_id === null) continue;
+      const key =
+        b.requirement.alternative_group_id === null
+          ? `__singleton_${singletonIdx++}`
+          : `g:${b.requirement.alternative_group_id}`;
+      const existing = buckets.get(key);
+      const isMatch = b.status === 'match';
+      if (existing) {
+        existing.skillIds.push(b.requirement.skill_id);
+        if (isMatch) existing.satisfied = true;
+      } else {
+        buckets.set(key, { skillIds: [b.requirement.skill_id], satisfied: isMatch });
+      }
+    }
+
+    const missing: string[] = [];
+    for (const bucket of buckets.values()) {
+      if (bucket.satisfied) continue;
+      for (const s of bucket.skillIds) missing.push(s);
+    }
     if (missing.length === 0) continue;
     out.push({ candidate_id: score.candidate_id, missing_skill_ids: missing });
   }
