@@ -49,6 +49,7 @@ const RESPONSE_JSON_SCHEMA = {
             'must_have',
             'evidence_snippet',
             'category',
+            'alternative_group_id',
           ],
           properties: {
             skill_raw: { type: 'string' },
@@ -60,6 +61,11 @@ const RESPONSE_JSON_SCHEMA = {
               type: 'string',
               enum: ['technical', 'language', 'soft', 'other'],
             },
+            // ADR-021: OR-group identifier. Non-null string = member
+            // of the group with that id; null = singleton. Must be
+            // present (strict mode requires every property in
+            // `properties` to be in `required`).
+            alternative_group_id: { type: ['string', 'null'] },
           },
         },
       },

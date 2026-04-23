@@ -64,6 +64,7 @@ function fixtureResult(): DecompositionResult {
         must_have: true,
         evidence_snippet: '3+ años',
         category: 'technical',
+        alternative_group_id: null,
       },
       {
         skill_raw: 'Decompose-E2E-Uncataloged',
@@ -72,6 +73,7 @@ function fixtureResult(): DecompositionResult {
         must_have: false,
         evidence_snippet: 'deseable',
         category: 'technical',
+        alternative_group_id: null,
       },
     ],
     seniority: 'senior',

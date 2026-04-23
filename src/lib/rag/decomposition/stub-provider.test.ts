@@ -63,6 +63,7 @@ describe('createStubDecompositionProvider', () => {
           must_have: true,
           evidence_snippet: '5 años Go',
           category: 'technical',
+          alternative_group_id: null,
         },
       ],
       seniority: 'lead',

@@ -45,6 +45,7 @@ function deterministicResult(rawText: string): DecompositionResult {
         must_have: true,
         evidence_snippet: snippet,
         category: 'technical',
+        alternative_group_id: null,
       },
     ],
     seniority: 'unspecified',

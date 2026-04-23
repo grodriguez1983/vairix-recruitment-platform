@@ -24,6 +24,7 @@ function validRequirement() {
     must_have: true,
     evidence_snippet: '3+ años de Node.js',
     category: 'technical' as const,
+    alternative_group_id: null,
   };
 }
 
@@ -120,7 +121,7 @@ describe('RequirementSchema', () => {
     const parsed = RequirementSchema.parse({
       ...validRequirement(),
       alternative_group_id: null,
-    }) as unknown as { alternative_group_id: string | null };
+    });
     expect(parsed.alternative_group_id).toBeNull();
   });
 
@@ -128,7 +129,7 @@ describe('RequirementSchema', () => {
     const parsed = RequirementSchema.parse({
       ...validRequirement(),
       alternative_group_id: 'g1',
-    }) as unknown as { alternative_group_id: string | null };
+    });
     expect(parsed.alternative_group_id).toBe('g1');
   });
 
@@ -157,9 +158,8 @@ describe('DecompositionResultSchema — ADR-021 OR groups', () => {
       notes: null,
     });
     expect(parsed.requirements).toHaveLength(2);
-    const reqs = parsed.requirements as unknown as Array<{ alternative_group_id: string | null }>;
-    expect(reqs[0]?.alternative_group_id).toBe('g-css');
-    expect(reqs[1]?.alternative_group_id).toBe('g-css');
+    expect(parsed.requirements[0]?.alternative_group_id).toBe('g-css');
+    expect(parsed.requirements[1]?.alternative_group_id).toBe('g-css');
   });
 });
 

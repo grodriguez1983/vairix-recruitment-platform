@@ -205,6 +205,7 @@ function stubFixture(): DecompositionResult {
         must_have: true,
         evidence_snippet: '3+ años',
         category: 'technical',
+        alternative_group_id: null,
       },
       {
         skill_raw: SKILL_POSTGRES_RAW,
@@ -213,6 +214,7 @@ function stubFixture(): DecompositionResult {
         must_have: true,
         evidence_snippet: '3+ años',
         category: 'technical',
+        alternative_group_id: null,
       },
     ],
     seniority: 'senior',

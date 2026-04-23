@@ -34,6 +34,7 @@ function mkRequirement(
     must_have: overrides.must_have ?? false,
     evidence_snippet: overrides.evidence_snippet ?? 'x',
     category: overrides.category ?? 'technical',
+    alternative_group_id: overrides.alternative_group_id ?? null,
   };
 }
 

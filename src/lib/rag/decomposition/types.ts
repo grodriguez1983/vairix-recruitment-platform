@@ -46,6 +46,11 @@ export const RequirementSchema = z.object({
   must_have: z.boolean(),
   evidence_snippet: z.string().min(1),
   category: RequirementCategoryEnum,
+  // ADR-021: non-null id means this requirement is part of an OR
+  // group with every other requirement sharing the same id. null
+  // means singleton (group of 1). Empty string is rejected
+  // explicitly — it would be ambiguous with null.
+  alternative_group_id: z.string().min(1).nullable(),
 });
 
 export const LanguageSchema = z.object({

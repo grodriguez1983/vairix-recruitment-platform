@@ -44,6 +44,7 @@ function input(): DecompositionResult {
         must_have: true,
         evidence_snippet: '3+ años de Node.js',
         category: 'technical',
+        alternative_group_id: null,
       },
       {
         skill_raw: 'Postgres',
@@ -52,6 +53,7 @@ function input(): DecompositionResult {
         must_have: false,
         evidence_snippet: 'deseable PostgreSQL',
         category: 'technical',
+        alternative_group_id: null,
       },
       {
         skill_raw: 'Kubernetes',
@@ -60,6 +62,7 @@ function input(): DecompositionResult {
         must_have: false,
         evidence_snippet: 'plus Kubernetes',
         category: 'technical',
+        alternative_group_id: null,
       },
     ],
     seniority: 'senior',
@@ -103,6 +106,7 @@ describe('resolveRequirements — ADR-014 §5', () => {
       must_have: true,
       evidence_snippet: 'imprescindible Kubernetes',
       category: 'technical',
+      alternative_group_id: null,
     });
     const out = resolveRequirements(duped, catalog());
     expect(out.unresolved_skills).toEqual(['Kubernetes']);
