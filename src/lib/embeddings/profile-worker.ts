@@ -12,6 +12,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { IN_QUERY_CHUNK_SIZE, runChunked } from '../shared/chunked-in';
 import type { EmbeddingProvider } from './provider';
 import { buildProfileContent } from './sources/profile';
 import {
@@ -41,13 +42,19 @@ async function loadCandidateData(
   candidateIds: readonly string[],
 ): Promise<Map<string, CandidateDataRow>> {
   const map = new Map<string, CandidateDataRow>();
-  if (candidateIds.length === 0) return map;
-  const { data, error } = await db
-    .from('candidates')
-    .select('id, first_name, last_name, pitch')
-    .in('id', [...candidateIds]);
-  if (error) throw new Error(`failed to load candidate profile data: ${error.message}`);
-  for (const row of (data ?? []) as CandidateDataRow[]) map.set(row.id, row);
+  const rows = await runChunked<CandidateDataRow>(
+    candidateIds,
+    IN_QUERY_CHUNK_SIZE,
+    async (chunk) => {
+      const { data, error } = await db
+        .from('candidates')
+        .select('id, first_name, last_name, pitch')
+        .in('id', chunk);
+      if (error) throw new Error(`failed to load candidate profile data: ${error.message}`);
+      return (data ?? []) as CandidateDataRow[];
+    },
+  );
+  for (const row of rows) map.set(row.id, row);
   return map;
 }
 
@@ -56,13 +63,15 @@ async function loadTagsByCandidate(
   candidateIds: readonly string[],
 ): Promise<Map<string, string[]>> {
   const map = new Map<string, string[]>();
-  if (candidateIds.length === 0) return map;
-  const { data, error } = await db
-    .from('candidate_tags')
-    .select('candidate_id, tags(name)')
-    .in('candidate_id', [...candidateIds]);
-  if (error) throw new Error(`failed to load candidate tags: ${error.message}`);
-  for (const row of (data ?? []) as unknown as TagRow[]) {
+  const rows = await runChunked<TagRow>(candidateIds, IN_QUERY_CHUNK_SIZE, async (chunk) => {
+    const { data, error } = await db
+      .from('candidate_tags')
+      .select('candidate_id, tags(name)')
+      .in('candidate_id', chunk);
+    if (error) throw new Error(`failed to load candidate tags: ${error.message}`);
+    return (data ?? []) as unknown as TagRow[];
+  });
+  for (const row of rows) {
     const name = row.tags?.name;
     if (!name) continue;
     const arr = map.get(row.candidate_id) ?? [];

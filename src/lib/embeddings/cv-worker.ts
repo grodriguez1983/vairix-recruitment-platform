@@ -10,6 +10,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { IN_QUERY_CHUNK_SIZE, runChunked } from '../shared/chunked-in';
 import type { EmbeddingProvider } from './provider';
 import { buildCvContent, type CvFileInput } from './sources/cv';
 import {
@@ -35,14 +36,16 @@ async function loadFilesByCandidate(
   candidateIds: readonly string[],
 ): Promise<Map<string, CvFileInput[]>> {
   const map = new Map<string, CvFileInput[]>();
-  if (candidateIds.length === 0) return map;
-  const { data, error } = await db
-    .from('files')
-    .select('id, candidate_id, parsed_text, parsed_at, deleted_at')
-    .is('deleted_at', null)
-    .in('candidate_id', [...candidateIds]);
-  if (error) throw new Error(`failed to load files: ${error.message}`);
-  for (const row of (data ?? []) as FileRow[]) {
+  const rows = await runChunked<FileRow>(candidateIds, IN_QUERY_CHUNK_SIZE, async (chunk) => {
+    const { data, error } = await db
+      .from('files')
+      .select('id, candidate_id, parsed_text, parsed_at, deleted_at')
+      .is('deleted_at', null)
+      .in('candidate_id', chunk);
+    if (error) throw new Error(`failed to load files: ${error.message}`);
+    return (data ?? []) as FileRow[];
+  });
+  for (const row of rows) {
     const arr = map.get(row.candidate_id) ?? [];
     arr.push({
       id: row.id,

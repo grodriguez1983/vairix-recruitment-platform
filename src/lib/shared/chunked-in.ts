@@ -42,9 +42,20 @@ export const IN_QUERY_CHUNK_SIZE = 100;
  *   returned when a chunk fails.
  */
 export async function runChunked<T>(
-  _ids: readonly string[],
-  _chunkSize: number,
-  _fetch: (chunk: string[]) => Promise<T[]>,
+  ids: readonly string[],
+  chunkSize: number,
+  fetch: (chunk: string[]) => Promise<T[]>,
 ): Promise<T[]> {
-  throw new Error('runChunked: not implemented');
+  if (!Number.isInteger(chunkSize) || chunkSize <= 0) {
+    throw new Error(`runChunked: chunkSize must be a positive integer, got ${chunkSize}`);
+  }
+  if (ids.length === 0) return [];
+
+  const out: T[] = [];
+  for (let i = 0; i < ids.length; i += chunkSize) {
+    const chunk = ids.slice(i, i + chunkSize);
+    const rows = await fetch(chunk);
+    for (const row of rows) out.push(row);
+  }
+  return out;
 }

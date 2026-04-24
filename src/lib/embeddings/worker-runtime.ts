@@ -34,6 +34,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { IN_QUERY_CHUNK_SIZE, runChunked } from '../shared/chunked-in';
 import { contentHash } from './hash';
 import type { EmbeddingProvider } from './provider';
 import type { EmbeddingSourceType } from '../rag/semantic-search';
@@ -80,6 +81,14 @@ async function loadCandidatesPage(
   from: number,
   to: number,
 ): Promise<CandidateRow[]> {
+  // NOTE: `options.candidateIds` is an optional *restrict-to* filter,
+  // not the normal per-page feed. If a caller ever passes more than
+  // IN_QUERY_CHUNK_SIZE ids here, this single `.in()` will blow the
+  // URL budget just like the per-page `.in()`s did pre-fix. The CLI
+  // in `embed:all` does not use this option, so this is a latent
+  // vector rather than an active incident; chunking it requires
+  // rethinking the `.range()` pagination interaction. Tracked as a
+  // follow-up in docs/status.md.
   let query = db
     .from('candidates')
     .select('id')
@@ -100,19 +109,22 @@ async function loadExistingHashes(
   candidateIds: readonly string[],
 ): Promise<Map<string, ExistingEmbeddingRow>> {
   const map = new Map<string, ExistingEmbeddingRow>();
-  if (candidateIds.length === 0) return map;
-  const { data, error } = await db
-    .from('embeddings')
-    .select('id, candidate_id, content_hash')
-    .eq('source_type', sourceType)
-    .is('source_id', null)
-    .in('candidate_id', [...candidateIds]);
-  if (error) throw new Error(`failed to load existing embeddings: ${error.message}`);
-  for (const row of data ?? []) {
-    map.set(row.candidate_id as string, {
-      id: row.id as string,
-      content_hash: row.content_hash as string,
-    });
+  const rows = await runChunked<{ id: string; candidate_id: string; content_hash: string }>(
+    candidateIds,
+    IN_QUERY_CHUNK_SIZE,
+    async (chunk) => {
+      const { data, error } = await db
+        .from('embeddings')
+        .select('id, candidate_id, content_hash')
+        .eq('source_type', sourceType)
+        .is('source_id', null)
+        .in('candidate_id', chunk);
+      if (error) throw new Error(`failed to load existing embeddings: ${error.message}`);
+      return (data ?? []) as { id: string; candidate_id: string; content_hash: string }[];
+    },
+  );
+  for (const row of rows) {
+    map.set(row.candidate_id, { id: row.id, content_hash: row.content_hash });
   }
   return map;
 }

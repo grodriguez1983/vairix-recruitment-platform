@@ -12,6 +12,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { IN_QUERY_CHUNK_SIZE, runChunked } from '../shared/chunked-in';
 import type { EmbeddingProvider } from './provider';
 import {
   buildEvaluationContent,
@@ -56,27 +57,40 @@ async function loadEvaluationsByCandidate(
   const byCandidate = new Map<string, EvaluationInput[]>();
   if (candidateIds.length === 0) return byCandidate;
 
-  const { data: evalRows, error: evalErr } = await db
-    .from('evaluations')
-    .select('id, candidate_id, decision, score, evaluator_name, notes, created_at')
-    .is('deleted_at', null)
-    .in('candidate_id', [...candidateIds]);
-  if (evalErr) throw new Error(`failed to load evaluations: ${evalErr.message}`);
+  const evals = await runChunked<EvaluationRow>(
+    candidateIds,
+    IN_QUERY_CHUNK_SIZE,
+    async (chunk) => {
+      const { data, error } = await db
+        .from('evaluations')
+        .select('id, candidate_id, decision, score, evaluator_name, notes, created_at')
+        .is('deleted_at', null)
+        .in('candidate_id', chunk);
+      if (error) throw new Error(`failed to load evaluations: ${error.message}`);
+      return (data ?? []) as EvaluationRow[];
+    },
+  );
 
-  const evals = (evalRows ?? []) as EvaluationRow[];
   if (evals.length === 0) return byCandidate;
 
   const evalIds = evals.map((e) => e.id);
-  const { data: answerRows, error: ansErr } = await db
-    .from('evaluation_answers')
-    .select(
-      'evaluation_id, question_tt_id, question_title, value_text, value_number, value_boolean, value_date, value_range',
-    )
-    .in('evaluation_id', evalIds);
-  if (ansErr) throw new Error(`failed to load evaluation_answers: ${ansErr.message}`);
+  const answerRows = await runChunked<EvaluationAnswerRow>(
+    evalIds,
+    IN_QUERY_CHUNK_SIZE,
+    async (chunk) => {
+      const { data, error } = await db
+        .from('evaluation_answers')
+        .select(
+          'evaluation_id, question_tt_id, question_title, value_text, value_number, value_boolean, value_date, value_range',
+        )
+        .in('evaluation_id', chunk);
+      if (error) throw new Error(`failed to load evaluation_answers: ${error.message}`);
+      return (data ?? []) as EvaluationAnswerRow[];
+    },
+  );
 
   const answersByEval = new Map<string, EvaluationAnswerInput[]>();
-  for (const row of (answerRows ?? []) as EvaluationAnswerRow[]) {
+  for (const row of answerRows) {
     const arr = answersByEval.get(row.evaluation_id) ?? [];
     arr.push({
       questionTtId: row.question_tt_id,

@@ -11,6 +11,7 @@
  */
 import type { SupabaseClient } from '@supabase/supabase-js';
 
+import { IN_QUERY_CHUNK_SIZE, runChunked } from '../shared/chunked-in';
 import type { EmbeddingProvider } from './provider';
 import { buildNotesContent, type NoteInput } from './sources/notes';
 import {
@@ -34,14 +35,16 @@ async function loadNotesByCandidate(
   candidateIds: readonly string[],
 ): Promise<Map<string, NoteInput[]>> {
   const map = new Map<string, NoteInput[]>();
-  if (candidateIds.length === 0) return map;
-  const { data, error } = await db
-    .from('notes')
-    .select('candidate_id, body, created_at')
-    .is('deleted_at', null)
-    .in('candidate_id', [...candidateIds]);
-  if (error) throw new Error(`failed to load notes: ${error.message}`);
-  for (const row of (data ?? []) as NoteRow[]) {
+  const rows = await runChunked<NoteRow>(candidateIds, IN_QUERY_CHUNK_SIZE, async (chunk) => {
+    const { data, error } = await db
+      .from('notes')
+      .select('candidate_id, body, created_at')
+      .is('deleted_at', null)
+      .in('candidate_id', chunk);
+    if (error) throw new Error(`failed to load notes: ${error.message}`);
+    return (data ?? []) as NoteRow[];
+  });
+  for (const row of rows) {
     const arr = map.get(row.candidate_id) ?? [];
     arr.push({ body: row.body, createdAt: row.created_at });
     map.set(row.candidate_id, arr);
