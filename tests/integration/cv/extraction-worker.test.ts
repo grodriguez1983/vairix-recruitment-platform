@@ -22,6 +22,7 @@ import {
   runCvExtractions,
   type CvExtractionWorkerDeps,
 } from '../../../src/lib/cv/extraction/worker';
+import { listPendingExtractions } from '../../../src/lib/cv/extraction/list-pending';
 import { createStubExtractionProvider } from '../../../src/lib/cv/extraction/stub-provider';
 import type { ExtractionResult } from '../../../src/lib/cv/extraction/types';
 
@@ -51,35 +52,12 @@ function workerDeps(
   provider: ReturnType<typeof createStubExtractionProvider>,
 ): CvExtractionWorkerDeps {
   return {
-    listPending: async (limit) => {
-      // files with parsed_text present and no candidate_extractions for
-      // the current (model, prompt_version). Done as two queries —
-      // join via NOT IN keeps the test readable without forcing a view.
-      const { data: existing, error: errE } = await db
-        .from('candidate_extractions')
-        .select('file_id')
-        .eq('model', provider.model)
-        .eq('prompt_version', provider.promptVersion);
-      if (errE) throw new Error(errE.message);
-      const excluded = (existing ?? []).map((r) => r.file_id);
-
-      let q = db
-        .from('files')
-        .select('id, candidate_id, parsed_text')
-        .is('deleted_at', null)
-        .not('parsed_text', 'is', null)
-        .is('parse_error', null)
-        .order('created_at', { ascending: true })
-        .limit(limit);
-      if (excluded.length > 0) q = q.not('id', 'in', `(${excluded.join(',')})`);
-      const { data, error } = await q;
-      if (error) throw new Error(error.message);
-      return (data ?? []).map((r) => ({
-        file_id: r.id as string,
-        candidate_id: r.candidate_id as string,
-        parsed_text: r.parsed_text as string,
-      }));
-    },
+    listPending: (limit) =>
+      listPendingExtractions(db, {
+        model: provider.model,
+        promptVersion: provider.promptVersion,
+        limit,
+      }),
     extractionExistsByHash: async (hash) => {
       const { data, error } = await db
         .from('candidate_extractions')

@@ -43,8 +43,54 @@ export interface PendingExtractionRow {
 }
 
 export async function listPendingExtractions(
-  _db: SupabaseClient,
-  _input: ListPendingExtractionsInput,
+  db: SupabaseClient,
+  input: ListPendingExtractionsInput,
 ): Promise<PendingExtractionRow[]> {
-  throw new Error('listPendingExtractions not implemented');
+  const { model, promptVersion, limit } = input;
+
+  const { data: existing, error: existingErr } = await db
+    .from('candidate_extractions')
+    .select('file_id')
+    .eq('model', model)
+    .eq('prompt_version', promptVersion);
+  if (existingErr) throw new Error(existingErr.message);
+
+  const excluded = new Set<string>();
+  for (const row of existing ?? []) {
+    const id = (row as { file_id: string | null }).file_id;
+    if (typeof id === 'string' && id.length > 0) excluded.add(id);
+  }
+
+  // Pre-fetch `limit + excluded.size` so we still return `limit` rows
+  // even if every row we'd want sits behind the excluded prefix.
+  // Smaller values risk false-empty; larger values waste bandwidth on
+  // a worker that runs infrequently.
+  const fetchCap = limit + excluded.size;
+
+  const { data: files, error: filesErr } = await db
+    .from('files')
+    .select('id, candidate_id, parsed_text')
+    .is('deleted_at', null)
+    .not('parsed_text', 'is', null)
+    .is('parse_error', null)
+    .order('created_at', { ascending: true })
+    .limit(fetchCap);
+  if (filesErr) throw new Error(filesErr.message);
+
+  const out: PendingExtractionRow[] = [];
+  for (const row of files ?? []) {
+    const typed = row as {
+      id: string;
+      candidate_id: string;
+      parsed_text: string;
+    };
+    if (excluded.has(typed.id)) continue;
+    out.push({
+      file_id: typed.id,
+      candidate_id: typed.candidate_id,
+      parsed_text: typed.parsed_text,
+    });
+    if (out.length >= limit) break;
+  }
+  return out;
 }
