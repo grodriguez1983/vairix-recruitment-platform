@@ -12,6 +12,7 @@ import Link from 'next/link';
 import { useEffect, useRef, useState } from 'react';
 
 import { cn } from '@/lib/shared/cn';
+import { formatTimeAgo } from '@/lib/shared/format-time-ago';
 import type { CandidateScore, RequirementBreakdown } from '@/lib/matching/types';
 
 export interface DisplayResult {
@@ -160,6 +161,11 @@ function BreakdownPanel({
     };
   }, [row.candidate_id, runId]);
 
+  // Single anchor for all "last used" cells in this panel so every row
+  // is computed against the same `now` instant (avoids drift across
+  // .map iterations).
+  const now = new Date();
+
   return (
     <div className="flex flex-col gap-3 border-t border-border bg-bg px-4 py-3">
       <div className="flex flex-wrap gap-2 font-mono text-[10px] uppercase tracking-wider text-text-muted">
@@ -183,6 +189,7 @@ function BreakdownPanel({
             <th className="py-1 pr-2 font-normal uppercase tracking-wider">skill</th>
             <th className="py-1 pr-2 font-normal uppercase tracking-wider">status</th>
             <th className="py-1 pr-2 font-normal uppercase tracking-wider">years</th>
+            <th className="py-1 pr-2 font-normal uppercase tracking-wider">last used</th>
             <th className="py-1 pr-2 font-normal uppercase tracking-wider">ratio</th>
             <th className="py-1 pr-2 text-right font-normal uppercase tracking-wider">contrib</th>
           </tr>
@@ -218,6 +225,9 @@ function BreakdownPanel({
               <td className="py-1 pr-2 text-text-muted">{b.status}</td>
               <td className="py-1 pr-2 text-text-muted tabular-nums">
                 {b.candidate_years.toFixed(1)}
+              </td>
+              <td className="py-1 pr-2 text-text-muted tabular-nums">
+                {formatTimeAgo(b.last_used, now)}
               </td>
               <td className="py-1 pr-2 text-text-muted tabular-nums">{b.years_ratio.toFixed(2)}</td>
               <td className="py-1 pr-2 text-right text-text-primary tabular-nums">
