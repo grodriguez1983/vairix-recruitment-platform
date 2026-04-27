@@ -133,7 +133,12 @@ export async function runIncremental<Row>(
   const acquired = await acquireLock(deps.db, syncer.entity);
   const runStartedAt = acquired.lastRunStartedAt!;
   const priorWatermark = acquired.lastSyncedAt;
-  const cursor = acquired.lastCursor;
+  // ADR-027: `last_cursor` is the per-entity watermark used by
+  // `buildInitialRequest`. For rows persisted before ADR-027,
+  // `last_cursor` is null while `last_synced_at` already carries the
+  // right value — use it as a one-shot fallback so the first
+  // post-fix run is genuinely incremental instead of a full scan.
+  const cursor = acquired.lastCursor ?? acquired.lastSyncedAt;
 
   let recordsSynced = 0;
   let rowErrors = 0;
@@ -188,6 +193,10 @@ export async function runIncremental<Row>(
       status: 'success',
       recordsSynced,
       lastSyncedAt: runStartedAt,
+      // ADR-027: persist run-start as the next cursor so subsequent
+      // runs filter by `updated-at >= cursor` and stop full-scanning
+      // Teamtailor.
+      lastCursor: runStartedAt,
     });
     logger.info?.(
       `[sync] ${syncer.entity} success: ${recordsSynced} records, ${rowErrors} row errors`,
