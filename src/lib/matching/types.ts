@@ -94,7 +94,32 @@ export type SeniorityMatch = 'match' | 'below' | 'above' | 'unknown';
 
 export interface RequirementBreakdown {
   requirement: ResolvedRequirement;
+  /**
+   * Years that fed `years_ratio`. Equals `effective_years` (post-decay)
+   * since ADR-026; before that it was the raw sweep-line output of
+   * `yearsForSkill`. Backward compatible at the field name level —
+   * readers see "what the ratio used", which is the only thing they
+   * could meaningfully use anyway.
+   */
   candidate_years: number;
+  /**
+   * ADR-026: pre-decay sweep-line years (work + side_project weighted
+   * per ADR-020). Useful for explaining "the candidate has 5 raw
+   * years, but the last one was 15y ago, so the effective is 0.36".
+   */
+  raw_years: number;
+  /**
+   * ADR-026: ISO date `YYYY-MM-DD` of the latest `end_date ?? asOf`
+   * across work + side_project experiences mentioning the resolved
+   * skill. `null` when no contributing experience exists.
+   */
+  last_used: string | null;
+  /**
+   * ADR-026: multiplicative decay applied to `raw_years` to obtain
+   * `candidate_years`. Range `(0, 1]`. `1` means "no penalty"
+   * (ongoing or no experience).
+   */
+  decay_factor: number;
   years_ratio: number;
   contribution: number;
   status: MatchStatus;

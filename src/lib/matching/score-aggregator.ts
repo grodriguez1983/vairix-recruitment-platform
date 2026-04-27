@@ -46,6 +46,7 @@ import type { ResolvedDecomposition } from '../rag/decomposition/resolve-require
 import type { Seniority } from '../rag/decomposition/types';
 
 import { MS_PER_YEAR, toInterval, type Interval } from './date-intervals';
+import { effectiveYearsForSkill } from './recency-decay';
 import { defaultMinYearsFor } from './seniority-defaults';
 import type {
   CandidateAggregate,
@@ -191,10 +192,14 @@ export function aggregateScore(
   const roleEssentialIds = new Set<string>(jobQuery.role_essentials.flatMap((g) => g.skill_ids));
 
   const breakdown: RequirementBreakdown[] = jobQuery.requirements.map((req) => {
-    const years =
+    // ADR-026: years that feed the ratio are the decayed effective
+    // years, not the raw sweep-line output. Both are exposed in the
+    // breakdown for auditing.
+    const eff =
       req.skill_id !== null
-        ? yearsForSkill(req.skill_id, candidate.merged_experiences, { now })
-        : 0;
+        ? effectiveYearsForSkill(req.skill_id, candidate.merged_experiences, { asOf: now })
+        : { rawYears: 0, effectiveYears: 0, lastUsed: null, decayFactor: 1, yearsSinceLastUse: 0 };
+    const years = eff.effectiveYears;
     const effectiveMinYears = req.min_years ?? seniorityBaseline;
     let ratio: number;
     if (req.skill_id === null) {
@@ -202,7 +207,10 @@ export function aggregateScore(
     } else if (effectiveMinYears === null || effectiveMinYears === 0) {
       // Binary presence fallback: either the JD has no seniority
       // signal (min_years explicitly null + seniority=unspecified)
-      // or the JD explicitly set min_years=0.
+      // or the JD explicitly set min_years=0. ADR-026: presence is
+      // measured against effective_years; for any finite raw_years > 0
+      // the decay factor is > 0, so this branch behaves as before
+      // (presence ⇔ raw exposure).
       ratio = years > 0 ? 1 : 0;
     } else {
       ratio = Math.min(years / effectiveMinYears, 1);
@@ -219,6 +227,9 @@ export function aggregateScore(
     return {
       requirement: req,
       candidate_years: years,
+      raw_years: eff.rawYears,
+      last_used: eff.lastUsed === null ? null : eff.lastUsed.toISOString().slice(0, 10),
+      decay_factor: eff.decayFactor,
       years_ratio: ratio,
       contribution,
       status: statusFor(ratio),
@@ -270,6 +281,13 @@ export function aggregateScore(
   // role, not about hitting the JD's year threshold). Empty
   // skill_ids short-circuit to pass to avoid silently hiding
   // candidates when the catalog drifts.
+  //
+  // ADR-026: this gate intentionally uses RAW yearsForSkill, not
+  // effectiveYearsForSkill. Stale exposure (e.g. 5y of Java 15y ago)
+  // still satisfies the role-coverage gate — the scorer already
+  // penalises the contribution via decay. Bolting decay onto the
+  // gate would double-penalise and silently hide candidates that
+  // the ratio is justly downscoring.
   const roleGateFailed = jobQuery.role_essentials.some((group) => {
     if (group.skill_ids.length === 0) return false;
     const anySatisfied = group.skill_ids.some(

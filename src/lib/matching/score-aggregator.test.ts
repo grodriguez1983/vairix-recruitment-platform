@@ -87,10 +87,13 @@ describe('aggregateScore — ADR-015 §3', () => {
     const reqs = [
       mkRequirement({ skill_raw: 'React', skill_id: REACT_ID, min_years: 3, must_have: true }),
     ];
+    // ADR-026: end=null (ongoing) keeps decay_factor=1, preserving
+    // the legacy "3 raw years → score 100" intent without conflating
+    // the test with recency-decay behaviour (covered separately).
     const exp = mkExp({
       id: 'a',
-      start: '2020-01-01',
-      end: '2023-01-01',
+      start: '2022-01-01',
+      end: null,
       skills: [{ skill_id: REACT_ID, skill_raw: 'React' }],
     });
     const result = aggregateScore(
@@ -961,5 +964,188 @@ describe('aggregateScore — ADR-023 role_essentials gate + 2× weight', () => {
     expect(lucas.total_score).toBe(0);
     expect(victor.must_have_gate).toBe('passed');
     expect(victor.total_score).toBeGreaterThan(0);
+  });
+});
+
+describe('aggregateScore — ADR-026 recency decay', () => {
+  // NOW is 2025-01-01. We use a later asOf for the canonical
+  // 15-yr-old-Java case so the gap is visible.
+  const ASOF_2026 = new Date('2026-04-27T00:00:00Z');
+  const JAVA_ID = '00000000-0000-0000-0000-00000000000a';
+
+  it('test_adr026_breakdown_exposes_decay_components', () => {
+    const reqs = [
+      mkRequirement({ skill_raw: 'React', skill_id: REACT_ID, min_years: 3, must_have: true }),
+    ];
+    const exp = mkExp({
+      id: 'a',
+      start: '2018-01-01',
+      end: '2022-01-01',
+      skills: [{ skill_id: REACT_ID, skill_raw: 'React' }],
+    });
+    const result = aggregateScore(
+      mkJobQuery({ requirements: reqs }),
+      mkCandidate({ candidate_id: 'c', merged_experiences: [exp] }),
+      { now: ASOF_2026 },
+    );
+    const b = result.breakdown[0]!;
+    expect(b.raw_years).toBeCloseTo(4, 1); // 2018→2022 = 4y
+    expect(b.last_used).toBe('2022-01-01');
+    // From 2022-01-01 to 2026-04-27 ≈ 4.32y → factor ≈ 0.47
+    expect(b.decay_factor).toBeGreaterThan(0.4);
+    expect(b.decay_factor).toBeLessThan(0.5);
+    expect(b.candidate_years).toBeCloseTo(b.raw_years * b.decay_factor, 4);
+  });
+
+  it('test_adr026_stale_skill_low_ratio_under_senior_baseline — owner canonical case', () => {
+    // 5 years of Java between 2005-01-01 and 2010-01-01. JD = senior
+    // (baseline 3y per ADR-022). asOf = 2026-04-27 → 16+y of decay.
+    // Ratio collapses from 1 (raw 5/3 saturated) to ~0.1.
+    const reqs = [
+      mkRequirement({
+        skill_raw: 'Java',
+        skill_id: JAVA_ID,
+        min_years: null,
+        must_have: false,
+      }),
+    ];
+    const exp = mkExp({
+      id: 'a',
+      start: '2005-01-01',
+      end: '2010-01-01',
+      skills: [{ skill_id: JAVA_ID, skill_raw: 'Java' }],
+    });
+    const result = aggregateScore(
+      mkJobQuery({ requirements: reqs, seniority: 'senior' }),
+      mkCandidate({ candidate_id: 'ex_java', merged_experiences: [exp] }),
+      { now: ASOF_2026 },
+    );
+    const b = result.breakdown[0]!;
+    expect(b.raw_years).toBeCloseTo(5, 1);
+    // effective_years / 3 ≪ 1 → ratio bajo
+    expect(b.years_ratio).toBeLessThan(0.2);
+    expect(b.years_ratio).toBeGreaterThan(0);
+  });
+
+  it('test_adr026_stale_skill_still_passes_must_have_gate', () => {
+    // Even with heavy decay, raw exposure satisfies the must-have
+    // gate (effective > 0 ⟺ raw > 0 for any finite raw years).
+    const reqs = [
+      mkRequirement({ skill_raw: 'Java', skill_id: JAVA_ID, min_years: 3, must_have: true }),
+    ];
+    const exp = mkExp({
+      id: 'a',
+      start: '2005-01-01',
+      end: '2010-01-01',
+      skills: [{ skill_id: JAVA_ID, skill_raw: 'Java' }],
+    });
+    const result = aggregateScore(
+      mkJobQuery({ requirements: reqs }),
+      mkCandidate({ candidate_id: 'ex_java', merged_experiences: [exp] }),
+      { now: ASOF_2026 },
+    );
+    expect(result.must_have_gate).toBe('passed');
+    // total_score is small (decay killed contribution) but not zero —
+    // the gate didn't slam shut.
+    expect(result.total_score).toBeGreaterThan(0);
+  });
+
+  it('test_adr026_stale_skill_still_passes_role_essentials_gate', () => {
+    // ADR-023 axis gate uses RAW yearsForSkill > 0, deliberately
+    // ignoring decay (commented in score-aggregator). A candidate
+    // with 15-yr-old Java exposure still covers the Java axis.
+    const reqs = [
+      mkRequirement({
+        skill_raw: 'Java',
+        skill_id: JAVA_ID,
+        min_years: null,
+        must_have: false,
+      }),
+    ];
+    const exp = mkExp({
+      id: 'a',
+      start: '2005-01-01',
+      end: '2010-01-01',
+      skills: [{ skill_id: JAVA_ID, skill_raw: 'Java' }],
+    });
+    const result = aggregateScore(
+      mkJobQuery({
+        requirements: reqs,
+        seniority: 'senior',
+        role_essentials: [{ label: 'backend', skill_ids: [JAVA_ID] }],
+      }),
+      mkCandidate({ candidate_id: 'ex_java', merged_experiences: [exp] }),
+      { now: ASOF_2026 },
+    );
+    // Axis covered → not gate-failed for role_essentials. The
+    // must-have gate also passes (raw > 0). Score is low because
+    // the decayed ratio drives contribution down, but the
+    // candidate is not silenced.
+    expect(result.must_have_gate).toBe('passed');
+    expect(result.total_score).toBeGreaterThan(0);
+  });
+
+  it('test_adr026_recent_beats_stale_for_same_raw_years — hero ranking inversion', () => {
+    // Two candidates, same skill Java, same raw years (3). One
+    // worked it 2023-2026 (recent), the other 2005-2008 (stale).
+    // JD = senior, baseline 3 → without decay both would saturate
+    // at ratio 1 and tie. With decay the recent dev keeps ratio ≈ 1
+    // while the stale one falls far below.
+    const reqs = [
+      mkRequirement({
+        skill_raw: 'Java',
+        skill_id: JAVA_ID,
+        min_years: null,
+        must_have: false,
+      }),
+    ];
+    const recentExp = mkExp({
+      id: 'r',
+      start: '2023-04-27',
+      end: null, // ongoing → no decay
+      skills: [{ skill_id: JAVA_ID, skill_raw: 'Java' }],
+    });
+    const staleExp = mkExp({
+      id: 's',
+      start: '2005-01-01',
+      end: '2008-01-01',
+      skills: [{ skill_id: JAVA_ID, skill_raw: 'Java' }],
+    });
+    const jq = mkJobQuery({ requirements: reqs, seniority: 'senior' });
+    const recent = aggregateScore(
+      jq,
+      mkCandidate({ candidate_id: 'recent', merged_experiences: [recentExp] }),
+      { now: ASOF_2026 },
+    );
+    const stale = aggregateScore(
+      jq,
+      mkCandidate({ candidate_id: 'stale', merged_experiences: [staleExp] }),
+      { now: ASOF_2026 },
+    );
+    // raw_years is similar for both (~3), but effective years differ
+    // by an order of magnitude.
+    expect(recent.breakdown[0]!.years_ratio).toBeGreaterThan(0.9);
+    expect(stale.breakdown[0]!.years_ratio).toBeLessThan(0.1);
+    expect(recent.total_score).toBeGreaterThan(stale.total_score);
+  });
+
+  it('test_adr026_unresolved_requirement_carries_neutral_decay_metadata', () => {
+    // Requirement with skill_id=null still produces a breakdown row;
+    // the decay metadata must be neutral (raw=0, effective via
+    // candidate_years=0, last_used=null, decay=1).
+    const reqs = [
+      mkRequirement({ skill_raw: 'EsotericTech', skill_id: null, min_years: 2, must_have: false }),
+    ];
+    const result = aggregateScore(
+      mkJobQuery({ requirements: reqs }),
+      mkCandidate({ candidate_id: 'c', merged_experiences: [] }),
+      { now: NOW },
+    );
+    const b = result.breakdown[0]!;
+    expect(b.raw_years).toBe(0);
+    expect(b.candidate_years).toBe(0);
+    expect(b.last_used).toBeNull();
+    expect(b.decay_factor).toBe(1);
+    expect(b.years_ratio).toBe(0);
   });
 });
