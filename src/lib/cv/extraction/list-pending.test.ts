@@ -189,4 +189,123 @@ describe('listPendingExtractions', () => {
     expect(byCol.get('model')).toBe('gpt-5-extract');
     expect(byCol.get('prompt_version')).toBe('v7');
   });
+
+  // ────────────────────────────────────────────────────────────────
+  // ADR-029: Re-extract when parsed_text changes
+  // ────────────────────────────────────────────────────────────────
+  // Bug surfaced when TT updates a CV: files row gets new content_hash,
+  // parser nullifies parsed_text, parser re-runs producing new text, but
+  // listPending skips the file because the OLD candidate_extractions row
+  // still matches (file_id, model, prompt_version). The fix: dedupe by
+  // the hash that the file *would* produce given its current parsed_text.
+
+  it('test_re_extracts_when_parsed_text_changed_post_extraction', async () => {
+    // The existing extraction was for parsed_text='OLD CV TEXT'; the file
+    // now has parsed_text='NEW CV TEXT' (post re-parse). The old row's
+    // content_hash differs from what NEW would hash to, so the file MUST
+    // appear in pending.
+    const { extractionContentHash } = await import('./hash');
+    const oldHash = extractionContentHash('OLD CV TEXT', 'gpt-4o-mini', '2026-04-v1');
+    const fileRow = {
+      id: 'file-1',
+      candidate_id: 'cand-1',
+      parsed_text: 'NEW CV TEXT',
+      created_at: '2026-04-24T00:00:00Z',
+    };
+    const { db } = buildFakeDb({
+      candidate_extractions: { rows: [{ file_id: 'file-1', content_hash: oldHash }] },
+      files: { rows: [fileRow] },
+    });
+
+    const out = await listPendingExtractions(db, {
+      model: 'gpt-4o-mini',
+      promptVersion: '2026-04-v1',
+      limit: 10,
+    });
+
+    expect(out.map((r) => r.file_id)).toEqual(['file-1']);
+  });
+
+  it('test_skips_when_text_unchanged_and_hash_matches', async () => {
+    // Steady state: the existing extraction's hash matches what the
+    // file's current parsed_text would hash to → file is up-to-date and
+    // should NOT appear in pending.
+    const { extractionContentHash } = await import('./hash');
+    const currentHash = extractionContentHash('SAME TEXT', 'gpt-4o-mini', '2026-04-v1');
+    const fileRow = {
+      id: 'file-1',
+      candidate_id: 'cand-1',
+      parsed_text: 'SAME TEXT',
+      created_at: '2026-04-24T00:00:00Z',
+    };
+    const { db } = buildFakeDb({
+      candidate_extractions: { rows: [{ file_id: 'file-1', content_hash: currentHash }] },
+      files: { rows: [fileRow] },
+    });
+
+    const out = await listPendingExtractions(db, {
+      model: 'gpt-4o-mini',
+      promptVersion: '2026-04-v1',
+      limit: 10,
+    });
+
+    expect(out).toEqual([]);
+  });
+
+  it('test_existing_query_selects_content_hash_not_just_file_id', async () => {
+    // Pin the contract: the helper must read content_hash from existing
+    // rows (otherwise the comparison in test_re_extracts_when_text_changed
+    // can't be done). Without this, a future refactor that drops
+    // content_hash from the select silently breaks the fix.
+    let selectArg: unknown = null;
+    const captureSelectDb = {
+      from: (table: string) => {
+        if (table !== 'candidate_extractions') {
+          return {
+            select: () => ({
+              eq: () => ({
+                eq: () => ({
+                  then: (r: (v: unknown) => unknown) =>
+                    Promise.resolve({ data: [], error: null }).then(r),
+                }),
+              }),
+              is: () => ({
+                is: () => ({
+                  not: () => ({
+                    order: () => ({
+                      limit: () => ({
+                        then: (r: (v: unknown) => unknown) =>
+                          Promise.resolve({ data: [], error: null }).then(r),
+                      }),
+                    }),
+                  }),
+                }),
+              }),
+            }),
+          };
+        }
+        return {
+          select: (cols: string) => {
+            selectArg = cols;
+            return {
+              eq: () => ({
+                eq: () => ({
+                  then: (r: (v: unknown) => unknown) =>
+                    Promise.resolve({ data: [], error: null }).then(r),
+                }),
+              }),
+            };
+          },
+        };
+      },
+    } as unknown as SupabaseClient;
+
+    await listPendingExtractions(captureSelectDb, {
+      model: 'm',
+      promptVersion: 'v1',
+      limit: 5,
+    });
+
+    expect(selectArg).toMatch(/content_hash/);
+  });
 });

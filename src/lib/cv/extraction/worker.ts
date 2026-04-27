@@ -74,6 +74,25 @@ export interface CvExtractionWorkerDeps {
   deriveLanguages?: (
     extractionId: string,
   ) => Promise<{ skipped: boolean; languagesInserted: number }>;
+  /**
+   * ADR-029: cleanup of stale sibling extractions for the same
+   * `(file_id, model, prompt_version)` whose `content_hash` differs
+   * from the freshly inserted one. Cascades clean up
+   * `candidate_experiences`, `experience_skills`, and
+   * `candidate_languages` derived from the stale row.
+   *
+   * Optional: tests that don't care about cleanup can omit it; the
+   * CLI always wires it. A thrown error is logged to `sync_errors`
+   * with `entity='cv_extraction'` and does NOT roll back the new
+   * extraction (the new data is valid; the stale sibling just
+   * survives until the next run retries the cleanup).
+   */
+  deleteStaleSiblings?: (input: {
+    file_id: string;
+    model: string;
+    prompt_version: string;
+    current_hash: string;
+  }) => Promise<{ deleted: number }>;
   provider: ExtractionProvider;
   now?: () => Date;
 }

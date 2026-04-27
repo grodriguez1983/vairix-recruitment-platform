@@ -53,6 +53,7 @@ function buildDeps(opts: {
   throwForFile?: string;
   derive?: CvExtractionWorkerDeps['deriveExperiences'];
   deriveLanguages?: CvExtractionWorkerDeps['deriveLanguages'];
+  deleteStaleSiblings?: CvExtractionWorkerDeps['deleteStaleSiblings'];
 }): {
   deps: CvExtractionWorkerDeps;
   inserts: Array<{ file_id: string; id: string; content_hash: string; source_variant: string }>;
@@ -102,6 +103,7 @@ function buildDeps(opts: {
       provider: wrappedProvider,
       deriveExperiences: opts.derive,
       deriveLanguages: opts.deriveLanguages,
+      deleteStaleSiblings: opts.deleteStaleSiblings,
     },
     inserts,
     errors,
@@ -366,5 +368,113 @@ describe('runCvExtractions — ADR-012 §6 worker invariants', () => {
     expect(errors[0]!.entity).toBe('cv_derivation');
     expect(errors[0]!.entity_id).toBe('ext-f-bad');
     expect(errors[0]!.message).toContain('simulated languages derivation failure');
+  });
+
+  // ────────────────────────────────────────────────────────────────
+  // ADR-029: cleanup of stale sibling extractions
+  // ────────────────────────────────────────────────────────────────
+
+  it('test_invokes_delete_stale_siblings_after_successful_insert', async () => {
+    const deleteStaleSiblings: NonNullable<CvExtractionWorkerDeps['deleteStaleSiblings']> = vi.fn(
+      async () => ({ deleted: 1 }),
+    );
+    const pending: Row[] = [
+      { file_id: 'f1', candidate_id: 'c1', parsed_text: 'cv one' },
+      { file_id: 'f2', candidate_id: 'c2', parsed_text: 'cv two' },
+    ];
+    const { deps, inserts } = buildDeps({ pending, deleteStaleSiblings });
+    await runCvExtractions(deps);
+
+    const calls = (
+      deleteStaleSiblings as unknown as {
+        mock: {
+          calls: Array<
+            [{ file_id: string; model: string; prompt_version: string; current_hash: string }]
+          >;
+        };
+      }
+    ).mock.calls;
+    expect(calls).toHaveLength(2);
+    // The dep MUST receive (file_id, model, prompt_version, current_hash)
+    // so the SQL DELETE can target stale siblings exactly.
+    for (const call of calls) {
+      const arg = call[0];
+      expect(arg).toMatchObject({
+        file_id: expect.any(String),
+        model: expect.any(String),
+        prompt_version: expect.any(String),
+        current_hash: expect.any(String),
+      });
+      // The current_hash MUST match what the worker just inserted
+      // (otherwise the DELETE would erase the row we just wrote).
+      const insertForFile = inserts.find((i) => i.file_id === arg.file_id);
+      expect(arg.current_hash).toBe(insertForFile?.content_hash);
+    }
+  });
+
+  it('test_skips_delete_when_extraction_skipped_by_hash', async () => {
+    const { extractionContentHash } = await import('./hash');
+    const provider = createStubExtractionProvider({ fixture: sampleResult() });
+    const hash = extractionContentHash('cached', provider.model, provider.promptVersion);
+    const deleteStaleSiblings = vi.fn(async () => ({ deleted: 0 }));
+
+    const { deps } = buildDeps({
+      pending: [{ file_id: 'f1', candidate_id: 'c1', parsed_text: 'cached' }],
+      existingHashes: new Set([hash]),
+      providerImpl: provider,
+      deleteStaleSiblings,
+    });
+    await runCvExtractions(deps);
+
+    expect(deleteStaleSiblings).not.toHaveBeenCalled();
+  });
+
+  it('test_skips_delete_when_extraction_failed', async () => {
+    const deleteStaleSiblings: NonNullable<CvExtractionWorkerDeps['deleteStaleSiblings']> = vi.fn(
+      async () => ({ deleted: 0 }),
+    );
+    const pending: Row[] = [
+      { file_id: 'f-ok', candidate_id: 'c1', parsed_text: 'good cv' },
+      { file_id: 'f-bad', candidate_id: 'c2', parsed_text: 'bad cv' },
+    ];
+    const { deps } = buildDeps({
+      pending,
+      throwForFile: 'f-bad',
+      deleteStaleSiblings,
+    });
+    await runCvExtractions(deps);
+
+    // Only f-ok had a successful insert; f-bad threw before insert.
+    const calls = (
+      deleteStaleSiblings as unknown as { mock: { calls: Array<[{ file_id: string }]> } }
+    ).mock.calls;
+    expect(calls).toHaveLength(1);
+    expect(calls[0]![0].file_id).toBe('f-ok');
+  });
+
+  it('test_cleanup_error_is_logged_and_does_not_rollback', async () => {
+    const deleteStaleSiblings = vi.fn(async () => {
+      throw new Error('simulated cleanup failure');
+    });
+    const pending: Row[] = [{ file_id: 'f1', candidate_id: 'c1', parsed_text: 'cv one' }];
+    const { deps, inserts, errors } = buildDeps({ pending, deleteStaleSiblings });
+    const stats = await runCvExtractions(deps);
+
+    // The new extraction is valid; the stale sibling just survives.
+    expect(stats.extracted).toBe(1);
+    expect(inserts).toHaveLength(1);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]!.entity).toBe('cv_extraction');
+    expect(errors[0]!.entity_id).toBe('f1');
+    expect(errors[0]!.message).toContain('simulated cleanup failure');
+  });
+
+  it('test_skips_delete_when_dep_is_absent_backwards_compat', async () => {
+    // Older callers (or unit tests) may not wire deleteStaleSiblings.
+    // The worker MUST not crash when the dep is undefined.
+    const pending: Row[] = [{ file_id: 'f1', candidate_id: 'c1', parsed_text: 'cv one' }];
+    const { deps } = buildDeps({ pending });
+    const stats = await runCvExtractions(deps);
+    expect(stats.extracted).toBe(1);
   });
 });
