@@ -370,6 +370,12 @@ sequenceDiagram
   candidates soft-deleted.
 - `test_matcher_deterministic_given_same_extraction` — mismas
   `candidate_experiences` + misma descomposición ⇒ mismo ranking.
+- `test_matcher_decays_stale_experience` (ADR-026) — un candidato con
+  N años de skill X cuya última experiencia con X terminó hace mucho
+  contribuye con `effective_years = N × 0.5^(years_since_last/4)` al
+  ratio, no con N raw. Caso canónico: 5 años de Java terminados
+  hace 15 años → `effective ≈ 0.36 años`, ratio bajo `senior` cae de
+  1 a ~0.12.
 
 ### Notas de diseño (pre-ADR)
 
