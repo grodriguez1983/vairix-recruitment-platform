@@ -168,6 +168,30 @@ export async function runCvExtractions(
       continue;
     }
 
+    // ADR-029: clean up stale siblings (same (file_id, model,
+    // prompt_version) but different content_hash). Cascade FKs handle
+    // the derived data. A failure here logs to sync_errors with
+    // entity='cv_extraction' but does NOT roll back the new
+    // extraction — the new row is valid; the stale sibling will be
+    // retried on the next run (idempotent: subsequent DELETE finds the
+    // same stale row and removes it).
+    if (deps.deleteStaleSiblings !== undefined && insertedId !== null) {
+      try {
+        await deps.deleteStaleSiblings({
+          file_id: row.file_id,
+          model: deps.provider.model,
+          prompt_version: deps.provider.promptVersion,
+          current_hash: hash,
+        });
+      } catch (e) {
+        await deps.logRowError({
+          entity: 'cv_extraction',
+          entity_id: row.file_id,
+          message: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
+
     if (deps.deriveExperiences !== undefined && insertedId !== null) {
       try {
         const d = await deps.deriveExperiences(insertedId);

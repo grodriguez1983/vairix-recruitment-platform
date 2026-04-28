@@ -113,6 +113,23 @@ function buildDeps(db: SupabaseClient, provider: ExtractionProvider): CvExtracti
     },
     deriveExperiences: (extractionId) => deriveExperiences(extractionId, buildDeriveDeps(db)),
     deriveLanguages: (extractionId) => deriveLanguages(extractionId, buildDeriveLanguagesDeps(db)),
+    // ADR-029: after a successful insert, drop any sibling extraction
+    // for the same `(file_id, model, prompt_version)` whose
+    // `content_hash` differs from the freshly inserted one. Cascade
+    // FKs (`candidate_experiences`, `experience_skills`,
+    // `candidate_languages`) clean up derived data automatically.
+    deleteStaleSiblings: async ({ file_id, model: m, prompt_version, current_hash }) => {
+      const { data, error } = await db
+        .from('candidate_extractions')
+        .delete()
+        .eq('file_id', file_id)
+        .eq('model', m)
+        .eq('prompt_version', prompt_version)
+        .neq('content_hash', current_hash)
+        .select('id');
+      if (error) throw new Error(error.message);
+      return { deleted: (data ?? []).length };
+    },
     provider,
   };
 }

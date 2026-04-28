@@ -112,7 +112,15 @@ describe('listPendingExtractions', () => {
   });
 
   it('filters excluded files in memory and returns at most `limit`', async () => {
-    const excluded = [{ file_id: 'f-1' }, { file_id: 'f-3' }];
+    // ADR-029: dedup is by `content_hash`, not `file_id`. Build the
+    // existing rows with the hashes that `text-f-1` and `text-f-3`
+    // would produce under (model, prompt_version) so the helper
+    // recognises them as already-extracted.
+    const { extractionContentHash } = await import('./hash');
+    const excluded = [
+      { content_hash: extractionContentHash('text-f-1', 'm', 'v1') },
+      { content_hash: extractionContentHash('text-f-3', 'm', 'v1') },
+    ];
     const files = [
       makeFile('f-1', 'c-1', '2026-04-24T00:00:01Z'),
       makeFile('f-2', 'c-2', '2026-04-24T00:00:02Z'),
@@ -147,7 +155,12 @@ describe('listPendingExtractions', () => {
     // it returns [] even though non-excluded rows exist further down.
     // Pre-fetching `limit + excluded.size` is the minimum that keeps
     // the worst case sound.
-    const excluded = Array.from({ length: 5 }, (_, i) => ({ file_id: `f-${i}` }));
+    // ADR-029: dedup by content_hash. Each excluded entry must match
+    // the hash that `text-f-i` would produce.
+    const { extractionContentHash } = await import('./hash');
+    const excluded = Array.from({ length: 5 }, (_, i) => ({
+      content_hash: extractionContentHash(`text-f-${i}`, 'm', 'v1'),
+    }));
     const files = [
       ...Array.from({ length: 5 }, (_, i) =>
         makeFile(`f-${i}`, `c-${i}`, `2026-04-24T00:00:0${i}Z`),
@@ -270,8 +283,8 @@ describe('listPendingExtractions', () => {
                 }),
               }),
               is: () => ({
-                is: () => ({
-                  not: () => ({
+                not: () => ({
+                  is: () => ({
                     order: () => ({
                       limit: () => ({
                         then: (r: (v: unknown) => unknown) =>
