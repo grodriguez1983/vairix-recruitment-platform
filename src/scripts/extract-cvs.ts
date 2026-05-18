@@ -271,7 +271,7 @@ async function main(): Promise<void> {
         `processed=${stats.processed} extracted=${stats.extracted} ` +
         `skipped=${stats.skipped} errored=${stats.errored} ` +
         `experiences=${stats.experiencesInserted} skills=${stats.skillsInserted} ` +
-        `derivationErrored=${stats.derivationErrored}`,
+        `languages=${stats.languagesInserted} derivationErrored=${stats.derivationErrored}`,
     );
     process.exit(0);
   } catch (e) {
