@@ -5,7 +5,8 @@
  * (ADR-015 + ADR-020). It is driven by:
  *   - the latest end_date of any work or side_project experience that
  *     mentions the resolved skill (`lastUsed`),
- *   - a uniform half-life (`HALF_LIFE_YEARS = 4`),
+ *   - a uniform half-life (`HALF_LIFE_YEARS = 2`, ADR-030; was 4 in
+ *     ADR-026 — see file header of recency-decay.ts for rationale),
  *   - an `asOf` date provided by the caller (no wallclock default —
  *     determinism is part of the API contract).
  *
@@ -49,7 +50,8 @@ describe('decayFactor — ADR-026', () => {
   });
 
   it('test_decay_factor_half_at_one_half_life', () => {
-    // 4 years since last use, half-life 4 → 0.5 exactly.
+    // After HALF_LIFE_YEARS elapsed → 0.5 exactly (definition).
+    // ADR-030: with half-life=2, this fires at 2y; was 4y under ADR-026.
     expect(decayFactor(HALF_LIFE_YEARS)).toBeCloseTo(0.5, 6);
   });
 
@@ -158,12 +160,11 @@ describe('lastUsedFor — ADR-026', () => {
 });
 
 describe('effectiveYearsForSkill — ADR-026', () => {
-  it('test_decay_penalizes_15yr_old_java — 5 raw years from 2005-2010 → ~0.36 effective at 2026', () => {
+  it('test_decay_penalizes_15yr_old_java — 5 raw years from 2005-2010 → near-zero effective at 2026', () => {
     // Owner's canonical case: 5 years of Java between 2005-01-01 and
     // 2010-01-01. asOf = 2026-04-27. lastUsed = 2010-01-01 → ~16.32y
-    // since last use. decayFactor = 0.5^(16.32/4) ≈ 0.0589. Effective
-    // years ≈ 5 × 0.0589 ≈ 0.29. (The exact number depends on date
-    // arithmetic; the assertion checks the order of magnitude.)
+    // since last use. ADR-030: decayFactor = 0.5^(16.32/2) ≈ 0.0035.
+    // Effective years ≈ 5 × 0.0035 ≈ 0.017. (Was ~0.29 under h=4.)
     const exp = mkExp({
       id: 'a',
       start: '2005-01-01',
@@ -172,9 +173,9 @@ describe('effectiveYearsForSkill — ADR-026', () => {
     });
     const r = effectiveYearsForSkill(JAVA_ID, [exp], { asOf: NOW });
     expect(r.rawYears).toBeCloseTo(5, 1);
-    expect(r.effectiveYears).toBeGreaterThan(0.2);
-    expect(r.effectiveYears).toBeLessThan(0.5);
-    expect(r.decayFactor).toBeLessThan(0.1);
+    expect(r.effectiveYears).toBeGreaterThan(0);
+    expect(r.effectiveYears).toBeLessThan(0.05);
+    expect(r.decayFactor).toBeLessThan(0.01);
     expect(r.lastUsed?.toISOString().slice(0, 10)).toBe('2010-01-01');
     expect(r.yearsSinceLastUse).toBeGreaterThan(15);
     expect(r.yearsSinceLastUse).toBeLessThan(17);
@@ -204,17 +205,20 @@ describe('effectiveYearsForSkill — ADR-026', () => {
       asOf: new Date('2014-01-01T00:00:00Z'),
     });
     const r2026 = effectiveYearsForSkill(JAVA_ID, [exp], { asOf: NOW });
-    // 2014: 4y since last use → factor 0.5
-    // 2026: ~16y since last use → factor << 0.1
-    expect(r2014.decayFactor).toBeCloseTo(0.5, 2);
-    expect(r2026.decayFactor).toBeLessThan(0.1);
+    // ADR-030 (h=2):
+    //   2014: 4y since last use → factor 0.5^(4/2) = 0.25
+    //   2026: ~16y since last use → factor 0.5^8 ≈ 0.004
+    expect(r2014.decayFactor).toBeCloseTo(0.25, 2);
+    expect(r2026.decayFactor).toBeLessThan(0.01);
     expect(r2014.effectiveYears).toBeGreaterThan(r2026.effectiveYears);
   });
 
   it('test_decay_uses_latest_end_date_per_skill — Java 2005-2010 + 2018-2020 anchors at 2020', () => {
     // 5 years 2005-2010 (work) + 2 years 2018-2020 (work). Sweep-line
     // merges to 7 raw years (disjoint). lastUsed = 2020-01-01.
-    // From 2026-04-27, ~6.32y elapsed → factor 0.5^(6.32/4) ≈ 0.335.
+    // From 2026-04-27, ~6.32y elapsed. ADR-030 (h=2):
+    //   factor = 0.5^(6.32/2) ≈ 0.112
+    //   effective ≈ 7 × 0.112 ≈ 0.78
     const a = mkExp({
       id: 'a',
       start: '2005-01-01',
@@ -230,10 +234,10 @@ describe('effectiveYearsForSkill — ADR-026', () => {
     const r = effectiveYearsForSkill(JAVA_ID, [a, b], { asOf: NOW });
     expect(r.lastUsed?.toISOString().slice(0, 10)).toBe('2020-01-01');
     expect(r.rawYears).toBeCloseTo(7, 1);
-    expect(r.decayFactor).toBeGreaterThan(0.3);
-    expect(r.decayFactor).toBeLessThan(0.4);
-    expect(r.effectiveYears).toBeGreaterThan(2.0);
-    expect(r.effectiveYears).toBeLessThan(2.5);
+    expect(r.decayFactor).toBeGreaterThan(0.09);
+    expect(r.decayFactor).toBeLessThan(0.13);
+    expect(r.effectiveYears).toBeGreaterThan(0.65);
+    expect(r.effectiveYears).toBeLessThan(0.9);
   });
 
   it('test_decay_compounds_with_side_project_weight_ortogonally', () => {
@@ -283,16 +287,16 @@ describe('effectiveYearsForSkill — ADR-026', () => {
     expect(r.yearsSinceLastUse).toBe(0);
   });
 
-  it('test_decay_factor_at_exact_half_life — 4 years since last use → 0.5', () => {
+  it('test_decay_factor_at_exact_half_life — 2 years since last use → 0.5', () => {
     const exp = mkExp({
       id: 'a',
-      start: '2018-04-27',
-      end: '2022-04-27',
+      start: '2020-04-27',
+      end: '2024-04-27',
       skills: [{ skill_id: JAVA_ID, skill_raw: 'Java' }],
     });
-    // lastUsed = 2022-04-27, asOf = 2026-04-27 → exactly 4 years.
+    // lastUsed = 2024-04-27, asOf = 2026-04-27 → exactly 2 years (ADR-030 h=2).
     const r = effectiveYearsForSkill(JAVA_ID, [exp], { asOf: NOW });
-    expect(r.yearsSinceLastUse).toBeCloseTo(4, 2);
+    expect(r.yearsSinceLastUse).toBeCloseTo(2, 2);
     expect(r.decayFactor).toBeCloseTo(0.5, 3);
     expect(r.effectiveYears).toBeCloseTo(r.rawYears * 0.5, 2);
   });

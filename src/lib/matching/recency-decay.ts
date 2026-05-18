@@ -31,7 +31,7 @@ import { parseDate } from './date-intervals';
 import type { ExperienceKind, MergedExperience } from './types';
 import { yearsForSkill } from './years-calculator';
 
-export const HALF_LIFE_YEARS = 4;
+export const HALF_LIFE_YEARS = 2;
 const MS_PER_YEAR = 365.2425 * 24 * 60 * 60 * 1000;
 const RECENCY_KINDS: ReadonlySet<ExperienceKind> = new Set(['work', 'side_project']);
 
