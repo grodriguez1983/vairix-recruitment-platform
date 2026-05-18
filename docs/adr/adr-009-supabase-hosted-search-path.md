@@ -179,7 +179,14 @@ Reemplazar `uuid_generate_v4()` por `gen_random_uuid()`.
 
 **Para la DB remota actual** (donde migración 001 ya corrió antes
 de este ADR), aplicar una sola vez en el SQL Editor del Studio
-remoto o vía `psql`:
+remoto, vía `psql`, o más simple, vía el CLI sin salir del repo:
+
+```bash
+supabase db query --linked \
+  "alter database postgres set search_path = public, extensions;"
+```
+
+Equivale a:
 
 ```sql
 ALTER DATABASE postgres SET search_path = public, extensions;
@@ -189,6 +196,31 @@ Sólo afecta conexiones **nuevas** — cerrar/reabrir el pool de
 conexiones del CLI antes de re-intentar el push. En la práctica,
 `supabase db push` abre conexiones frescas, así que un retry
 inmediato alcanza.
+
+**Verificación** post-fix (debe aparecer el `search_path` en la
+salida):
+
+```bash
+supabase db query --linked \
+  "select unnest(setconfig) from pg_db_role_setting s \
+   join pg_database d on d.oid = s.setdatabase \
+   where d.datname = 'postgres';"
+```
+
+**Caso confirmado (Bloque 24, 2026-05-18)**: el primer `supabase db
+push --linked --include-all` contra el proyecto remoto
+`tqyvvtmaouhmfsknfvxq` falló en la segunda migración
+(`20260417205152_app_users.sql`) con `function uuid_generate_v4()
+does not exist`. La migración 001 figuraba como aplicada
+(`migration_list` la mostraba en ambos lados) pero el
+`pg_db_role_setting` del remoto sólo tenía `app.settings.jwt_exp`,
+faltando el `search_path`. Causa: la versión de la migración 001
+que se aplicó al remoto el 2026-04-17 era **anterior** al ADR-009
+(creado 2026-04-18) y no incluía la línea del ALTER. La línea del
+ALTER agregada en ADR-009 reside en el archivo de migración pero no
+re-ejecuta porque el migration_id ya está en `supabase_migrations.schema_migrations`.
+Workaround una-sola-vez por proyecto remoto pre-existente
+documentado arriba.
 
 **Para bootstraps futuros**, la migración 001 ya incluye el ALTER
 y no se necesita ningún paso manual.
