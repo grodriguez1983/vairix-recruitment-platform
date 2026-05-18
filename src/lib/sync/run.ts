@@ -81,6 +81,18 @@ export interface EntitySyncer<Row = unknown> {
    */
   mapResource(resource: TTParsedResource, included: TTParsedResource[]): Row;
   /**
+   * Optional cursor-based early-stop hook for endpoints that cannot
+   * be server-filtered by `updated-at` (e.g. TT /v1/uploads — every
+   * `filter[*]` is rejected with code 102 "not allowed"). When set,
+   * the runner consults it on each yielded resource BEFORE mapping;
+   * a `true` return breaks iteration and the trigger resource is
+   * NOT upserted. Used in tandem with `sort=-updated-at` in
+   * `buildInitialRequest` to emulate a server-side incremental
+   * cursor entirely client-side. Omit on syncers that filter
+   * server-side (the vast majority).
+   */
+  shouldStop?(resource: TTParsedResource, cursor: string | null): boolean;
+  /**
    * Upserts a batch of rows. Failure is treated as FATAL by the
    * runner: the lock releases with status='error' and
    * last_synced_at does NOT advance.

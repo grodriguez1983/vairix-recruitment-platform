@@ -205,6 +205,48 @@ describe('runIncremental / ADR-027 cursor persistence', () => {
     expect(cursorSeen.value).toBeNull();
   });
 
+  it('test_breaks_pagination_when_syncer_shouldStop_returns_true', async () => {
+    // C′ early-stop contract: syncers whose upstream endpoint cannot
+    // filter by cursor (e.g. TT /v1/uploads) ask the server to sort
+    // newest-first and break iteration client-side as soon as a
+    // resource older than the cursor appears. The trigger resource
+    // MUST NOT be upserted (it's already older than the watermark).
+    vi.mocked(acquireLock).mockResolvedValueOnce({
+      lastRunStartedAt: '2026-04-27T10:00:00.000Z',
+      lastSyncedAt: '2026-04-20T00:00:00.000Z',
+      lastCursor: '2026-04-20T00:00:00.000Z',
+    } as Awaited<ReturnType<typeof acquireLock>>);
+    vi.mocked(releaseLock).mockClear();
+
+    const upserts: Row[][] = [];
+    const syncer: EntitySyncer<Row> = {
+      entity: 'test-entity',
+      buildInitialRequest: () => ({ path: '/test', params: {} }),
+      mapResource: (r) => ({ teamtailor_id: r.id }),
+      // Stop on id === '3' (simulating the third resource being older
+      // than cursor in the newest-first sort).
+      shouldStop: (r) => r.id === '3',
+      upsert: async (rows) => {
+        upserts.push([...rows]);
+        return rows.length;
+      },
+    };
+
+    const result = await runIncremental(syncer, {
+      db: {} as SyncerDeps['db'],
+      client: fakeClient(10),
+    } as SyncerDeps);
+
+    expect(result.recordsSynced).toBe(3);
+    expect(upserts.flat().map((r) => r.teamtailor_id)).toEqual(['0', '1', '2']);
+    const outcome = vi.mocked(releaseLock).mock.calls[0]?.[2];
+    expect(outcome?.status).toBe('success');
+    if (outcome?.status === 'success') {
+      // Cursor still advances — partial drain by design.
+      expect(outcome.lastCursor).toBe('2026-04-27T10:00:00.000Z');
+    }
+  });
+
   it('test_does_not_advance_cursor_on_error_path', async () => {
     vi.mocked(acquireLock).mockResolvedValueOnce({
       lastRunStartedAt: '2026-04-27T10:00:00.000Z',
