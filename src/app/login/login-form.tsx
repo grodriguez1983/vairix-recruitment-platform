@@ -2,9 +2,9 @@
 
 import { useFormState, useFormStatus } from 'react-dom';
 
-import { sendMagicLink, type MagicLinkState } from './actions';
+import { signIn, type SignInState } from './actions';
 
-const initialState: MagicLinkState = { ok: false, message: '' };
+const initialState: SignInState = { ok: false, message: '' };
 
 function SubmitButton(): JSX.Element {
   const { pending } = useFormStatus();
@@ -14,13 +14,13 @@ function SubmitButton(): JSX.Element {
       disabled={pending}
       className="inline-flex h-10 w-full items-center justify-center rounded-md bg-accent px-4 text-sm font-medium text-[color:var(--color-bg)] transition-opacity hover:opacity-90 disabled:opacity-60"
     >
-      {pending ? 'Sending…' : 'Send magic link'}
+      {pending ? 'Signing in…' : 'Sign in'}
     </button>
   );
 }
 
 export function LoginForm(): JSX.Element {
-  const [state, formAction] = useFormState(sendMagicLink, initialState);
+  const [state, formAction] = useFormState(signIn, initialState);
 
   return (
     <form action={formAction} className="space-y-4">
@@ -35,6 +35,19 @@ export function LoginForm(): JSX.Element {
           autoComplete="email"
           required
           placeholder="you@vairix.com"
+          className="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none"
+        />
+      </div>
+      <div className="space-y-1.5">
+        <label htmlFor="password" className="text-xs font-medium text-text-muted">
+          Password
+        </label>
+        <input
+          id="password"
+          name="password"
+          type="password"
+          autoComplete="current-password"
+          required
           className="h-10 w-full rounded-md border border-border bg-surface px-3 text-sm text-text-primary placeholder:text-text-muted focus:border-accent focus:outline-none"
         />
       </div>
