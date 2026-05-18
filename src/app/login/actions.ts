@@ -1,49 +1,54 @@
 'use server';
 
 /**
- * Server actions for the login flow.
+ * Server action for the login flow.
  *
- * `sendMagicLink` triggers `signInWithOtp` against Supabase. The
- * user receives an email; clicking it hits `/auth/callback` which
- * exchanges the code for a session and redirects home.
+ * `signIn` authenticates with email + password against Supabase. On
+ * success the Supabase server client writes the session cookies and
+ * we redirect to the app shell. Wrong credentials return a generic
+ * message (we intentionally do not disclose whether the email exists
+ * — internal tool, but minimal-surface stance per ADR-003).
+ *
+ * User provisioning happens out-of-band: admins create users (and set
+ * the initial password) from the Supabase dashboard, then communicate
+ * the password to the user via a side channel.
  */
+import { redirect } from 'next/navigation';
 import { z } from 'zod';
 
 import { createClient } from '@/lib/supabase/server';
-import { originFromHeaders } from '@/lib/shared/origin';
 
-export interface MagicLinkState {
+export interface SignInState {
   ok: boolean;
   message: string;
 }
 
-const EmailSchema = z.string().trim().email('Enter a valid email address.');
+const CredentialsSchema = z.object({
+  email: z.string().trim().email('Enter a valid email address.'),
+  password: z.string().min(1, 'Password is required.'),
+});
 
-export async function sendMagicLink(
-  _prev: MagicLinkState | undefined,
+export async function signIn(
+  _prev: SignInState | undefined,
   formData: FormData,
-): Promise<MagicLinkState> {
-  const raw = formData.get('email');
-  const parsed = EmailSchema.safeParse(raw);
+): Promise<SignInState> {
+  const parsed = CredentialsSchema.safeParse({
+    email: formData.get('email'),
+    password: formData.get('password'),
+  });
   if (!parsed.success) {
-    return { ok: false, message: parsed.error.issues[0]?.message ?? 'Invalid email.' };
+    return { ok: false, message: parsed.error.issues[0]?.message ?? 'Invalid credentials.' };
   }
 
   const supabase = createClient();
-  const redirectTo = `${originFromHeaders()}/auth/callback`;
-  const { error } = await supabase.auth.signInWithOtp({
-    email: parsed.data,
-    options: { emailRedirectTo: redirectTo, shouldCreateUser: false },
+  const { error } = await supabase.auth.signInWithPassword({
+    email: parsed.data.email,
+    password: parsed.data.password,
   });
 
   if (error) {
-    // Intentionally generic: avoid leaking whether the email is
-    // registered. This is an internal tool, but the surface is still
-    // minimal.
-    return { ok: false, message: 'Could not send the link. Try again in a moment.' };
+    return { ok: false, message: 'Invalid email or password.' };
   }
-  return {
-    ok: true,
-    message: 'Check your inbox. The link expires in a few minutes.',
-  };
+
+  redirect('/');
 }
