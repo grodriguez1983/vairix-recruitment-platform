@@ -208,7 +208,7 @@ describe('runIncremental + uploadsSyncer', () => {
     // Reset sync_state so the next run fires again.
     await db
       .from('sync_state')
-      .update({ last_run_status: 'idle', last_synced_at: null })
+      .update({ last_run_status: 'idle', last_synced_at: null, last_cursor: null })
       .eq('entity', 'files');
 
     await runIncremental(syncer, { db, client: makeTeamtailorClient() });
@@ -260,7 +260,7 @@ describe('runIncremental + uploadsSyncer', () => {
     );
     await db
       .from('sync_state')
-      .update({ last_run_status: 'idle', last_synced_at: null })
+      .update({ last_run_status: 'idle', last_synced_at: null, last_cursor: null })
       .eq('entity', 'files');
     await runIncremental(syncer, { db, client: makeTeamtailorClient() });
 

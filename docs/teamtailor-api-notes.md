@@ -250,13 +250,25 @@ Relationships (se populan con `?include=<rel>`):
 - `job` — to-one, para uploads atadas a una aplicación.
 - `answer` — to-one, para attachments de preguntas de la aplicación.
 
-**Estrategia de sync recomendada** (ADR-004-style, parejo al resto):
+**Estrategia de sync** (excepción al patrón ADR-004):
 
-Usar `/v1/uploads?include=candidate` con cursor incremental por
-`updated_at`. Resuelve el `candidate_id` externo al `uuid` interno
-como los otros syncers. No usar el path sideload en `/candidates`
-porque el watermark por-entidad (sync_state) queda cleaner con un
-endpoint dedicado.
+Usar `/v1/uploads?include=candidate&sort=-updated-at` **sin** cursor
+server-side. Re-probado 2026-05-18: el endpoint **rechaza TODOS los
+filtros** con código 102 "not allowed" (`filter[updated-at]`,
+`filter[created-at]`, `filter[candidate-id]`, `filter[internal]`),
+contradiciendo la recomendación previa de esta sección que sugería
+`filter[updated-at][from]=<iso>`. La versión anterior del syncer
+crashaba con HTTP 400 en cada run posterior al primero.
+
+Workaround vigente: pedir orden descendente por `updated-at` y cortar
+client-side cuando una resource viene con `updatedAt < cursor` (hook
+`shouldStop()` en `EntitySyncer`, `src/lib/sync/run.ts`). Emula el
+cursor incremental con cero soporte del servidor.
+
+Resuelve el `candidate_id` externo al `uuid` interno como los otros
+syncers. No usar el path sideload en `/candidates` porque el
+watermark por-entidad (sync_state) queda cleaner con un endpoint
+dedicado.
 
 **Heurística para distinguir CVs de otros uploads** (sin `mimeType`):
 

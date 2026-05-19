@@ -130,13 +130,29 @@ export function makeUploadsSyncer(
     // The TT endpoint is /v1/uploads but our downstream table is files.
     entity: 'files',
 
-    buildInitialRequest(cursor: string | null) {
-      const params: Record<string, string> = {
-        'page[size]': '30',
-        include: 'candidate',
+    buildInitialRequest(_cursor: string | null) {
+      // TT `/v1/uploads` rejects every `filter[*]` (probed 2026-05-18 —
+      // returns code 102 "not allowed"). We sort newest-first and let
+      // `shouldStop()` (below) terminate iteration client-side as soon
+      // as we see a resource older than the cursor.
+      return {
+        path: '/uploads',
+        params: {
+          'page[size]': '30',
+          include: 'candidate',
+          sort: '-updated-at',
+        },
       };
-      if (cursor) params['filter[updated-at][from]'] = cursor;
-      return { path: '/uploads', params };
+    },
+
+    shouldStop(resource: TTParsedResource, cursor: string | null): boolean {
+      if (cursor === null) return false;
+      const updatedAt = resource.attributes['updatedAt'];
+      if (typeof updatedAt !== 'string' || updatedAt.length === 0) return false;
+      const updatedMs = Date.parse(updatedAt);
+      const cursorMs = Date.parse(cursor);
+      if (Number.isNaN(updatedMs) || Number.isNaN(cursorMs)) return false;
+      return updatedMs < cursorMs;
     },
 
     mapResource(resource: TTParsedResource): UploadStaging {

@@ -186,12 +186,14 @@ export async function runIncremental<Row>(
     let yielded = 0;
     if (syncer.includesSideloads) {
       for await (const { resource, included } of deps.client.paginateWithIncluded(path, params)) {
+        if (syncer.shouldStop?.(resource, cursor)) break;
         await pushOrRecord(resource, included);
         yielded += 1;
         if (yielded >= cap) break;
       }
     } else {
       for await (const resource of deps.client.paginate(path, params)) {
+        if (syncer.shouldStop?.(resource, cursor)) break;
         await pushOrRecord(resource, []);
         yielded += 1;
         if (yielded >= cap) break;
