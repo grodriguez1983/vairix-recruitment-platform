@@ -57,6 +57,12 @@ export function normalize(raw: string): string {
       // leak them; strip plus other C0 control chars except tab/newline.
       // eslint-disable-next-line no-control-regex
       .replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g, '')
+      // Replace unpaired UTF-16 surrogates with U+FFFD. pdf-parse
+      // occasionally emits these; JSON.stringify keeps the literal
+      // \uXXXX escape, then PostgREST rejects with PGRST102 "Empty or
+      // invalid json" before the write reaches Postgres. Valid
+      // surrogate pairs (e.g. emoji) are preserved.
+      .replace(/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/g, '\uFFFD')
       .replace(/\n{3,}/g, '\n\n')
       .replace(/[ \t]+/g, ' ')
       .trim()
