@@ -106,6 +106,22 @@ export async function resetCursor(db: SupabaseClient, entity: string): Promise<v
 }
 
 /**
+ * Pins `sync_state.last_cursor` and `sync_state.last_synced_at` to
+ * `atIso` for `entity`, without making any Teamtailor calls. Used
+ * after a date-window backfill (ADR-028 addendum) finished re-ingesting
+ * history: the operator declares "we have everything up to this point"
+ * so the next `sync:incremental` filters by `updated-at >= atIso` and
+ * only pulls genuine forward deltas. Exit code 4 on DB failure.
+ */
+export async function sealCursor(
+  _db: SupabaseClient,
+  _entity: string,
+  _atIso: string,
+): Promise<void> {
+  throw new Error('sealCursor: not implemented (stub for [RED] phase)');
+}
+
+/**
  * Builds the entity → syncer registry. The registry is the single
  * source of truth for which entities the CLI knows how to sync;
  * `CANONICAL_ENTITY_ORDER` (in `orchestration.ts`) MUST stay in

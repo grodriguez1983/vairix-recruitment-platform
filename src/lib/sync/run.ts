@@ -53,6 +53,26 @@ export interface SyncerDeps {
    * default behavior (unresolved candidate → orphan log).
    */
   scopeCandidateTtIds?: ReadonlySet<string>;
+  /**
+   * Date-window backfill (ADR-028 addendum): the caller injects
+   * explicit JSON:API params (typically `filter[updated-at][from]`,
+   * `filter[updated-at][to]`, `sort`) that the runner merges on top
+   * of whatever `syncer.buildInitialRequest()` returned. Keys collide
+   * → caller wins. Used by `sync:backfill --from=A --to=B` to walk
+   * history in bounded chunks without disturbing the incremental
+   * watermark. Omit on incremental runs.
+   */
+  requestParamsOverride?: Record<string, string>;
+  /**
+   * Controls whether `last_cursor`/`last_synced_at` advance on success.
+   *  - `'advance'` (default): on success, persist `runStartedAt` as the
+   *    next cursor (incremental semantics, ADR-027).
+   *  - `'preserve'`: leave both fields at whatever they were before
+   *    the run. Used by date-window backfill: the records being
+   *    pulled are older than the current cursor, so advancing would
+   *    skip the forward delta on the next incremental run.
+   */
+  cursorPolicy?: 'advance' | 'preserve';
 }
 
 export interface EntitySyncer<Row = unknown> {

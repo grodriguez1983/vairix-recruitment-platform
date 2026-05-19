@@ -247,6 +247,99 @@ describe('runIncremental / ADR-027 cursor persistence', () => {
     }
   });
 
+  it('test_merges_requestParamsOverride_into_initial_request', async () => {
+    // Date-window backfill (ADR-028 addendum): the caller injects
+    // explicit `filter[updated-at][*]` + `sort` params; these MUST be
+    // merged on top of whatever the syncer's `buildInitialRequest`
+    // returned (caller wins on key collision so we override the
+    // syncer's own cursor handling cleanly).
+    vi.mocked(acquireLock).mockResolvedValueOnce({
+      lastRunStartedAt: '2026-04-27T10:00:00.000Z',
+      lastSyncedAt: null,
+      lastCursor: null,
+    } as Awaited<ReturnType<typeof acquireLock>>);
+
+    let observedParams: Record<string, string> | undefined;
+    const client = {
+      paginate: async function* (
+        _path: string,
+        params?: Record<string, string>,
+      ): AsyncGenerator<TTParsedResource> {
+        observedParams = params;
+        // No resources for this test — we only care about the params
+        // shape. Empty-array loop satisfies require-yield without
+        // actually emitting.
+        for (const r of [] as TTParsedResource[]) yield r;
+      },
+      paginateWithIncluded: () => {
+        throw new Error('not used');
+      },
+    } as unknown as SyncerDeps['client'];
+
+    const syncer: EntitySyncer<Row> = {
+      entity: 'test-entity',
+      // Syncer baseline params — `page[size]` survives because the
+      // override doesn't touch it; `filter[updated-at][from]` gets
+      // shadowed by the override below.
+      buildInitialRequest: () => ({
+        path: '/test',
+        params: { 'page[size]': '30', 'filter[updated-at][from]': 'SHOULD-BE-OVERRIDDEN' },
+      }),
+      mapResource: (r) => ({ teamtailor_id: r.id }),
+      upsert: async (rows) => rows.length,
+    };
+
+    await runIncremental(syncer, {
+      db: {} as SyncerDeps['db'],
+      client,
+      requestParamsOverride: {
+        'filter[updated-at][from]': '2024-01-01',
+        'filter[updated-at][to]': '2024-06-30',
+        sort: 'updated-at',
+      },
+    } as SyncerDeps);
+
+    expect(observedParams).toEqual({
+      'page[size]': '30',
+      'filter[updated-at][from]': '2024-01-01',
+      'filter[updated-at][to]': '2024-06-30',
+      sort: 'updated-at',
+    });
+  });
+
+  it('test_preserves_last_cursor_when_cursorPolicy_is_preserve', async () => {
+    // Date-window backfill must NOT touch the incremental watermark:
+    // the records being pulled are older than the current cursor by
+    // construction, so advancing the cursor would silently skip the
+    // forward delta on the next `sync:incremental` run.
+    vi.mocked(acquireLock).mockResolvedValueOnce({
+      lastRunStartedAt: '2026-04-27T10:00:00.000Z',
+      lastSyncedAt: '2026-04-20T00:00:00.000Z',
+      lastCursor: '2026-04-25T00:00:00.000Z',
+    } as Awaited<ReturnType<typeof acquireLock>>);
+    vi.mocked(releaseLock).mockClear();
+
+    const upserts: Row[][] = [];
+    const syncer = fakeSyncer(upserts);
+
+    await runIncremental(syncer, {
+      db: {} as SyncerDeps['db'],
+      client: fakeClient(2),
+      cursorPolicy: 'preserve',
+    } as SyncerDeps);
+
+    const outcome = vi.mocked(releaseLock).mock.calls[0]?.[2];
+    expect(outcome?.status).toBe('success');
+    if (outcome?.status === 'success') {
+      // Cursor pinned to prior value — NOT advanced to runStartedAt.
+      expect(outcome.lastCursor).toBe('2026-04-25T00:00:00.000Z');
+      // last_synced_at also stays pinned (date-window backfill is not
+      // an incremental run; it shouldn't claim to be "synced through
+      // now").
+      expect(outcome.lastSyncedAt).toBe('2026-04-20T00:00:00.000Z');
+    }
+  });
+
   it('test_does_not_advance_cursor_on_error_path', async () => {
     vi.mocked(acquireLock).mockResolvedValueOnce({
       lastRunStartedAt: '2026-04-27T10:00:00.000Z',

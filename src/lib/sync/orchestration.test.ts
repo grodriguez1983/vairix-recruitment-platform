@@ -70,6 +70,88 @@ describe('parseBackfillArgs', () => {
       entity: 'stages',
     });
   });
+
+  // ────────────────────────────────────────────────────────────────
+  // Date-window backfill (Option A, ADR-028 addendum). The default
+  // backfill mode wipes `last_cursor`/`last_synced_at` and pulls
+  // every page — useful only when starting from scratch. Date-window
+  // mode lets the operator ingest history in bounded chunks without
+  // touching the incremental watermark.
+  // ────────────────────────────────────────────────────────────────
+
+  it('test_accepts_from_and_to_iso_dates', () => {
+    expect(
+      parseBackfillArgs(['--entity=candidates', '--from=2024-01-01', '--to=2024-06-30']),
+    ).toEqual({
+      entity: 'candidates',
+      dateWindow: { from: '2024-01-01', to: '2024-06-30' },
+    });
+  });
+
+  it('test_accepts_full_iso_timestamps_in_window', () => {
+    expect(
+      parseBackfillArgs([
+        '--entity=candidates',
+        '--from=2024-01-01T00:00:00Z',
+        '--to=2024-06-30T23:59:59Z',
+      ]),
+    ).toEqual({
+      entity: 'candidates',
+      dateWindow: { from: '2024-01-01T00:00:00Z', to: '2024-06-30T23:59:59Z' },
+    });
+  });
+
+  it('test_rejects_from_without_to', () => {
+    expect(() => parseBackfillArgs(['--entity=candidates', '--from=2024-01-01'])).toThrow(
+      /--from.*--to/,
+    );
+  });
+
+  it('test_rejects_to_without_from', () => {
+    expect(() => parseBackfillArgs(['--entity=candidates', '--to=2024-06-30'])).toThrow(
+      /--from.*--to/,
+    );
+  });
+
+  it('test_rejects_unparseable_from_date', () => {
+    expect(() =>
+      parseBackfillArgs(['--entity=candidates', '--from=not-a-date', '--to=2024-06-30']),
+    ).toThrow(/invalid.*--from/i);
+  });
+
+  it('test_rejects_from_after_to', () => {
+    expect(() =>
+      parseBackfillArgs(['--entity=candidates', '--from=2024-07-01', '--to=2024-06-30']),
+    ).toThrow(/--from.*before.*--to/i);
+  });
+
+  it('test_accepts_seal_cursor_flag_alone', () => {
+    expect(parseBackfillArgs(['--entity=candidates', '--seal-cursor'])).toEqual({
+      entity: 'candidates',
+      sealCursor: true,
+    });
+  });
+
+  it('test_rejects_seal_cursor_combined_with_date_window', () => {
+    // Either you seal (no TT call) or you backfill a window — not both
+    // in the same invocation. Compound moves invite mistakes.
+    expect(() =>
+      parseBackfillArgs([
+        '--entity=candidates',
+        '--from=2024-01-01',
+        '--to=2024-06-30',
+        '--seal-cursor',
+      ]),
+    ).toThrow(/seal-cursor.*--from/i);
+  });
+
+  it('test_rejects_seal_cursor_for_entity_all', () => {
+    // Sealing the watermark of every entity at once is a footgun; force
+    // the operator to seal per-entity so the intent is explicit.
+    expect(() => parseBackfillArgs(['--entity=all', '--seal-cursor'])).toThrow(
+      /seal-cursor.*entity=all/i,
+    );
+  });
 });
 
 describe('runOrchestration', () => {

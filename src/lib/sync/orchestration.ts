@@ -35,7 +35,15 @@ const KNOWN_ENTITIES: ReadonlySet<string> = new Set(CANONICAL_ENTITY_ORDER);
  * values so the caller can exit with a usage error before touching
  * `sync_state`.
  */
-export function parseBackfillArgs(argv: readonly string[]): { entity: string } {
+export interface ParsedBackfillArgs {
+  entity: string;
+  /** Date-window backfill (ADR-028 addendum); both bounds required. */
+  dateWindow?: { from: string; to: string };
+  /** `--seal-cursor`: pin `sync_state.last_cursor` to `now()` without TT calls. */
+  sealCursor?: true;
+}
+
+export function parseBackfillArgs(argv: readonly string[]): ParsedBackfillArgs {
   let value: string | undefined;
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
