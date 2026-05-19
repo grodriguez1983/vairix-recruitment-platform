@@ -113,12 +113,15 @@ export async function resetCursor(db: SupabaseClient, entity: string): Promise<v
  * so the next `sync:incremental` filters by `updated-at >= atIso` and
  * only pulls genuine forward deltas. Exit code 4 on DB failure.
  */
-export async function sealCursor(
-  _db: SupabaseClient,
-  _entity: string,
-  _atIso: string,
-): Promise<void> {
-  throw new Error('sealCursor: not implemented (stub for [RED] phase)');
+export async function sealCursor(db: SupabaseClient, entity: string, atIso: string): Promise<void> {
+  const { error } = await db
+    .from('sync_state')
+    .update({ last_cursor: atIso, last_synced_at: atIso })
+    .eq('entity', entity);
+  if (error) {
+    console.error(`[sync] failed to seal cursor for "${entity}": ${error.message}`);
+    process.exit(4);
+  }
 }
 
 /**

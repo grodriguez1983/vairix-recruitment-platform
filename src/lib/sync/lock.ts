@@ -45,8 +45,13 @@ export type ReleaseOutcome =
   | {
       status: 'success';
       recordsSynced: number;
-      /** Watermark to persist as `last_synced_at`. Usually run start. */
-      lastSyncedAt: string;
+      /**
+       * Watermark to persist as `last_synced_at`. Usually run start;
+       * may be null when the runner is in `cursorPolicy='preserve'`
+       * mode (ADR-028 addendum, date-window backfill) and the prior
+       * watermark was itself null (fresh entity).
+       */
+      lastSyncedAt: string | null;
       /** Optional incremental cursor (e.g. Teamtailor updated-at). */
       lastCursor?: string | null;
     }

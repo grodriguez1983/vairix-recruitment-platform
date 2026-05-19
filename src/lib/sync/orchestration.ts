@@ -43,20 +43,26 @@ export interface ParsedBackfillArgs {
   sealCursor?: true;
 }
 
-export function parseBackfillArgs(argv: readonly string[]): ParsedBackfillArgs {
-  let value: string | undefined;
+function readFlag(argv: readonly string[], name: string): string | undefined {
+  // Supports `--flag=value` and `--flag value`. Returns the literal
+  // value (or '' if `--flag=` with no value). Returns undefined when
+  // the flag isn't present at all.
   for (let i = 0; i < argv.length; i += 1) {
     const arg = argv[i];
     if (arg === undefined) continue;
-    if (arg.startsWith('--entity=')) {
-      value = arg.slice('--entity='.length);
-      break;
-    }
-    if (arg === '--entity') {
-      value = argv[i + 1];
-      break;
-    }
+    const prefix = `--${name}=`;
+    if (arg.startsWith(prefix)) return arg.slice(prefix.length);
+    if (arg === `--${name}`) return argv[i + 1] ?? '';
   }
+  return undefined;
+}
+
+function hasBoolFlag(argv: readonly string[], name: string): boolean {
+  return argv.some((a) => a === `--${name}`);
+}
+
+export function parseBackfillArgs(argv: readonly string[]): ParsedBackfillArgs {
+  const value = readFlag(argv, 'entity');
   if (value === undefined) {
     throw new Error('missing required arg --entity=<name|all>');
   }
@@ -68,6 +74,41 @@ export function parseBackfillArgs(argv: readonly string[]): ParsedBackfillArgs {
       `unknown entity "${value}" — expected one of: ${[...CANONICAL_ENTITY_ORDER, 'all'].join(', ')}`,
     );
   }
+
+  const from = readFlag(argv, 'from');
+  const to = readFlag(argv, 'to');
+  const sealCursor = hasBoolFlag(argv, 'seal-cursor');
+
+  if ((from !== undefined) !== (to !== undefined)) {
+    throw new Error('--from and --to must be provided together (date-window backfill)');
+  }
+
+  if (sealCursor && from !== undefined) {
+    throw new Error('--seal-cursor is incompatible with --from/--to (use one or the other)');
+  }
+  if (sealCursor && value === 'all') {
+    throw new Error('--seal-cursor cannot be combined with --entity=all (seal per-entity only)');
+  }
+
+  if (from !== undefined && to !== undefined) {
+    const fromMs = Date.parse(from);
+    const toMs = Date.parse(to);
+    if (Number.isNaN(fromMs)) {
+      throw new Error(`invalid --from "${from}" — expected an ISO-8601 date or timestamp`);
+    }
+    if (Number.isNaN(toMs)) {
+      throw new Error(`invalid --to "${to}" — expected an ISO-8601 date or timestamp`);
+    }
+    if (fromMs > toMs) {
+      throw new Error(`--from "${from}" must be before --to "${to}"`);
+    }
+    return { entity: value, dateWindow: { from, to } };
+  }
+
+  if (sealCursor) {
+    return { entity: value, sealCursor: true };
+  }
+
   return { entity: value };
 }
 

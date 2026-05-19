@@ -176,7 +176,15 @@ export async function runIncremental<Row>(
   let rowErrors = 0;
 
   try {
-    const { path, params } = syncer.buildInitialRequest(cursor);
+    const initial = syncer.buildInitialRequest(cursor);
+    const { path } = initial;
+    // ADR-028 addendum: date-window backfill passes JSON:API params
+    // verbatim via `requestParamsOverride`; caller wins on key
+    // collision so the override can shadow the syncer's own cursor
+    // filter cleanly. Plain incremental runs leave the override unset.
+    const params = deps.requestParamsOverride
+      ? { ...(initial.params ?? {}), ...deps.requestParamsOverride }
+      : initial.params;
     const batch: Row[] = [];
 
     const pushOrRecord = async (
@@ -223,14 +231,20 @@ export async function runIncremental<Row>(
       recordsSynced += await syncer.upsert(batch, deps);
     }
 
+    const preserve = deps.cursorPolicy === 'preserve';
     await releaseLock(deps.db, syncer.entity, {
       status: 'success',
       recordsSynced,
-      lastSyncedAt: runStartedAt,
+      // ADR-028 addendum: date-window backfill must NOT advance the
+      // watermark — the records pulled are older than the incremental
+      // cursor by construction, so advancing would silently skip
+      // forward deltas. `cursorPolicy='preserve'` pins both fields
+      // to whatever they were before the run.
+      lastSyncedAt: preserve ? priorWatermark : runStartedAt,
       // ADR-027: persist run-start as the next cursor so subsequent
       // runs filter by `updated-at >= cursor` and stop full-scanning
       // Teamtailor.
-      lastCursor: runStartedAt,
+      lastCursor: preserve ? (acquired.lastCursor ?? null) : runStartedAt,
     });
     logger.info?.(
       `[sync] ${syncer.entity} success: ${recordsSynced} records, ${rowErrors} row errors`,
