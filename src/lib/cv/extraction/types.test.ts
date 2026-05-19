@@ -77,14 +77,58 @@ describe('ExtractionResultSchema — ADR-012 §2 contract', () => {
     expect(() => ExtractionResultSchema.parse(p1)).not.toThrow();
   });
 
-  it('rejects dates that are not ISO-8601 partial', () => {
+  it('rejects dates that are not ISO-8601 partial and not a known LLM coercion', () => {
+    // Free-form prose stays rejected — it would silently destroy data
+    // if coerced to null. Garbage is a parsing bug, not an LLM drift.
     const p = valid();
     p.experiences[0]!.start_date = 'March 2024' as unknown as string;
     expect(() => ExtractionResultSchema.parse(p)).toThrow();
+  });
 
-    const q = valid();
-    q.experiences[0]!.end_date = '03/2024' as unknown as string;
-    expect(() => ExtractionResultSchema.parse(q)).toThrow();
+  it('coerces year-only strings to YYYY-01 (prompt rule §2)', () => {
+    // gpt-4o-mini occasionally emits "2024" when only the year is in
+    // the CV, ignoring the prompt's instruction to pad to YYYY-01. We
+    // coerce here so the strict schema can still consume it.
+    const p = valid();
+    p.experiences[0]!.start_date = '2024' as unknown as string;
+    const out = ExtractionResultSchema.parse(p);
+    expect(out.experiences[0]!.start_date).toBe('2024-01');
+  });
+
+  it('coerces present-like end_date markers to null', () => {
+    // "Present", "Current", "Actual" (es), "Now", "Ongoing", "Vigente"
+    // are the LLM's favorite non-null ways of saying "still in role".
+    for (const marker of ['Present', 'present', 'Current', 'Actual', 'Now', 'Ongoing', 'Vigente']) {
+      const p = valid();
+      p.experiences[0]!.end_date = marker as unknown as string;
+      const out = ExtractionResultSchema.parse(p);
+      expect(out.experiences[0]!.end_date).toBeNull();
+    }
+  });
+
+  it('coerces slash-separated dates (YYYY/MM, YYYY/MM/DD) to dash form', () => {
+    const p = valid();
+    p.experiences[0]!.start_date = '2024/03' as unknown as string;
+    p.experiences[0]!.end_date = '2024/12/31' as unknown as string;
+    const out = ExtractionResultSchema.parse(p);
+    expect(out.experiences[0]!.start_date).toBe('2024-03');
+    expect(out.experiences[0]!.end_date).toBe('2024-12-31');
+  });
+
+  it('coerces YYYY-M (single-digit month) to YYYY-0M', () => {
+    const p = valid();
+    p.experiences[0]!.start_date = '2024-3' as unknown as string;
+    const out = ExtractionResultSchema.parse(p);
+    expect(out.experiences[0]!.start_date).toBe('2024-03');
+  });
+
+  it('passes through already-valid dates and null unchanged', () => {
+    const p = valid();
+    p.experiences[0]!.start_date = '2020-01';
+    p.experiences[0]!.end_date = null;
+    const out = ExtractionResultSchema.parse(p);
+    expect(out.experiences[0]!.start_date).toBe('2020-01');
+    expect(out.experiences[0]!.end_date).toBeNull();
   });
 
   it('rejects skills that are not strings', () => {
