@@ -31,6 +31,21 @@ describe('normalize', () => {
   it('trims leading/trailing whitespace', () => {
     expect(normalize('  hello  ')).toBe('hello');
   });
+  it('replaces lone low surrogate with U+FFFD (rejected by PostgREST as invalid UTF-8)', () => {
+    // \uDFC1 is an unpaired low surrogate — pdf-parse leaks these on
+    // some PDFs. JSON.stringify keeps the literal escape, then
+    // PostgREST rejects the body with PGRST102 "Empty or invalid json".
+    const raw = `abc${String.fromCharCode(0xdfc1)}def`;
+    expect(normalize(raw)).toBe('abc\uFFFDdef');
+  });
+  it('replaces lone high surrogate with U+FFFD', () => {
+    const raw = `abc${String.fromCharCode(0xd800)}def`;
+    expect(normalize(raw)).toBe('abc\uFFFDdef');
+  });
+  it('preserves valid surrogate pairs (e.g. emoji U+1F600)', () => {
+    // '😀' is U+1F600 encoded as the pair \uD83D\uDE00.
+    expect(normalize('hi 😀 there')).toBe('hi 😀 there');
+  });
 });
 
 describe('parseCvBuffer', () => {
