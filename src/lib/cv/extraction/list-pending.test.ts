@@ -28,7 +28,19 @@ interface FakeCallLog {
   filters: FilterCall[];
 }
 
-function buildFakeDb(tables: Record<string, FakeTableData>): {
+interface BuildFakeDbOptions {
+  /**
+   * Simulates PostgREST `max_rows` server-side cap. When set, every
+   * `.limit(n)` or `.range(from, to)` call returns at most `serverCap`
+   * rows regardless of what was requested. Defaults to no cap.
+   */
+  serverCap?: number;
+}
+
+function buildFakeDb(
+  tables: Record<string, FakeTableData>,
+  options: BuildFakeDbOptions = {},
+): {
   db: SupabaseClient;
   calls: FakeCallLog;
 } {
@@ -37,6 +49,8 @@ function buildFakeDb(tables: Record<string, FakeTableData>): {
   function makeBuilder(table: string) {
     const data = tables[table]?.rows ?? [];
     let limit: number | undefined;
+    let rangeFrom: number | undefined;
+    let rangeTo: number | undefined;
 
     const builder: Record<string, unknown> = {
       select: () => builder,
@@ -65,8 +79,22 @@ function buildFakeDb(tables: Record<string, FakeTableData>): {
         calls.filters.push({ kind: 'limit', args: [table, n] });
         return builder;
       },
+      range: (from: number, to: number) => {
+        rangeFrom = from;
+        rangeTo = to;
+        calls.filters.push({ kind: 'range', args: [table, from, to] });
+        return builder;
+      },
       then: (resolve: (value: { data: unknown; error: null }) => unknown) => {
-        const slice = typeof limit === 'number' ? data.slice(0, limit) : data;
+        let slice = data;
+        if (typeof rangeFrom === 'number' && typeof rangeTo === 'number') {
+          slice = data.slice(rangeFrom, rangeTo + 1);
+        } else if (typeof limit === 'number') {
+          slice = data.slice(0, limit);
+        }
+        if (typeof options.serverCap === 'number' && slice.length > options.serverCap) {
+          slice = slice.slice(0, options.serverCap);
+        }
         return Promise.resolve({ data: slice, error: null }).then(resolve);
       },
     };
@@ -261,6 +289,95 @@ describe('listPendingExtractions', () => {
       promptVersion: '2026-04-v1',
       limit: 10,
     });
+
+    expect(out).toEqual([]);
+  });
+
+  // ────────────────────────────────────────────────────────────────
+  // PostgREST max_rows=1000 cap: list-pending must paginate
+  // ────────────────────────────────────────────────────────────────
+  // Bug surfaced in prod after extracting ~1000 CVs: the .limit(N)
+  // call asks for fetchCap=limit+existing rows, but PostgREST caps
+  // any single request at max_rows=1000. Once existing.size >= 1000,
+  // the helper returns [] even though thousands of pending files
+  // remain. Fix: paginate the files query so we keep walking past
+  // the already-extracted prefix until `limit` pending are found.
+
+  it('test_paginates_past_already_extracted_prefix_under_server_cap', async () => {
+    // Server caps every page at 10 rows. Existing=20 covers files
+    // f-0..f-19; pending sit at f-20..f-29. With the old .limit(30)
+    // call, the server returns rows 0-9 (all already extracted) →
+    // helper returns []. With pagination, the helper must walk
+    // through pages until it sees f-20..f-29.
+    const { extractionContentHash } = await import('./hash');
+    const excluded = Array.from({ length: 20 }, (_, i) => ({
+      content_hash: extractionContentHash(`text-f-${i}`, 'm', 'v1'),
+    }));
+    const files = Array.from({ length: 30 }, (_, i) =>
+      makeFile(`f-${i}`, `c-${i}`, `2026-04-24T00:00:${i.toString().padStart(2, '0')}Z`),
+    );
+    const { db } = buildFakeDb(
+      {
+        candidate_extractions: { rows: excluded },
+        files: { rows: files },
+      },
+      { serverCap: 10 },
+    );
+
+    const out = await listPendingExtractions(db, { model: 'm', promptVersion: 'v1', limit: 5 });
+
+    expect(out.map((r) => r.file_id)).toEqual(['f-20', 'f-21', 'f-22', 'f-23', 'f-24']);
+  });
+
+  it('test_paginates_when_existing_exceeds_server_cap', async () => {
+    // The pathological case from prod: existing=1200 already extracted
+    // (>> server cap of 1000), 5 pending at the very end. A single
+    // .limit() call could never see them.
+    const { extractionContentHash } = await import('./hash');
+    const excluded = Array.from({ length: 1200 }, (_, i) => ({
+      content_hash: extractionContentHash(`text-f-${i}`, 'm', 'v1'),
+    }));
+    const files = [
+      ...Array.from({ length: 1200 }, (_, i) =>
+        makeFile(`f-${i}`, `c-${i}`, `2026-04-24T00:00:00.${i.toString().padStart(4, '0')}Z`),
+      ),
+      ...Array.from({ length: 5 }, (_, i) =>
+        makeFile(`p-${i}`, `cp-${i}`, `2026-04-24T01:00:00.${i.toString().padStart(4, '0')}Z`),
+      ),
+    ];
+    const { db } = buildFakeDb(
+      {
+        candidate_extractions: { rows: excluded },
+        files: { rows: files },
+      },
+      { serverCap: 1000 },
+    );
+
+    const out = await listPendingExtractions(db, { model: 'm', promptVersion: 'v1', limit: 5 });
+
+    expect(out.map((r) => r.file_id)).toEqual(['p-0', 'p-1', 'p-2', 'p-3', 'p-4']);
+  });
+
+  it('test_stops_paginating_when_files_exhausted', async () => {
+    // If all files are excluded, the helper must return [] without
+    // looping forever. Stop condition: the most recent page returned
+    // strictly fewer rows than the page size.
+    const { extractionContentHash } = await import('./hash');
+    const excluded = Array.from({ length: 5 }, (_, i) => ({
+      content_hash: extractionContentHash(`text-f-${i}`, 'm', 'v1'),
+    }));
+    const files = Array.from({ length: 5 }, (_, i) =>
+      makeFile(`f-${i}`, `c-${i}`, `2026-04-24T00:00:0${i}Z`),
+    );
+    const { db } = buildFakeDb(
+      {
+        candidate_extractions: { rows: excluded },
+        files: { rows: files },
+      },
+      { serverCap: 10 },
+    );
+
+    const out = await listPendingExtractions(db, { model: 'm', promptVersion: 'v1', limit: 5 });
 
     expect(out).toEqual([]);
   });
