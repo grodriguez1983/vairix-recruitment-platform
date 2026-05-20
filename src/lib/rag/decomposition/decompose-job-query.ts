@@ -91,14 +91,22 @@ function isZodError(e: unknown): boolean {
  * The snippet is normalized with the same `preprocess` used on
  * raw_text so that whitespace differences (the LLM sees the original
  * raw_text, which may contain newlines/indent, while `normalized`
- * has collapsed them) do not produce false positives. Only pure
- * whitespace collapsing is forgiven — any lexical drift in the
- * snippet still trips the guard.
+ * has collapsed them) do not produce false positives.
+ *
+ * The match is **case-insensitive**. Bug from prod (2026-05-20):
+ * pasting "perfil senior fullstack con laravel y react" tripped the
+ * guard because the LLM returned evidence_snippet "React" with
+ * canonical casing while normalized has "react". Capitalizing a
+ * skill is not fabrication — the invariant we care about is "this
+ * token appears in the user's text", which is preserved under
+ * `toLowerCase`. Any lexical drift beyond casing still trips the
+ * guard.
  */
 function assertLiteralSnippets(decomposed: DecompositionResult, normalized: string): void {
+  const haystack = normalized.toLowerCase();
   for (const req of decomposed.requirements) {
-    const snippet = preprocess(req.evidence_snippet);
-    if (!normalized.includes(snippet)) {
+    const snippet = preprocess(req.evidence_snippet).toLowerCase();
+    if (!haystack.includes(snippet)) {
       throw new DecompositionError(
         'hallucinated_snippet',
         `evidence_snippet for ${req.skill_raw} is not a literal substring of raw_text`,
