@@ -298,6 +298,85 @@ describe('decomposeJobQuery — error mapping', () => {
     });
   });
 
+  it('accepts evidence_snippet that differs from raw_text only in casing', async () => {
+    // Bug from prod: user pastes "perfil senior fullstack con laravel y
+    // react" (lowercase). LLM correctly returns evidence_snippet "React"
+    // with canonical casing. A case-sensitive literal-substring check
+    // rejects this as 'hallucinated_snippet', which it isn't —
+    // capitalizing a skill is not fabrication. The guard must only
+    // catch real fabrication; casing drift is benign.
+    const raw = 'perfil senior fullstack con laravel y react';
+    const deps = baseDeps({
+      loadCatalog: vi.fn(async () => emptyCatalog()),
+      provider: {
+        model: STUB_MODEL,
+        promptVersion: STUB_PROMPT,
+        decompose: vi.fn(
+          async (): Promise<DecompositionResult> => ({
+            requirements: [
+              {
+                skill_raw: 'React',
+                min_years: null,
+                max_years: null,
+                must_have: true,
+                evidence_snippet: 'React',
+                category: 'technical',
+                alternative_group_id: null,
+              },
+            ],
+            seniority: 'senior',
+            languages: [],
+            notes: null,
+            role_essentials: [],
+          }),
+        ),
+      },
+    });
+    await expect(decomposeJobQuery(raw, deps)).resolves.toMatchObject({
+      query_id: 'jq-1',
+      cached: false,
+    });
+    expect(deps.insertJobQuery).toHaveBeenCalled();
+  });
+
+  it('still rejects genuine fabrication even when casing matches', async () => {
+    // Symmetric guard: relaxing the casing check must not let through
+    // snippets that don't exist in the text at all. "REACT" in caps
+    // would still not be a substring of a raw_text that doesn't
+    // mention react in any casing.
+    const raw = 'Buscamos backend con Node.js';
+    const deps = baseDeps({
+      loadCatalog: vi.fn(async () => emptyCatalog()),
+      provider: {
+        model: STUB_MODEL,
+        promptVersion: STUB_PROMPT,
+        decompose: vi.fn(
+          async (): Promise<DecompositionResult> => ({
+            requirements: [
+              {
+                skill_raw: 'React',
+                min_years: null,
+                max_years: null,
+                must_have: true,
+                evidence_snippet: 'react',
+                category: 'technical',
+                alternative_group_id: null,
+              },
+            ],
+            seniority: 'unspecified',
+            languages: [],
+            notes: null,
+            role_essentials: [],
+          }),
+        ),
+      },
+    });
+    await expect(decomposeJobQuery(raw, deps)).rejects.toMatchObject({
+      name: 'DecompositionError',
+      code: 'hallucinated_snippet',
+    });
+  });
+
   it('rejects hallucinated evidence_snippet (not a substring of normalized_text)', async () => {
     const deps = baseDeps({
       provider: {
