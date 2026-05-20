@@ -177,12 +177,12 @@ describe('listPendingExtractions', () => {
     expect(out).toEqual([]);
   });
 
-  it('fetches enough rows to survive heavy filtering (limit + excluded upper bound)', async () => {
+  it('walks past an excluded prefix when limit < excluded.size', async () => {
     // If `listPendingExtractions` naively asks Postgres for just
     // `limit` rows and the first `limit` happen to all be excluded,
     // it returns [] even though non-excluded rows exist further down.
-    // Pre-fetching `limit + excluded.size` is the minimum that keeps
-    // the worst case sound.
+    // Pagination (see test_paginates_*) is the strict superset of
+    // this property; this test keeps a small, readable case alive.
     // ADR-029: dedup by content_hash. Each excluded entry must match
     // the hash that `text-f-i` would produce.
     const { extractionContentHash } = await import('./hash');
@@ -196,7 +196,7 @@ describe('listPendingExtractions', () => {
       makeFile('f-5', 'c-5', '2026-04-24T00:00:05Z'),
       makeFile('f-6', 'c-6', '2026-04-24T00:00:06Z'),
     ];
-    const { db, calls } = buildFakeDb({
+    const { db } = buildFakeDb({
       candidate_extractions: { rows: excluded },
       files: { rows: files },
     });
@@ -204,10 +204,6 @@ describe('listPendingExtractions', () => {
     const out = await listPendingExtractions(db, { model: 'm', promptVersion: 'v1', limit: 2 });
 
     expect(out.map((r) => r.file_id)).toEqual(['f-5', 'f-6']);
-    const fileLimitCalls = calls.filters.filter((f) => f.kind === 'limit' && f.args[0] === 'files');
-    expect(fileLimitCalls.length).toBe(1);
-    const limitArg = fileLimitCalls[0]!.args[1] as number;
-    expect(limitArg).toBeGreaterThanOrEqual(2 + excluded.length);
   });
 
   it('scopes the excluded lookup by model and prompt version', async () => {
@@ -388,25 +384,19 @@ describe('listPendingExtractions', () => {
     // can't be done). Without this, a future refactor that drops
     // content_hash from the select silently breaks the fix.
     let selectArg: unknown = null;
+    const emptyThen = {
+      then: (r: (v: unknown) => unknown) => Promise.resolve({ data: [], error: null }).then(r),
+    };
     const captureSelectDb = {
       from: (table: string) => {
         if (table !== 'candidate_extractions') {
           return {
             select: () => ({
-              eq: () => ({
-                eq: () => ({
-                  then: (r: (v: unknown) => unknown) =>
-                    Promise.resolve({ data: [], error: null }).then(r),
-                }),
-              }),
               is: () => ({
                 not: () => ({
                   is: () => ({
                     order: () => ({
-                      limit: () => ({
-                        then: (r: (v: unknown) => unknown) =>
-                          Promise.resolve({ data: [], error: null }).then(r),
-                      }),
+                      range: () => emptyThen,
                     }),
                   }),
                 }),
@@ -420,8 +410,7 @@ describe('listPendingExtractions', () => {
             return {
               eq: () => ({
                 eq: () => ({
-                  then: (r: (v: unknown) => unknown) =>
-                    Promise.resolve({ data: [], error: null }).then(r),
+                  range: () => emptyThen,
                 }),
               }),
             };

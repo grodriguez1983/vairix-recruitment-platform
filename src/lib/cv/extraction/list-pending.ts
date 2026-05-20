@@ -62,49 +62,77 @@ export async function listPendingExtractions(
   // against the hash the file would produce given its CURRENT
   // parsed_text. A file_id whose row's content_hash differs from the
   // expected one is a stale extraction → file is pending re-extract.
-  const { data: existing, error: existingErr } = await db
-    .from('candidate_extractions')
-    .select('content_hash')
-    .eq('model', model)
-    .eq('prompt_version', promptVersion);
-  if (existingErr) throw new Error(existingErr.message);
-
+  //
+  // Paginated for the same reason as the files query below: once
+  // candidate_extractions grows past PostgREST's max_rows cap, an
+  // un-paginated SELECT silently truncates and the helper starts
+  // missing exclusions (files re-appear as pending → duplicate work
+  // and waste against the UNIQUE constraint).
   const existingHashes = new Set<string>();
-  for (const row of existing ?? []) {
-    const hash = (row as { content_hash: string | null }).content_hash;
-    if (typeof hash === 'string' && hash.length > 0) existingHashes.add(hash);
+  let existingFrom = 0;
+  for (;;) {
+    const { data: existing, error: existingErr } = await db
+      .from('candidate_extractions')
+      .select('content_hash')
+      .eq('model', model)
+      .eq('prompt_version', promptVersion)
+      .range(existingFrom, existingFrom + FILES_PAGE_SIZE - 1);
+    if (existingErr) throw new Error(existingErr.message);
+    const page = existing ?? [];
+    if (page.length === 0) break;
+    for (const row of page) {
+      const hash = (row as { content_hash: string | null }).content_hash;
+      if (typeof hash === 'string' && hash.length > 0) existingHashes.add(hash);
+    }
+    existingFrom += page.length;
   }
 
-  // Pre-fetch `limit + existingHashes.size` so we still return `limit`
-  // rows even if every row we'd want sits behind already-extracted
-  // files. Smaller values risk false-empty.
-  const fetchCap = limit + existingHashes.size;
-
-  const { data: files, error: filesErr } = await db
-    .from('files')
-    .select('id, candidate_id, parsed_text')
-    .is('deleted_at', null)
-    .not('parsed_text', 'is', null)
-    .is('parse_error', null)
-    .order('created_at', { ascending: true })
-    .limit(fetchCap);
-  if (filesErr) throw new Error(filesErr.message);
-
+  // Paginate the files query. PostgREST caps any single request at
+  // `max_rows` (1000 by default), so the old `.limit(limit + existing)`
+  // strategy silently returned [] once `existing.size >= max_rows` —
+  // the request never saw past the already-extracted prefix. We walk
+  // pages of FILES_PAGE_SIZE rows and accumulate pending in memory
+  // until we have `limit` or the table is exhausted.
   const out: PendingExtractionRow[] = [];
-  for (const row of files ?? []) {
-    const typed = row as {
-      id: string;
-      candidate_id: string;
-      parsed_text: string;
-    };
-    const expectedHash = extractionContentHash(typed.parsed_text, model, promptVersion);
-    if (existingHashes.has(expectedHash)) continue;
-    out.push({
-      file_id: typed.id,
-      candidate_id: typed.candidate_id,
-      parsed_text: typed.parsed_text,
-    });
-    if (out.length >= limit) break;
+  let from = 0;
+  for (;;) {
+    const { data: files, error: filesErr } = await db
+      .from('files')
+      .select('id, candidate_id, parsed_text')
+      .is('deleted_at', null)
+      .not('parsed_text', 'is', null)
+      .is('parse_error', null)
+      .order('created_at', { ascending: true })
+      .range(from, from + FILES_PAGE_SIZE - 1);
+    if (filesErr) throw new Error(filesErr.message);
+    const page = files ?? [];
+    if (page.length === 0) break;
+
+    for (const row of page) {
+      const typed = row as {
+        id: string;
+        candidate_id: string;
+        parsed_text: string;
+      };
+      const expectedHash = extractionContentHash(typed.parsed_text, model, promptVersion);
+      if (existingHashes.has(expectedHash)) continue;
+      out.push({
+        file_id: typed.id,
+        candidate_id: typed.candidate_id,
+        parsed_text: typed.parsed_text,
+      });
+      if (out.length >= limit) return out;
+    }
+    // Advance by what the server actually returned, not by the
+    // requested page size — PostgREST `max_rows` may cap the page
+    // below FILES_PAGE_SIZE. Termination relies on an empty page
+    // (next iteration's range falls past the last row).
+    from += page.length;
   }
   return out;
 }
+
+// Matches PostgREST's default `max_rows=1000`. Using exactly the
+// server cap means each request returns at most one page and we
+// don't waste round-trips asking for more than the server delivers.
+const FILES_PAGE_SIZE = 1000;
