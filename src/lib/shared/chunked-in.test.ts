@@ -102,6 +102,127 @@ describe('runChunked', () => {
     expect(calls).toEqual([100]);
   });
 
+  // ─────────────────────────────────────────────────────────────
+  // Concurrency contract (ADR-030 — matching pipeline H12 fix).
+  //
+  // The default (`concurrency: 1`) MUST stay sequential — embeddings
+  // workers (the original caller) rely on the pool-friendly trickle
+  // and on at-most-one chunk in flight at a time. New callers that
+  // know the pool can absorb a burst opt in with `{ concurrency: N }`.
+  // ─────────────────────────────────────────────────────────────
+
+  it('default behavior is sequential — at most 1 chunk in flight', async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const fetch = async (chunk: string[]): Promise<Row[]> => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      // Yield so any concurrent dispatch would manifest here.
+      await Promise.resolve();
+      await Promise.resolve();
+      inFlight -= 1;
+      return chunk.map((id) => ({ id }));
+    };
+    await runChunked(ids(500), 100, fetch);
+    expect(maxInFlight).toBe(1);
+  });
+
+  it('with concurrency: 3 and 6 chunks, dispatches up to 3 chunks in parallel', async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const releases: Array<() => void> = [];
+    const fetch = async (chunk: string[]): Promise<Row[]> => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await new Promise<void>((resolve) => releases.push(resolve));
+      inFlight -= 1;
+      return chunk.map((id) => ({ id }));
+    };
+
+    const pending = runChunked(ids(600), 100, fetch, { concurrency: 3 });
+    // Let the scheduler fan out the initial batch.
+    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => setImmediate(r));
+    expect(inFlight).toBe(3);
+    // Release in order — the runner should refill the in-flight slot
+    // immediately, never exceeding 3.
+    while (releases.length > 0) {
+      releases.shift()!();
+      await new Promise((r) => setImmediate(r));
+    }
+    await pending;
+    expect(maxInFlight).toBe(3);
+  });
+
+  it('with concurrency: 3 and 2 chunks, never inflates beyond chunk count', async () => {
+    let inFlight = 0;
+    let maxInFlight = 0;
+    const fetch = async (chunk: string[]): Promise<Row[]> => {
+      inFlight += 1;
+      maxInFlight = Math.max(maxInFlight, inFlight);
+      await Promise.resolve();
+      inFlight -= 1;
+      return chunk.map((id) => ({ id }));
+    };
+    await runChunked(ids(150), 100, fetch, { concurrency: 3 });
+    // Only 2 chunks total → ceiling stays at 2 even with budget for 3.
+    expect(maxInFlight).toBeLessThanOrEqual(2);
+  });
+
+  it('preserves chunk-issue order when chunks resolve out of order under concurrency', async () => {
+    // Chunk 0 resolves LAST; chunk 2 resolves FIRST. Sequential code
+    // would never exhibit this — only a concurrent runner does, and
+    // it must still concat in [chunk0, chunk1, chunk2] order.
+    const delays = [40, 20, 0]; // ms per chunk index
+    let callIdx = 0;
+    const fetch = async (chunk: string[]): Promise<Row[]> => {
+      const myIdx = callIdx;
+      callIdx += 1;
+      await new Promise((r) => setTimeout(r, delays[myIdx] ?? 0));
+      return chunk.map((id) => ({ id: `${myIdx}:${id}` }));
+    };
+    const out = await runChunked(ids(300), 100, fetch, { concurrency: 3 });
+    // First 100 rows belong to chunk 0, next 100 to chunk 1, last to chunk 2.
+    expect(out[0]!.id.startsWith('0:')).toBe(true);
+    expect(out[99]!.id.startsWith('0:')).toBe(true);
+    expect(out[100]!.id.startsWith('1:')).toBe(true);
+    expect(out[199]!.id.startsWith('1:')).toBe(true);
+    expect(out[200]!.id.startsWith('2:')).toBe(true);
+    expect(out[299]!.id.startsWith('2:')).toBe(true);
+  });
+
+  it('rejects concurrency of zero', async () => {
+    await expect(runChunked(ids(5), 5, async () => [], { concurrency: 0 })).rejects.toThrow(
+      /concurrency must be a positive integer/,
+    );
+  });
+
+  it('rejects negative concurrency', async () => {
+    await expect(runChunked(ids(5), 5, async () => [], { concurrency: -1 })).rejects.toThrow(
+      /concurrency must be a positive integer/,
+    );
+  });
+
+  it('rejects non-integer concurrency', async () => {
+    await expect(runChunked(ids(5), 5, async () => [], { concurrency: 2.5 })).rejects.toThrow(
+      /concurrency must be a positive integer/,
+    );
+  });
+
+  it('on chunk failure under concurrency, surfaces the error without hanging', async () => {
+    const boom = new Error('chunk 1 exploded');
+    let callIdx = 0;
+    const fetch = async (chunk: string[]): Promise<Row[]> => {
+      const myIdx = callIdx;
+      callIdx += 1;
+      // Stagger so chunk 1's failure interleaves with chunk 0's success.
+      await new Promise((r) => setTimeout(r, myIdx === 0 ? 20 : 0));
+      if (myIdx === 1) throw boom;
+      return chunk.map((id) => ({ id }));
+    };
+    await expect(runChunked(ids(300), 100, fetch, { concurrency: 3 })).rejects.toBe(boom);
+  });
+
   it('IN_QUERY_CHUNK_SIZE keeps a 500-uuid batch under the PostgREST URL budget', () => {
     // A UUID is 36 chars; PostgREST encodes it as `"..."` + comma
     // inside the `in.(...)` list — call it ~40 chars per id after

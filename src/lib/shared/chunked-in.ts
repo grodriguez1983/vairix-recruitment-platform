@@ -32,25 +32,52 @@
  */
 export const IN_QUERY_CHUNK_SIZE = 100;
 
+export interface RunChunkedOptions {
+  /**
+   * Maximum number of chunks dispatched in parallel. Default 1
+   * (sequential — preserves the original embeddings-worker contract).
+   *
+   * Use values > 1 when the chunk count is large (e.g. matching
+   * pipeline at ~30 chunks for 5_000+ candidates) and the upstream
+   * pool can absorb the burst. Concrete ceiling at the call site is
+   * the Supabase connection pool size; Supavisor's tenant default is
+   * ~15 conns, so practical values are 3–8.
+   *
+   * Must be a positive integer; otherwise throws.
+   */
+  concurrency?: number;
+}
+
 /**
  * Runs `fetch` once per chunk of `ids` (size ≤ `chunkSize`) and
  * returns the concatenation of all results.
  *
  * - Empty `ids` ⇒ returns `[]` without invoking `fetch`.
  * - `chunkSize` must be a positive integer; otherwise throws.
- * - Errors from `fetch` propagate as-is; no partial results are
- *   returned when a chunk fails.
+ * - `options.concurrency` (default 1) bounds the number of chunks
+ *   in flight; the returned array still concatenates results in the
+ *   same chunk-issue order regardless of completion order.
+ * - Errors from `fetch` propagate as-is; on the first failure no
+ *   further chunks are dispatched and pending chunks' results are
+ *   discarded.
  */
 export async function runChunked<T>(
   ids: readonly string[],
   chunkSize: number,
   fetch: (chunk: string[]) => Promise<T[]>,
+  options: RunChunkedOptions = {},
 ): Promise<T[]> {
   if (!Number.isInteger(chunkSize) || chunkSize <= 0) {
     throw new Error(`runChunked: chunkSize must be a positive integer, got ${chunkSize}`);
   }
+  const concurrency = options.concurrency ?? 1;
+  if (!Number.isInteger(concurrency) || concurrency <= 0) {
+    throw new Error(`runChunked: concurrency must be a positive integer, got ${concurrency}`);
+  }
   if (ids.length === 0) return [];
 
+  // TODO(ADR-030): wire concurrency. Current impl ignores the option
+  // — kept sequential so the RED tests fail before the GREEN landed.
   const out: T[] = [];
   for (let i = 0; i < ids.length; i += chunkSize) {
     const chunk = ids.slice(i, i + chunkSize);
