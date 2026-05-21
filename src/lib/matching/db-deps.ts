@@ -16,6 +16,11 @@ import {
 import type { ResolvedDecomposition } from '../rag/decomposition/resolve-requirements';
 
 import { buildMustHaveGroups } from './pre-filter';
+import type {
+  LoadedMatchRunForChunk,
+  MatchRunStatus,
+  ProcessMatchChunkDeps,
+} from './process-match-chunk';
 import { DeterministicRanker } from './ranker';
 import type { MatchResultRow, RunMatchJobDeps } from './run-match-job';
 import type { StartMatchRunDeps } from './start-match-run';
@@ -334,6 +339,93 @@ export function buildRunMatchJobDeps(
     },
 
     now: options.now,
+  };
+}
+
+/**
+ * `buildProcessMatchChunkDeps` — wires `processMatchChunk` (ADR-034 §2)
+ * deps against an RLS-scoped Supabase client.
+ *
+ * - `loadRunForChunk` does two reads (match_runs + job_queries). A
+ *   JOIN via PostgREST embedded resources would also work but requires
+ *   the FK to be exposed; two round-trips are sub-millisecond against
+ *   primary keys and keep the adapter simple.
+ * - `loadCandidates` and `rank` are reused from the legacy builder
+ *   (same RPC + ranker, same shapes).
+ * - `insertMatchResults` is reused — already chunked (ADR-032). With
+ *   a /process-chunk batch of ≤500 rows it issues a single insert.
+ * - `bumpProgress` is a read-then-write at the JS layer. ADR-034 has
+ *   a single FE driving the loop sequentially, so the race window is
+ *   not exercised. If we ever parallelize chunks, swap this for an
+ *   RPC that does `UPDATE ... SET processed_count = processed_count
+ *   + $delta ... RETURNING processed_count` atomically.
+ */
+export function buildProcessMatchChunkDeps(
+  supabase: SupabaseClient,
+  options: BuildRunMatchJobDepsOptions = {},
+): ProcessMatchChunkDeps {
+  const full = buildRunMatchJobDeps(supabase, options);
+  const now = options.now ?? ((): Date => new Date());
+
+  return {
+    loadRunForChunk: async (runId: string): Promise<LoadedMatchRunForChunk | null> => {
+      const { data: run, error: runErr } = await supabase
+        .from('match_runs')
+        .select('id, status, expected_count, processed_count, tenant_id, job_query_id')
+        .eq('id', runId)
+        .maybeSingle();
+      if (runErr) throw new Error(`loadRunForChunk: ${runErr.message}`);
+      if (run === null) return null;
+
+      const { data: jq, error: jqErr } = await supabase
+        .from('job_queries')
+        .select('resolved_json, resolved_at')
+        .eq('id', run.job_query_id as string)
+        .maybeSingle();
+      if (jqErr) throw new Error(`loadRunForChunk: job_query: ${jqErr.message}`);
+      if (jq === null) {
+        throw new Error(
+          `loadRunForChunk: job_query ${run.job_query_id} not found for run ${runId}`,
+        );
+      }
+
+      return {
+        status: run.status as MatchRunStatus,
+        expected_count: (run.expected_count as number | null) ?? null,
+        processed_count: (run.processed_count as number | null) ?? 0,
+        tenant_id: (run.tenant_id as string | null) ?? null,
+        job_query_id: run.job_query_id as string,
+        resolved: jq.resolved_json as unknown as ResolvedDecomposition,
+        catalog_snapshot_at: new Date(jq.resolved_at as string),
+      };
+    },
+
+    loadCandidates: full.loadCandidates,
+    rank: full.rank,
+    insertMatchResults: full.insertMatchResults,
+
+    bumpProgress: async (runId: string, delta: number) => {
+      // Read-then-write. See module-level comment for the
+      // concurrency assumption (single-FE sequential loop).
+      const { data: current, error: readErr } = await supabase
+        .from('match_runs')
+        .select('processed_count')
+        .eq('id', runId)
+        .single();
+      if (readErr) throw new Error(`bumpProgress: read: ${readErr.message}`);
+      const newCount = (current.processed_count as number) + delta;
+      const { error: writeErr } = await supabase
+        .from('match_runs')
+        .update({
+          processed_count: newCount,
+          last_progress_at: now().toISOString(),
+        })
+        .eq('id', runId);
+      if (writeErr) throw new Error(`bumpProgress: write: ${writeErr.message}`);
+      return { processed_count: newCount };
+    },
+
+    now,
   };
 }
 
