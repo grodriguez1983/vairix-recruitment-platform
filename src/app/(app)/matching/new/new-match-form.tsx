@@ -5,11 +5,18 @@
  *
  *   1. Paste JD → POST `/api/matching/decompose` → show resolved
  *      requirements + unresolved skills + seniority + languages.
- *   2. Click "Run match" → POST `/api/matching/run` → redirect to
- *      `/matching/runs/:id`.
+ *   2. Click "Run match" → ADR-034 FE-driven chunked pipeline:
+ *         POST `/api/matching/run/start`        (open run + preFilter)
+ *         POST `/api/matching/run/process-chunk` × ceil(total/CHUNK)
+ *         POST `/api/matching/run/finalize`     (close + top_n)
+ *      Then redirect to `/matching/runs/:id`.
  *
  * No local business logic beyond shape narrowing: the server is the
- * source of truth for validation (Zod on both routes) and RLS.
+ * source of truth for validation (Zod on every route) and RLS.
+ *
+ * Heroku H12 = 30s. The chunk loop is what keeps each request below
+ * that ceiling — chunk size is conservative so loadCandidates +
+ * rank + insert fit comfortably.
  */
 'use client';
 
@@ -26,7 +33,43 @@ interface DecomposeResponse {
   unresolved_skills: string[];
 }
 
+interface PreFilterExcluded {
+  candidate_id: string;
+  missing_must_have_skill_ids: string[];
+}
+
+interface StartResponse {
+  run_id: string;
+  included: string[];
+  excluded: PreFilterExcluded[];
+  total: number;
+  tenant_id: string | null;
+}
+
+interface ProcessChunkResponse {
+  processed_count: number;
+  total: number | null;
+  new_results: unknown[];
+}
+
+interface FinalizeResponse {
+  candidates_evaluated: number;
+  top: unknown[];
+  rescues_inserted?: number;
+}
+
 const MAX_JD = 20000;
+/** Chunk size for /process-chunk. Conservative: loadCandidates over
+ *  ~100 candidates + rank + insert fits comfortably under Heroku
+ *  H12 (30s). Raise only with measurement. */
+const CHUNK_SIZE = 100;
+const TOP_N = 20;
+
+interface ProgressState {
+  phase: 'starting' | 'processing' | 'finalizing';
+  processed: number;
+  total: number;
+}
 
 export function NewMatchForm(): JSX.Element {
   const router = useRouter();
@@ -35,6 +78,7 @@ export function NewMatchForm(): JSX.Element {
   const [decomposition, setDecomposition] = useState<DecomposeResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
+  const [progress, setProgress] = useState<ProgressState | null>(null);
 
   async function onDecompose(e: React.FormEvent<HTMLFormElement>): Promise<void> {
     e.preventDefault();
@@ -71,26 +115,46 @@ export function NewMatchForm(): JSX.Element {
     if (!decomposition) return;
     setError(null);
     setRunning(true);
+    setProgress({ phase: 'starting', processed: 0, total: 0 });
     try {
-      const res = await fetch('/api/matching/run', {
-        method: 'POST',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({ job_query_id: decomposition.query_id, top_n: 20 }),
+      // 1. /start — opens run + runs preFilter + stamps expected_count.
+      const startBody = await postJson<StartResponse>('/api/matching/run/start', {
+        job_query_id: decomposition.query_id,
       });
-      const body = (await res.json().catch(() => ({}))) as {
-        error?: string;
-        message?: string;
-        run_id?: string;
-      };
-      if (!res.ok || !body.run_id) {
-        setError(body.message ?? body.error ?? `run failed (${res.status})`);
-        setRunning(false);
-        return;
+      const { run_id, included, excluded, total } = startBody;
+      setProgress({ phase: 'processing', processed: 0, total });
+
+      // 2. /process-chunk loop — chunk-local rank, total_score-desc
+      //    ordering is recovered on read (ADR-034 + migration 004).
+      //    The post-bump processed_count returned by the server is
+      //    what we display, so concurrent writers (if any) are
+      //    observed truthfully.
+      for (let i = 0; i < included.length; i += CHUNK_SIZE) {
+        const chunk = included.slice(i, i + CHUNK_SIZE);
+        const res = await postJson<ProcessChunkResponse>('/api/matching/run/process-chunk', {
+          run_id,
+          candidate_ids: chunk,
+        });
+        setProgress({
+          phase: 'processing',
+          processed: res.processed_count,
+          total: res.total ?? total,
+        });
       }
-      router.push(`/matching/runs/${body.run_id}`);
+
+      // 3. /finalize — closes the run, returns top + rescues.
+      setProgress({ phase: 'finalizing', processed: total, total });
+      await postJson<FinalizeResponse>('/api/matching/run/finalize', {
+        run_id,
+        top_n: TOP_N,
+        excluded,
+      });
+
+      router.push(`/matching/runs/${run_id}`);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
       setRunning(false);
+      setProgress(null);
     }
   }
 
@@ -137,18 +201,44 @@ export function NewMatchForm(): JSX.Element {
         </section>
       )}
 
-      {decomposition && <DecompositionPanel data={decomposition} running={running} onRun={onRun} />}
+      {decomposition && (
+        <DecompositionPanel
+          data={decomposition}
+          running={running}
+          progress={progress}
+          onRun={onRun}
+        />
+      )}
     </div>
   );
+}
+
+/**
+ * Thin POST helper. Throws on non-2xx with the server's `message` /
+ * `error` if present, so the caller can surface it in the form.
+ */
+async function postJson<T>(url: string, body: unknown): Promise<T> {
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify(body),
+  });
+  const parsed = (await res.json().catch(() => ({}))) as { error?: string; message?: string } & T;
+  if (!res.ok) {
+    throw new Error(parsed.message ?? parsed.error ?? `${url} failed (${res.status})`);
+  }
+  return parsed;
 }
 
 function DecompositionPanel({
   data,
   running,
+  progress,
   onRun,
 }: {
   data: DecomposeResponse;
   running: boolean;
+  progress: ProgressState | null;
   onRun: () => void;
 }): JSX.Element {
   const { resolved, unresolved_skills, cached, query_id } = data;
@@ -228,7 +318,8 @@ function DecompositionPanel({
         </div>
       )}
 
-      <div className="flex items-center justify-end gap-2">
+      <div className="flex items-center justify-end gap-3">
+        {running && progress && <ProgressIndicator progress={progress} />}
         <button
           type="button"
           onClick={onRun}
@@ -242,6 +333,20 @@ function DecompositionPanel({
         </button>
       </div>
     </section>
+  );
+}
+
+function ProgressIndicator({ progress }: { progress: ProgressState }): JSX.Element {
+  const { phase, processed, total } = progress;
+  const pct = total > 0 ? Math.min(100, Math.round((processed / total) * 100)) : 0;
+  const label =
+    phase === 'starting'
+      ? 'pre-filtering…'
+      : phase === 'finalizing'
+        ? 'finalizing…'
+        : `${processed}/${total} (${pct}%)`;
+  return (
+    <span className="font-mono text-[10px] uppercase tracking-wider text-text-muted">{label}</span>
   );
 }
 
