@@ -52,7 +52,7 @@ export interface PreFilterByMustHaveResult {
   excluded: PreFilterExcludedCandidate[];
 }
 
-interface MustHaveGroup {
+export interface MustHaveGroup {
   /** Resolved alternative skill_ids for this group. Always non-empty
    *  because groups with zero resolved alternatives are dropped. */
   skill_ids: string[];
@@ -63,8 +63,13 @@ interface MustHaveGroup {
  *  such requirement is its own unique group. Shared non-null ids
  *  collapse into one group. A group is emitted only when it has at
  *  least one resolved alternative; a fully-unresolved group drops
- *  out (ADR-015 — unresolved does not filter). */
-function buildMustHaveGroups(jobQuery: ResolvedDecomposition): MustHaveGroup[] {
+ *  out (ADR-015 — unresolved does not filter).
+ *
+ *  Exported because the RPC wiring (ADR-033) reuses this exact
+ *  grouping to build the `must_have_groups_in` payload — same
+ *  semantics, just executed server-side. The JS `preFilterByMustHave`
+ *  below stays as the canonical reference impl for unit tests. */
+export function buildMustHaveGroups(jobQuery: ResolvedDecomposition): MustHaveGroup[] {
   const namedGroups = new Map<string, string[]>();
   const singletons: MustHaveGroup[] = [];
 

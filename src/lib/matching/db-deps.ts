@@ -14,51 +14,22 @@ import {
   type FtsRescueCandidate,
 } from '../rag/complementary-signals';
 import type { ResolvedDecomposition } from '../rag/decomposition/resolve-requirements';
-import { runChunked } from '../shared/chunked-in';
 
-import type { CandidateExperienceRow, CandidateLanguageRow } from './load-candidate-aggregates';
-import { loadCandidateAggregates } from './load-candidate-aggregates';
-import { preFilterByMustHave } from './pre-filter';
+import { buildMustHaveGroups } from './pre-filter';
 import { DeterministicRanker } from './ranker';
 import type { MatchResultRow, RunMatchJobDeps } from './run-match-job';
-import type { ExperienceKind, ExperienceSkill, SourceVariant } from './types';
+import type {
+  CandidateAggregate,
+  ExperienceInput,
+  ExperienceKind,
+  ExperienceSkill,
+  SourceVariant,
+} from './types';
+import { mergeVariants } from './variant-merger';
 
 export interface BuildRunMatchJobDepsOptions {
   now?: () => Date;
 }
-
-/**
- * PostgREST hard-caps each SELECT response at `max_rows = 1000`
- * (supabase/config.toml). Any row-returning fetch MUST loop over
- * `.range(offset, offset + PAGE_SIZE - 1)` until a short page
- * signals EOF — otherwise rows past row 1000 are silently dropped.
- * Kept strictly below 1000 so "fewer rows than requested" is an
- * unambiguous EOF signal even under the cap.
- */
-const PAGE_SIZE = 500;
-
-/**
- * Cap for `.in('col', ids)` input arrays. Supabase-js renders these
- * as a comma-separated list in the querystring, which at ~50 chars
- * per UUID hits the server's URI length limit well before 1_000 ids
- * (observed "URI too long" at ~1_100 in the pagination RED test).
- * 200 keeps the encoded list under ~10KB, comfortably below the
- * default 8KB–16KB URI cap across the stack.
- */
-const IN_CHUNK_SIZE = 200;
-
-/**
- * Bounded concurrency for chunked-IN fan-out (ADR-031). At 5_000+
- * candidates the sequential per-chunk loop accumulates ~30 chunks
- * × (3 helpers) × pagination wall-clock and blew the Heroku 30s
- * limit. Dispatching up to N chunks in parallel cuts wall-clock to
- * ~ceil(chunkCount / N) page-RTTs without saturating Supabase's
- * pool (Supavisor tenant default ~15 conns).
- *
- * Conservative default of 5 keeps headroom for concurrent requests
- * (other recruiters running matches, sync workers, etc.).
- */
-const CHUNK_CONCURRENCY = 5;
 
 /**
  * Batch size for `insertMatchResults` (ADR-032). A single bulk
@@ -91,166 +62,6 @@ export function buildRunMatchJobDeps(
 ): RunMatchJobDeps {
   const ranker = new DeterministicRanker();
 
-  /**
-   * Drive a range-paginated SELECT until a short page (< PAGE_SIZE)
-   * signals EOF. `runPage(from, to)` is re-invoked per page so the
-   * caller can rebuild any filters on the query — supabase-js
-   * builders are not reusable once awaited.
-   */
-  async function paginateRange<T>(
-    label: string,
-    runPage: (
-      from: number,
-      to: number,
-    ) => PromiseLike<{ data: T[] | null; error: { message: string } | null }>,
-  ): Promise<T[]> {
-    const out: T[] = [];
-    let offset = 0;
-    // Hard upper bound (5M rows) as a safety net against an infinite
-    // loop if PostgREST ever returns a full page past end-of-data.
-    const MAX_ITERATIONS = 10_000;
-    for (let i = 0; i < MAX_ITERATIONS; i += 1) {
-      const { data, error } = await runPage(offset, offset + PAGE_SIZE - 1);
-      if (error) throw new Error(`${label}: ${error.message}`);
-      const rows = data ?? [];
-      for (const r of rows) out.push(r);
-      if (rows.length < PAGE_SIZE) return out;
-      offset += PAGE_SIZE;
-    }
-    throw new Error(`${label}: exceeded MAX_ITERATIONS paginating`);
-  }
-
-  async function fetchAllCandidateIds(_tenantId: string | null): Promise<string[]> {
-    // RLS already scopes candidates; tenant_id hedge (ADR-003) is a
-    // no-op in F1 and stays at the DB layer for Fase 2+.
-    const rows = await paginateRange<{ id: string }>('fetchAllCandidateIds', (from, to) =>
-      supabase.from('candidates').select('id').range(from, to),
-    );
-    return rows.map((r) => r.id);
-  }
-
-  async function fetchCandidateMustHaveCoverage(
-    skillIds: string[],
-    _tenantId: string | null,
-  ): Promise<Array<{ candidate_id: string; covered_skill_ids: string[] }>> {
-    // Fetch (candidate_id, skill_id) pairs for the resolved
-    // must-have set and let the pure filter derive both included
-    // (full coverage) and excluded (partial / zero coverage) in JS.
-    // `skillIds` is typically tiny (≤ ~10 resolved must-haves) so we
-    // chunk input defensively; the row count (one per experience
-    // touching a must-have skill) can easily exceed max_rows on a
-    // sizable candidate pool, so each chunk is range-paginated.
-    if (skillIds.length === 0) return [];
-
-    type Row = {
-      skill_id: string | null;
-      candidate_experiences: unknown;
-    };
-    const allRows = await runChunked<Row>(
-      skillIds,
-      IN_CHUNK_SIZE,
-      (chunk) =>
-        paginateRange<Row>('fetchCandidateMustHaveCoverage', (from, to) =>
-          supabase
-            .from('experience_skills')
-            .select('skill_id, candidate_experiences!inner(candidate_id)')
-            .in('skill_id', chunk)
-            .range(from, to),
-        ),
-      { concurrency: CHUNK_CONCURRENCY },
-    );
-
-    const byCandidate = new Map<string, Set<string>>();
-    for (const row of allRows) {
-      const ce = row.candidate_experiences as unknown as { candidate_id: string } | null;
-      if (ce === null) continue;
-      const skillId = row.skill_id;
-      if (skillId === null) continue;
-      const set = byCandidate.get(ce.candidate_id) ?? new Set<string>();
-      set.add(skillId);
-      byCandidate.set(ce.candidate_id, set);
-    }
-    const out: Array<{ candidate_id: string; covered_skill_ids: string[] }> = [];
-    for (const [candidateId, present] of byCandidate) {
-      out.push({ candidate_id: candidateId, covered_skill_ids: Array.from(present) });
-    }
-    return out;
-  }
-
-  async function loadExperiences(candidateIds: string[]): Promise<CandidateExperienceRow[]> {
-    if (candidateIds.length === 0) return [];
-
-    type Row = {
-      id: string;
-      candidate_id: string;
-      source_variant: string;
-      kind: string;
-      company: string | null;
-      title: string | null;
-      start_date: string | null;
-      end_date: string | null;
-      description: string | null;
-      experience_skills: Array<{ skill_id: string | null; skill_raw: string }> | null;
-    };
-
-    const all = await runChunked<Row>(
-      candidateIds,
-      IN_CHUNK_SIZE,
-      (chunk) =>
-        paginateRange<Row>('loadExperiences', (from, to) =>
-          supabase
-            .from('candidate_experiences')
-            .select(
-              'id, candidate_id, source_variant, kind, company, title, start_date, end_date, description, experience_skills(skill_id, skill_raw)',
-            )
-            .in('candidate_id', chunk)
-            .range(from, to),
-        ),
-      { concurrency: CHUNK_CONCURRENCY },
-    );
-
-    return all.map((row) => ({
-      candidate_id: row.candidate_id,
-      id: row.id,
-      source_variant: row.source_variant as SourceVariant,
-      kind: row.kind as ExperienceKind,
-      company: row.company ?? null,
-      title: row.title ?? null,
-      start_date: row.start_date ?? null,
-      end_date: row.end_date ?? null,
-      description: row.description ?? null,
-      skills: ((row.experience_skills ?? []) as ExperienceSkill[]).map((s) => ({
-        skill_id: s.skill_id ?? null,
-        skill_raw: s.skill_raw,
-      })),
-    }));
-  }
-
-  async function loadLanguages(candidateIds: string[]): Promise<CandidateLanguageRow[]> {
-    if (candidateIds.length === 0) return [];
-
-    type Row = { candidate_id: string; name: string; level: string | null };
-    const all = await runChunked<Row>(
-      candidateIds,
-      IN_CHUNK_SIZE,
-      (chunk) =>
-        paginateRange<Row>('loadLanguages', (from, to) =>
-          supabase
-            .from('candidate_languages')
-            .select('candidate_id, name, level')
-            .in('candidate_id', chunk)
-            .range(from, to),
-        ),
-      { concurrency: CHUNK_CONCURRENCY },
-    );
-
-    return all.map((r) => ({
-      candidate_id: r.candidate_id,
-      name: r.name,
-      level: r.level ?? null,
-    }));
-  }
-
   return {
     loadJobQuery: async (jobQueryId: string) => {
       const { data, error } = await supabase
@@ -267,14 +78,84 @@ export function buildRunMatchJobDeps(
       };
     },
 
-    preFilter: async (jobQuery, tenantId) =>
-      preFilterByMustHave(jobQuery, tenantId, {
-        fetchAllCandidateIds,
-        fetchCandidateMustHaveCoverage,
-      }),
+    // ADR-033 — Server-side pre-filter via the `match_pre_filter`
+    // RPC. Replaces the previous chunked-IN fan-out across
+    // `candidates` + `experience_skills`. The JS impl in
+    // `pre-filter.ts` stays as the canonical reference (and is
+    // covered by unit tests there); we reuse `buildMustHaveGroups`
+    // to derive the exact same group shape and ship it to the RPC.
+    preFilter: async (jobQuery, tenantId) => {
+      const groups = buildMustHaveGroups(jobQuery);
+      const { data, error } = await supabase.rpc('match_pre_filter', {
+        must_have_groups_in: groups as unknown as never,
+        tenant_id_in: tenantId,
+      });
+      if (error) throw new Error(`preFilter: ${error.message}`);
+      const payload = (data ?? {}) as {
+        included?: string[];
+        excluded?: Array<{ candidate_id: string; missing_must_have_skill_ids: string[] }>;
+      };
+      return {
+        included: payload.included ?? [],
+        excluded: payload.excluded ?? [],
+      };
+    },
 
-    loadCandidates: async (candidateIds) =>
-      loadCandidateAggregates(candidateIds, { loadExperiences, loadLanguages }),
+    // ADR-033 — Server-side aggregate loader via the
+    // `match_load_aggregates` RPC. Replaces the previous chunked-IN
+    // fan-out across `candidate_experiences` + `candidate_languages`.
+    // `mergeVariants` (ADR-015) stays in TS — it's pure CPU work
+    // operating on the per-candidate experiences array.
+    loadCandidates: async (candidateIds) => {
+      if (candidateIds.length === 0) return [];
+      const { data, error } = await supabase.rpc('match_load_aggregates', {
+        candidate_ids_in: candidateIds,
+        tenant_id_in: null,
+      });
+      if (error) throw new Error(`loadCandidates: ${error.message}`);
+      const rows = (data ?? []) as unknown as Array<{
+        candidate_id: string;
+        experiences: Array<{
+          id: string;
+          source_variant: string;
+          kind: string;
+          company: string | null;
+          title: string | null;
+          start_date: string | null;
+          end_date: string | null;
+          description: string | null;
+          skills: Array<{ skill_id: string | null; skill_raw: string }>;
+        }>;
+        languages: Array<{ name: string; level: string | null }>;
+      }>;
+
+      const byId = new Map<string, (typeof rows)[number]>();
+      for (const r of rows) byId.set(r.candidate_id, r);
+
+      const out: CandidateAggregate[] = candidateIds.map((id) => {
+        const row = byId.get(id);
+        const exps: ExperienceInput[] = (row?.experiences ?? []).map((e) => ({
+          id: e.id,
+          source_variant: e.source_variant as SourceVariant,
+          kind: e.kind as ExperienceKind,
+          company: e.company,
+          title: e.title,
+          start_date: e.start_date,
+          end_date: e.end_date,
+          description: e.description,
+          skills: (e.skills ?? []).map(
+            (s): ExperienceSkill => ({ skill_id: s.skill_id, skill_raw: s.skill_raw }),
+          ),
+        }));
+        const { experiences } = mergeVariants(exps);
+        return {
+          candidate_id: id,
+          merged_experiences: experiences,
+          languages: row?.languages ?? [],
+        };
+      });
+      return out;
+    },
 
     rank: async (input) => ranker.rank(input),
 
