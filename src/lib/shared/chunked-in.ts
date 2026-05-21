@@ -76,13 +76,55 @@ export async function runChunked<T>(
   }
   if (ids.length === 0) return [];
 
-  // TODO(ADR-030): wire concurrency. Current impl ignores the option
-  // — kept sequential so the RED tests fail before the GREEN landed.
-  const out: T[] = [];
+  // Materialize chunks up-front so the dispatcher can address them
+  // by index — the output must preserve chunk-issue order even when
+  // chunks complete out of order under concurrency.
+  const chunks: string[][] = [];
   for (let i = 0; i < ids.length; i += chunkSize) {
-    const chunk = ids.slice(i, i + chunkSize);
-    const rows = await fetch(chunk);
-    for (const row of rows) out.push(row);
+    chunks.push(ids.slice(i, i + chunkSize));
+  }
+  const slots: T[][] = new Array<T[]>(chunks.length);
+
+  if (concurrency === 1) {
+    // Fast path: keeps the original sequential loop shape so the
+    // embeddings-worker call sites (no `concurrency` option) keep
+    // their well-tested behavior unchanged.
+    for (let i = 0; i < chunks.length; i += 1) {
+      slots[i] = await fetch(chunks[i]!);
+    }
+  } else {
+    // Bounded-parallel worker pool: `concurrency` workers pull the
+    // next unclaimed chunk index from a shared counter until drained.
+    // A single shared `firstError` short-circuits remaining work — no
+    // partial results are returned on failure (matches the sequential
+    // contract).
+    let nextIdx = 0;
+    let firstError: unknown = null;
+    const worker = async (): Promise<void> => {
+      while (firstError === null) {
+        const myIdx = nextIdx;
+        if (myIdx >= chunks.length) return;
+        nextIdx = myIdx + 1;
+        try {
+          const rows = await fetch(chunks[myIdx]!);
+          slots[myIdx] = rows;
+        } catch (err) {
+          if (firstError === null) firstError = err;
+          return;
+        }
+      }
+    };
+    const workerCount = Math.min(concurrency, chunks.length);
+    const workers: Array<Promise<void>> = [];
+    for (let w = 0; w < workerCount; w += 1) workers.push(worker());
+    await Promise.all(workers);
+    if (firstError !== null) throw firstError;
+  }
+
+  const out: T[] = [];
+  for (const slot of slots) {
+    if (slot === undefined) continue;
+    for (const row of slot) out.push(row);
   }
   return out;
 }
