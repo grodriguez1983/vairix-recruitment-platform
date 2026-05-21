@@ -63,6 +63,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
   const deps = buildRunMatchJobDeps(supabase);
 
+  const tStart = Date.now();
+  console.error(
+    `[match] POST /api/matching/run: start job_query_id=${parsed.job_query_id} top_n=${parsed.top_n}`,
+  );
   try {
     const result = await runMatchJob(
       {
@@ -72,9 +76,15 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       },
       deps,
     );
+    console.error(
+      `[match] POST /api/matching/run: ok ${Date.now() - tStart}ms run_id=${result.run_id} evaluated=${result.candidates_evaluated}`,
+    );
     return NextResponse.json(result, { status: 200 });
   } catch (e) {
     const message = e instanceof Error ? e.message : String(e);
+    console.error(
+      `[match] POST /api/matching/run: FAILED ${Date.now() - tStart}ms message=${message}`,
+    );
     if (/job_query not found/i.test(message)) {
       return NextResponse.json({ error: 'job_query_not_found' }, { status: 404 });
     }

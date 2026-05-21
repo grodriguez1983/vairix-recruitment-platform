@@ -86,15 +86,31 @@ export function buildRunMatchJobDeps(
     // to derive the exact same group shape and ship it to the RPC.
     preFilter: async (jobQuery, tenantId) => {
       const groups = buildMustHaveGroups(jobQuery);
+      const totalAlts = groups.reduce((acc, g) => acc + g.skill_ids.length, 0);
+      const t0 = Date.now();
+      console.error(
+        `[match] preFilter: start tenant=${tenantId ?? 'null'} groups=${groups.length} alts=${totalAlts}`,
+      );
       const { data, error } = await supabase.rpc('match_pre_filter', {
         must_have_groups_in: groups as unknown as never,
         tenant_id_in: tenantId,
       });
-      if (error) throw new Error(`preFilter: ${error.message}`);
+      const elapsedMs = Date.now() - t0;
+      if (error) {
+        console.error(
+          `[match] preFilter: FAILED after ${elapsedMs}ms code=${error.code ?? 'n/a'} message=${error.message}`,
+        );
+        throw new Error(`preFilter: ${error.message}`);
+      }
       const payload = (data ?? {}) as {
         included?: string[];
         excluded?: Array<{ candidate_id: string; missing_must_have_skill_ids: string[] }>;
       };
+      const includedCount = payload.included?.length ?? 0;
+      const excludedCount = payload.excluded?.length ?? 0;
+      console.error(
+        `[match] preFilter: ok ${elapsedMs}ms included=${includedCount} excluded=${excludedCount}`,
+      );
       return {
         included: payload.included ?? [],
         excluded: payload.excluded ?? [],
@@ -108,11 +124,22 @@ export function buildRunMatchJobDeps(
     // operating on the per-candidate experiences array.
     loadCandidates: async (candidateIds) => {
       if (candidateIds.length === 0) return [];
+      const t0 = Date.now();
+      console.error(`[match] loadCandidates: start candidates=${candidateIds.length}`);
       const { data, error } = await supabase.rpc('match_load_aggregates', {
         candidate_ids_in: candidateIds,
         tenant_id_in: null,
       });
-      if (error) throw new Error(`loadCandidates: ${error.message}`);
+      const elapsedMs = Date.now() - t0;
+      if (error) {
+        console.error(
+          `[match] loadCandidates: FAILED after ${elapsedMs}ms code=${error.code ?? 'n/a'} message=${error.message}`,
+        );
+        throw new Error(`loadCandidates: ${error.message}`);
+      }
+      const rowsLen = Array.isArray(data) ? data.length : 0;
+      const bytes = JSON.stringify(data ?? []).length;
+      console.error(`[match] loadCandidates: ok ${elapsedMs}ms rows=${rowsLen} bytes=${bytes}`);
       const rows = (data ?? []) as unknown as Array<{
         candidate_id: string;
         experiences: Array<{
@@ -185,8 +212,13 @@ export function buildRunMatchJobDeps(
       // chunks remain, but `failMatchRun` stamps the run and the
       // FK `ON DELETE CASCADE` lets a future GC clean orphans
       // (same partial-failure surface as the prior bulk impl).
+      const t0 = Date.now();
+      const totalChunks = Math.ceil(rows.length / INSERT_CHUNK_SIZE);
+      console.error(`[match] insertMatchResults: start rows=${rows.length} chunks=${totalChunks}`);
       for (let i = 0; i < rows.length; i += INSERT_CHUNK_SIZE) {
         const chunk = rows.slice(i, i + INSERT_CHUNK_SIZE);
+        const chunkIdx = Math.floor(i / INSERT_CHUNK_SIZE) + 1;
+        const tc = Date.now();
         const { error } = await supabase.from('match_results').insert(
           chunk.map((r) => ({
             match_run_id: runId,
@@ -198,8 +230,18 @@ export function buildRunMatchJobDeps(
             breakdown_json: r.breakdown_json as never,
           })),
         );
-        if (error) throw new Error(`insertMatchResults: ${error.message}`);
+        const chunkMs = Date.now() - tc;
+        if (error) {
+          console.error(
+            `[match] insertMatchResults: FAILED chunk ${chunkIdx}/${totalChunks} after ${chunkMs}ms code=${error.code ?? 'n/a'} message=${error.message}`,
+          );
+          throw new Error(`insertMatchResults: ${error.message}`);
+        }
+        console.error(
+          `[match] insertMatchResults: chunk ${chunkIdx}/${totalChunks} ok ${chunkMs}ms`,
+        );
       }
+      console.error(`[match] insertMatchResults: done total ${Date.now() - t0}ms`);
     },
 
     completeMatchRun: async (runId, params) => {
