@@ -48,7 +48,7 @@ const PAGE_SIZE = 500;
 const IN_CHUNK_SIZE = 200;
 
 /**
- * Bounded concurrency for chunked-IN fan-out (ADR-030). At 5_000+
+ * Bounded concurrency for chunked-IN fan-out (ADR-031). At 5_000+
  * candidates the sequential per-chunk loop accumulates ~30 chunks
  * × (3 helpers) × pagination wall-clock and blew the Heroku 30s
  * limit. Dispatching up to N chunks in parallel cuts wall-clock to
