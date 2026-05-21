@@ -18,7 +18,11 @@
  * COUNT(*). The optional `rescues_inserted` is present iff the
  * rescue dep was wired — matches the legacy `runMatchJob` semantics.
  *
- * STUB — RED-cycle scaffold. The real body lands in the GREEN commit.
+ * Error model: rethrow on anything other than rescue. The run stays
+ * `running` so the FE can retry /finalize — backend is dumb, FE owns
+ * the lifecycle (ADR-034). Rescue is orthogonal to ranking
+ * (ADR-016 §1) so its errors are swallowed and rescues_inserted
+ * degrades to 0.
  */
 import type { PreFilterExcludedCandidate } from './pre-filter';
 import type { MatchRunStatus } from './process-match-chunk';
@@ -82,10 +86,97 @@ export interface FinalizeMatchRunDeps {
   now: () => Date;
 }
 
+/**
+ * Re-hydrates a `CandidateScore` from a persisted `match_results`
+ * row. `breakdown_json` carries `{breakdown, language_match,
+ * seniority_match}`; the chunk-local `rank` is dropped — the
+ * response shape doesn't expose it.
+ */
+function rowToCandidateScore(row: TopMatchResultRow): CandidateScore {
+  const bj = row.breakdown_json as {
+    breakdown: CandidateScore['breakdown'];
+    language_match: CandidateScore['language_match'];
+    seniority_match: CandidateScore['seniority_match'];
+  };
+  return {
+    candidate_id: row.candidate_id,
+    total_score: row.total_score,
+    must_have_gate: row.must_have_gate,
+    breakdown: bj.breakdown,
+    language_match: bj.language_match,
+    seniority_match: bj.seniority_match,
+  };
+}
+
+/**
+ * Merge gate-failed candidates with the pre-filter excluded pool.
+ * Failed wins on duplicate `candidate_id`; excluded rows with no
+ * `missing_must_have_skill_ids` are dropped (nothing to FTS-check).
+ * Parity with `runMatchJob.mergeRescueInputs`.
+ */
+function mergeRescueInputs(
+  gateFailed: FailedCandidateInput[],
+  preFilterExcluded: PreFilterExcludedCandidate[],
+): FailedCandidateInput[] {
+  const byCandidate = new Map<string, FailedCandidateInput>();
+  for (const gf of gateFailed) {
+    byCandidate.set(gf.candidate_id, gf);
+  }
+  for (const pe of preFilterExcluded) {
+    if (pe.missing_must_have_skill_ids.length === 0) continue;
+    if (byCandidate.has(pe.candidate_id)) continue;
+    byCandidate.set(pe.candidate_id, {
+      candidate_id: pe.candidate_id,
+      missing_skill_ids: pe.missing_must_have_skill_ids,
+    });
+  }
+  return Array.from(byCandidate.values());
+}
+
 export async function finalizeMatchRun(
-  _input: FinalizeMatchRunInput,
-  _deps: FinalizeMatchRunDeps,
+  input: FinalizeMatchRunInput,
+  deps: FinalizeMatchRunDeps,
 ): Promise<FinalizeMatchRunResult> {
-  // RED stub.
-  throw new Error('finalizeMatchRun: not implemented');
+  const run = await deps.loadRunForFinalize(input.runId);
+  if (run === null) {
+    throw new Error(`match_run not found: ${input.runId}`);
+  }
+  if (run.status !== 'running') {
+    throw new Error(`match_run ${input.runId} is not running (status=${run.status})`);
+  }
+
+  const topRows = await deps.loadTopResults(input.runId, input.topN);
+  const failed = await deps.loadFailedResults(input.runId);
+
+  // Rescue (orthogonal, ADR-016 §1). `rescues_inserted` stays
+  // undefined when the dep is not wired — same surface as runMatchJob.
+  let rescuesInserted: number | undefined;
+  if (deps.rescueFailedCandidates !== undefined) {
+    rescuesInserted = 0;
+    const merged = mergeRescueInputs(failed, input.excluded);
+    if (merged.length > 0) {
+      try {
+        const r = await deps.rescueFailedCandidates({
+          run_id: input.runId,
+          tenant_id: run.tenant_id,
+          failed: merged,
+        });
+        rescuesInserted = r.rescues_inserted;
+      } catch {
+        // Swallow — rescue must not fail a completable run.
+      }
+    }
+  }
+
+  await deps.completeMatchRun(input.runId, {
+    finished_at: deps.now(),
+    candidates_evaluated: run.processed_count,
+    diagnostics: {},
+  });
+
+  return {
+    candidates_evaluated: run.processed_count,
+    top: topRows.map(rowToCandidateScore),
+    ...(rescuesInserted !== undefined ? { rescues_inserted: rescuesInserted } : {}),
+  };
 }
