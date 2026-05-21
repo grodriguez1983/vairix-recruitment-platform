@@ -14,6 +14,7 @@ import {
   type FtsRescueCandidate,
 } from '../rag/complementary-signals';
 import type { ResolvedDecomposition } from '../rag/decomposition/resolve-requirements';
+import { runChunked } from '../shared/chunked-in';
 
 import type { CandidateExperienceRow, CandidateLanguageRow } from './load-candidate-aggregates';
 import { loadCandidateAggregates } from './load-candidate-aggregates';
@@ -45,6 +46,19 @@ const PAGE_SIZE = 500;
  * default 8KB–16KB URI cap across the stack.
  */
 const IN_CHUNK_SIZE = 200;
+
+/**
+ * Bounded concurrency for chunked-IN fan-out (ADR-030). At 5_000+
+ * candidates the sequential per-chunk loop accumulates ~30 chunks
+ * × (3 helpers) × pagination wall-clock and blew the Heroku 30s
+ * limit. Dispatching up to N chunks in parallel cuts wall-clock to
+ * ~ceil(chunkCount / N) page-RTTs without saturating Supabase's
+ * pool (Supavisor tenant default ~15 conns).
+ *
+ * Conservative default of 5 keeps headroom for concurrent requests
+ * (other recruiters running matches, sync workers, etc.).
+ */
+const CHUNK_CONCURRENCY = 5;
 
 export function buildRunMatchJobDeps(
   supabase: SupabaseClient,
@@ -107,18 +121,19 @@ export function buildRunMatchJobDeps(
       skill_id: string | null;
       candidate_experiences: unknown;
     };
-    const allRows: Row[] = [];
-    for (let i = 0; i < skillIds.length; i += IN_CHUNK_SIZE) {
-      const chunk = skillIds.slice(i, i + IN_CHUNK_SIZE);
-      const rows = await paginateRange<Row>('fetchCandidateMustHaveCoverage', (from, to) =>
-        supabase
-          .from('experience_skills')
-          .select('skill_id, candidate_experiences!inner(candidate_id)')
-          .in('skill_id', chunk)
-          .range(from, to),
-      );
-      for (const r of rows) allRows.push(r);
-    }
+    const allRows = await runChunked<Row>(
+      skillIds,
+      IN_CHUNK_SIZE,
+      (chunk) =>
+        paginateRange<Row>('fetchCandidateMustHaveCoverage', (from, to) =>
+          supabase
+            .from('experience_skills')
+            .select('skill_id, candidate_experiences!inner(candidate_id)')
+            .in('skill_id', chunk)
+            .range(from, to),
+        ),
+      { concurrency: CHUNK_CONCURRENCY },
+    );
 
     const byCandidate = new Map<string, Set<string>>();
     for (const row of allRows) {
@@ -153,20 +168,21 @@ export function buildRunMatchJobDeps(
       experience_skills: Array<{ skill_id: string | null; skill_raw: string }> | null;
     };
 
-    const all: Row[] = [];
-    for (let i = 0; i < candidateIds.length; i += IN_CHUNK_SIZE) {
-      const chunk = candidateIds.slice(i, i + IN_CHUNK_SIZE);
-      const rows = await paginateRange<Row>('loadExperiences', (from, to) =>
-        supabase
-          .from('candidate_experiences')
-          .select(
-            'id, candidate_id, source_variant, kind, company, title, start_date, end_date, description, experience_skills(skill_id, skill_raw)',
-          )
-          .in('candidate_id', chunk)
-          .range(from, to),
-      );
-      for (const r of rows) all.push(r);
-    }
+    const all = await runChunked<Row>(
+      candidateIds,
+      IN_CHUNK_SIZE,
+      (chunk) =>
+        paginateRange<Row>('loadExperiences', (from, to) =>
+          supabase
+            .from('candidate_experiences')
+            .select(
+              'id, candidate_id, source_variant, kind, company, title, start_date, end_date, description, experience_skills(skill_id, skill_raw)',
+            )
+            .in('candidate_id', chunk)
+            .range(from, to),
+        ),
+      { concurrency: CHUNK_CONCURRENCY },
+    );
 
     return all.map((row) => ({
       candidate_id: row.candidate_id,
@@ -189,18 +205,19 @@ export function buildRunMatchJobDeps(
     if (candidateIds.length === 0) return [];
 
     type Row = { candidate_id: string; name: string; level: string | null };
-    const all: Row[] = [];
-    for (let i = 0; i < candidateIds.length; i += IN_CHUNK_SIZE) {
-      const chunk = candidateIds.slice(i, i + IN_CHUNK_SIZE);
-      const rows = await paginateRange<Row>('loadLanguages', (from, to) =>
-        supabase
-          .from('candidate_languages')
-          .select('candidate_id, name, level')
-          .in('candidate_id', chunk)
-          .range(from, to),
-      );
-      for (const r of rows) all.push(r);
-    }
+    const all = await runChunked<Row>(
+      candidateIds,
+      IN_CHUNK_SIZE,
+      (chunk) =>
+        paginateRange<Row>('loadLanguages', (from, to) =>
+          supabase
+            .from('candidate_languages')
+            .select('candidate_id, name, level')
+            .in('candidate_id', chunk)
+            .range(from, to),
+        ),
+      { concurrency: CHUNK_CONCURRENCY },
+    );
 
     return all.map((r) => ({
       candidate_id: r.candidate_id,
