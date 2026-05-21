@@ -1069,9 +1069,12 @@ export type Database = {
           catalog_snapshot_at: string
           created_at: string
           diagnostics: Json | null
+          expected_count: number | null
           finished_at: string | null
           id: string
           job_query_id: string
+          last_progress_at: string | null
+          processed_count: number
           started_at: string
           status: string
           tenant_id: string | null
@@ -1082,9 +1085,12 @@ export type Database = {
           catalog_snapshot_at: string
           created_at?: string
           diagnostics?: Json | null
+          expected_count?: number | null
           finished_at?: string | null
           id?: string
           job_query_id: string
+          last_progress_at?: string | null
+          processed_count?: number
           started_at?: string
           status?: string
           tenant_id?: string | null
@@ -1095,9 +1101,12 @@ export type Database = {
           catalog_snapshot_at?: string
           created_at?: string
           diagnostics?: Json | null
+          expected_count?: number | null
           finished_at?: string | null
           id?: string
           job_query_id?: string
+          last_progress_at?: string | null
+          processed_count?: number
           started_at?: string
           status?: string
           tenant_id?: string | null
