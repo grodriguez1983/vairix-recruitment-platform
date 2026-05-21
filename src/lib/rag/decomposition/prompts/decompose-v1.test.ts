@@ -6,7 +6,7 @@
  * meaning reformulation does not silently change the decomposer's
  * semantics:
  *
- *   - `DECOMPOSITION_PROMPT_V1` is pinned to '2026-04-v2'. Changing
+ *   - `DECOMPOSITION_PROMPT_V1` is pinned to '2026-05-v7'. Changing
  *     it invalidates every `job_queries.content_hash` (ADR-014 §5),
  *     so bumping the constant should be a conscious decision.
  *   - The prompt covers the four ADR-014 §3 rules: min_years only if
@@ -23,8 +23,8 @@ import { describe, expect, it } from 'vitest';
 import { DECOMPOSITION_PROMPT_V1, DECOMPOSITION_PROMPT_V1_TEXT } from './decompose-v1';
 
 describe('decomposition prompt v1 — ADR-014 semantic invariants', () => {
-  it('pins DECOMPOSITION_PROMPT_V1 to 2026-04-v6 (ADR-023 role_essentials)', () => {
-    expect(DECOMPOSITION_PROMPT_V1).toBe('2026-04-v6');
+  it('pins DECOMPOSITION_PROMPT_V1 to 2026-05-v7 (minimal-JD rule 12)', () => {
+    expect(DECOMPOSITION_PROMPT_V1).toBe('2026-05-v7');
   });
 
   it('prompt text is non-trivial', () => {
@@ -172,6 +172,38 @@ describe('decomposition prompt v1 — ADR-014 semantic invariants', () => {
       expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(
         /also.{0,20}(in |appear).{0,30}requirements|both.{0,30}requirements/i,
       );
+    });
+  });
+
+  // Prompt v7 (2026-05): rule 12 — minimal / single-token JDs.
+  // Regression for the "busco programador react → 0 requirements"
+  // incident, where rule 6's "do not invent" bias produced a cache
+  // entry with an empty requirements list for a JD that literally
+  // names the skill. Rule 12 carves out an explicit exception so the
+  // model emits the named technology as a soft (must_have:false)
+  // requirement instead of staying silent.
+  describe('minimal-JD rule 12 (prompt v7)', () => {
+    it('prompt names the rule and the canonical incident example', () => {
+      // The literal phrase from the incident is pinned so anyone
+      // reformulating the rule cannot silently drop the example
+      // that motivated it.
+      expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(/minimal|short informal|single-token/i);
+      expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(/busco programador react/);
+    });
+
+    it('prompt specifies must_have:false and null years for minimal JDs', () => {
+      // Without this, the model could mark a single-keyword JD as
+      // must_have:true and accidentally hard-filter every candidate
+      // who lacks an exact skill match in pre-filtering.
+      expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(/must_have:\s*false/);
+      expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(/min_years.{0,20}null/);
+    });
+
+    it('prompt scopes rule 12 to short fragments only — long JDs keep rule 6', () => {
+      // The carve-out is bounded so long JDs do not start emitting
+      // requirements from incidental mentions ("we use Jira" inside
+      // a benefits paragraph).
+      expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(/rule 6 still applies|longer JDs/i);
     });
   });
 });

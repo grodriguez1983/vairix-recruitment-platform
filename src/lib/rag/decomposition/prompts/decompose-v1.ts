@@ -11,7 +11,7 @@
  * fixes with no semantic change go under the same version.
  */
 
-export const DECOMPOSITION_PROMPT_V1 = '2026-04-v6';
+export const DECOMPOSITION_PROMPT_V1 = '2026-05-v7';
 
 // Kept as a template literal so prettier doesn't reflow the rules
 // into a hard-to-read single line. These are the non-negotiable rules
@@ -217,6 +217,49 @@ Rules (do not break):
       resolver can't bind it; the axis ends up silently empty and
       the gate becomes a no-op. Only list raws that are also in
       requirements[].
+
+12. Minimal / single-token JD: when the input is a short informal
+    fragment that names one or more technologies as the role
+    keyword(s) — typical recruiter shorthand like "busco programador
+    react", "dev rails", "react native dev", "node engineer" — DO
+    emit one requirement per named technology. This is NOT
+    hallucination: the technology appears literally in the text and
+    the recruiter's intent is unambiguous (they typed the name of
+    the skill they are searching for). Apply:
+    - must_have: false (the JD never said "excluyente").
+    - min_years / max_years: null (no explicit number).
+    - evidence_snippet: the full input text (since there is no
+      separable phrase to point at — the whole fragment is the
+      evidence).
+    - skill_raw: the canonical name of the technology, following
+      rule 4 (e.g. "React" — not "react", not "programador react").
+    - alternative_group_id: null (singleton; no "A o B" here).
+    - role_essentials: still empty unless the title is genuinely
+      multi-axis (rule 11). A single-keyword JD is single-axis by
+      construction.
+
+    CORRECT:
+      text: "busco programador react"
+      requirements: [
+        { skill_raw: "React", must_have: false, min_years: null,
+          max_years: null, category: "technical",
+          evidence_snippet: "busco programador react",
+          alternative_group_id: null }
+      ]
+      role_essentials: []
+
+    CORRECT (two technologies in shorthand):
+      text: "dev react + node"
+      requirements: [
+        { skill_raw: "React",   evidence_snippet: "dev react + node", ... },
+        { skill_raw: "Node.js", evidence_snippet: "dev react + node", ... }
+      ]
+
+    This rule overrides rule 6's bias toward false negatives ONLY
+    when the technology name appears literally and the fragment is
+    too short (≤ ~15 words) to contain a real requirements section.
+    For longer JDs, rule 6 still applies — do not start inventing
+    requirements from passing mentions.
 
 Return ONLY the JSON object. No prose, no markdown fences.
 `;
