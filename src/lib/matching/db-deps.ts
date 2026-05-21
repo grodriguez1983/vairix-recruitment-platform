@@ -18,6 +18,7 @@ import type { ResolvedDecomposition } from '../rag/decomposition/resolve-require
 import { buildMustHaveGroups } from './pre-filter';
 import { DeterministicRanker } from './ranker';
 import type { MatchResultRow, RunMatchJobDeps } from './run-match-job';
+import type { StartMatchRunDeps } from './start-match-run';
 import type {
   CandidateAggregate,
   ExperienceInput,
@@ -333,5 +334,33 @@ export function buildRunMatchJobDeps(
     },
 
     now: options.now,
+  };
+}
+
+/**
+ * `buildStartMatchRunDeps` — wires `startMatchRun` (ADR-034 §1) deps
+ * against an RLS-scoped Supabase client. Reuses `loadJobQuery`,
+ * `preFilter`, `createMatchRun` and `failMatchRun` from the legacy
+ * builder (same shapes, same RLS posture) and adds `setExpectedCount`,
+ * which stamps `match_runs.expected_count` from the preFilter result.
+ */
+export function buildStartMatchRunDeps(
+  supabase: SupabaseClient,
+  options: BuildRunMatchJobDepsOptions = {},
+): StartMatchRunDeps {
+  const full = buildRunMatchJobDeps(supabase, options);
+  return {
+    loadJobQuery: full.loadJobQuery,
+    createMatchRun: full.createMatchRun,
+    preFilter: full.preFilter,
+    failMatchRun: full.failMatchRun,
+    setExpectedCount: async (runId, expectedCount) => {
+      const { error } = await supabase
+        .from('match_runs')
+        .update({ expected_count: expectedCount })
+        .eq('id', runId);
+      if (error) throw new Error(`setExpectedCount: ${error.message}`);
+    },
+    now: options.now ?? (() => new Date()),
   };
 }
