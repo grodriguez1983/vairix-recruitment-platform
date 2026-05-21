@@ -15,6 +15,11 @@ import {
 } from '../rag/complementary-signals';
 import type { ResolvedDecomposition } from '../rag/decomposition/resolve-requirements';
 
+import type {
+  FinalizeMatchRunDeps,
+  LoadedMatchRunForFinalize,
+  TopMatchResultRow,
+} from './finalize-match-run';
 import { buildMustHaveGroups } from './pre-filter';
 import type {
   LoadedMatchRunForChunk,
@@ -22,8 +27,14 @@ import type {
   ProcessMatchChunkDeps,
 } from './process-match-chunk';
 import { DeterministicRanker } from './ranker';
-import type { MatchResultRow, RunMatchJobDeps } from './run-match-job';
+import {
+  collectFailedCandidates,
+  type FailedCandidateInput,
+  type MatchResultRow,
+  type RunMatchJobDeps,
+} from './run-match-job';
 import type { StartMatchRunDeps } from './start-match-run';
+import type { CandidateScore, RequirementBreakdown, SeniorityMatch } from './types';
 import type {
   CandidateAggregate,
   ExperienceInput,
@@ -425,6 +436,101 @@ export function buildProcessMatchChunkDeps(
       return { processed_count: newCount };
     },
 
+    now,
+  };
+}
+
+/**
+ * `buildFinalizeMatchRunDeps` — wires `finalizeMatchRun` (ADR-034 §3)
+ * deps against an RLS-scoped Supabase client.
+ *
+ * - `loadRunForFinalize` is a single read on match_runs (no JOIN —
+ *   finalize doesn't need the resolved decomposition).
+ * - `loadTopResults` orders by total_score desc (matches the new
+ *   index `idx_match_results_run_score` from migration 004). The
+ *   persisted `rank` is chunk-local and intentionally ignored here.
+ * - `loadFailedResults` selects gate-failed rows and runs the
+ *   adapter through `collectFailedCandidates` — the shared
+ *   reference impl from `run-match-job.ts` — so /finalize behaves
+ *   identically to the legacy synchronous pipeline at the rescue
+ *   seam. A failed row carries the full ranker breakdown in
+ *   `breakdown_json`; we re-hydrate `CandidateScore` to feed the
+ *   collector.
+ * - `rescueFailedCandidates` and `completeMatchRun` are reused from
+ *   the legacy builder (same RLS posture, same shapes).
+ */
+export function buildFinalizeMatchRunDeps(
+  supabase: SupabaseClient,
+  options: BuildRunMatchJobDepsOptions = {},
+): FinalizeMatchRunDeps {
+  const full = buildRunMatchJobDeps(supabase, options);
+  const now = options.now ?? ((): Date => new Date());
+
+  return {
+    loadRunForFinalize: async (runId: string): Promise<LoadedMatchRunForFinalize | null> => {
+      const { data, error } = await supabase
+        .from('match_runs')
+        .select('status, expected_count, processed_count, tenant_id')
+        .eq('id', runId)
+        .maybeSingle();
+      if (error) throw new Error(`loadRunForFinalize: ${error.message}`);
+      if (data === null) return null;
+      return {
+        status: data.status as MatchRunStatus,
+        expected_count: (data.expected_count as number | null) ?? null,
+        processed_count: (data.processed_count as number | null) ?? 0,
+        tenant_id: (data.tenant_id as string | null) ?? null,
+      };
+    },
+
+    loadTopResults: async (runId: string, topN: number): Promise<TopMatchResultRow[]> => {
+      const { data, error } = await supabase
+        .from('match_results')
+        .select('candidate_id, total_score, must_have_gate, rank, breakdown_json')
+        .eq('match_run_id', runId)
+        .order('total_score', { ascending: false })
+        .limit(topN);
+      if (error) throw new Error(`loadTopResults: ${error.message}`);
+      return (data ?? []).map((r) => ({
+        candidate_id: r.candidate_id as string,
+        total_score: Number(r.total_score),
+        must_have_gate: r.must_have_gate as 'passed' | 'failed',
+        rank: r.rank as number,
+        breakdown_json: r.breakdown_json,
+      }));
+    },
+
+    loadFailedResults: async (runId: string): Promise<FailedCandidateInput[]> => {
+      const { data, error } = await supabase
+        .from('match_results')
+        .select('candidate_id, total_score, must_have_gate, breakdown_json')
+        .eq('match_run_id', runId)
+        .eq('must_have_gate', 'failed');
+      if (error) throw new Error(`loadFailedResults: ${error.message}`);
+      // Rehydrate CandidateScore[] from rows so the SHARED
+      // `collectFailedCandidates` from run-match-job.ts can derive
+      // missing_skill_ids — single source of truth for the rescue
+      // input shape.
+      const scores: CandidateScore[] = (data ?? []).map((r) => {
+        const bj = (r.breakdown_json ?? {}) as {
+          breakdown?: RequirementBreakdown[];
+          language_match?: { required: number; matched: number };
+          seniority_match?: SeniorityMatch;
+        };
+        return {
+          candidate_id: r.candidate_id as string,
+          total_score: Number(r.total_score),
+          must_have_gate: 'failed',
+          breakdown: bj.breakdown ?? [],
+          language_match: bj.language_match ?? { required: 0, matched: 0 },
+          seniority_match: bj.seniority_match ?? 'unknown',
+        };
+      });
+      return collectFailedCandidates(scores);
+    },
+
+    rescueFailedCandidates: full.rescueFailedCandidates,
+    completeMatchRun: full.completeMatchRun,
     now,
   };
 }

@@ -104,7 +104,7 @@ export interface RunMatchJobDeps {
  * alternative has status === 'match'. Per ADR-021, rescue only
  * needs to re-check the groups that actually failed.
  */
-function collectFailedCandidates(results: CandidateScore[]): FailedCandidateInput[] {
+export function collectFailedCandidates(results: CandidateScore[]): FailedCandidateInput[] {
   const out: FailedCandidateInput[] = [];
   for (const score of results) {
     if (score.must_have_gate !== 'failed') continue;
