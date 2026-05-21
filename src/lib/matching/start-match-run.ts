@@ -8,8 +8,13 @@
  *   preFilter → setExpectedCount (= included.length) →
  *   return { run_id, included, excluded, total, tenant_id }
  *
- * STUB — this file is the RED-cycle scaffold so the test file
- * type-checks. Real implementation lands in the GREEN commit.
+ * On any failure AFTER `createMatchRun`, the run is closed via
+ * `failMatchRun(reason)` and the error is rethrown so the route
+ * handler can surface it. On `loadJobQuery` returning null (no such
+ * job), the service throws WITHOUT creating a run — nothing to fail.
+ *
+ * All I/O is injected (`StartMatchRunDeps`) so the route handler can
+ * compose db adapters and tests can wire `vi.fn` mocks.
  */
 import type { ResolvedDecomposition } from '../rag/decomposition/resolve-requirements';
 
@@ -59,9 +64,35 @@ export interface StartMatchRunResult {
 }
 
 export async function startMatchRun(
-  _input: StartMatchRunInput,
-  _deps: StartMatchRunDeps,
+  input: StartMatchRunInput,
+  deps: StartMatchRunDeps,
 ): Promise<StartMatchRunResult> {
-  // RED stub — intentionally wrong so adversarial tests fail.
-  throw new Error('startMatchRun: not implemented');
+  const loaded = await deps.loadJobQuery(input.jobQueryId);
+  if (loaded === null) {
+    // No run was created — nothing to fail.
+    throw new Error(`job_query not found: ${input.jobQueryId}`);
+  }
+
+  const { id: runId } = await deps.createMatchRun({
+    job_query_id: input.jobQueryId,
+    tenant_id: loaded.tenant_id,
+    triggered_by: input.triggeredBy,
+    catalog_snapshot_at: loaded.catalog_snapshot_at,
+  });
+
+  try {
+    const preFilterResult = await deps.preFilter(loaded.resolved, loaded.tenant_id);
+    await deps.setExpectedCount(runId, preFilterResult.included.length);
+    return {
+      run_id: runId,
+      included: preFilterResult.included,
+      excluded: preFilterResult.excluded,
+      total: preFilterResult.included.length,
+      tenant_id: loaded.tenant_id,
+    };
+  } catch (err) {
+    const reason = err instanceof Error ? err.message : String(err);
+    await deps.failMatchRun(runId, { finished_at: deps.now(), reason });
+    throw err;
+  }
 }
