@@ -7,11 +7,6 @@ export type Json =
   | Json[]
 
 export type Database = {
-  // Allows to automatically instantiate createClient with right options
-  // instead of createClient<Database, { PostgrestVersion: 'XX' }>(URL, KEY)
-  __InternalSupabase: {
-    PostgrestVersion: "14.5"
-  }
   graphql_public: {
     Tables: {
       [_ in never]: never
@@ -1615,6 +1610,14 @@ export type Database = {
     Functions: {
       current_app_role: { Args: never; Returns: string }
       current_app_user_id: { Args: never; Returns: string }
+      match_load_aggregates: {
+        Args: { candidate_ids_in: string[]; tenant_id_in: string }
+        Returns: Json
+      }
+      match_pre_filter: {
+        Args: { must_have_groups_in: Json; tenant_id_in: string }
+        Returns: Json
+      }
       match_rescue_fts_search: {
         Args: { candidate_ids_in: string[]; skill_slugs_in: string[] }
         Returns: {
@@ -1775,3 +1778,4 @@ export const Constants = {
     Enums: {},
   },
 } as const
+
