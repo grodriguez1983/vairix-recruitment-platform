@@ -60,6 +60,31 @@ const IN_CHUNK_SIZE = 200;
  */
 const CHUNK_CONCURRENCY = 5;
 
+/**
+ * Batch size for `insertMatchResults` (ADR-032). A single bulk
+ * `.insert([...N rows])` of ~5_500 `match_results` rows blew past
+ * Postgres `statement_timeout` (~27 s observed on the validation
+ * run for `job_query c5cf4efe-…`). Each row carries a JSONB
+ * `breakdown_json` of ~2 KB (requirement breakdowns + language +
+ * seniority), so the request body for a full pool also hugs the
+ * PostgREST ~1 MB body ceiling.
+ *
+ * Chunking to 500 rows per call:
+ *   - keeps each request body well under the body cap (~1 MB);
+ *   - keeps each Postgres statement under any reasonable
+ *     `statement_timeout` (rough budget: ~5 ms/row inserts ×
+ *     500 ≈ 2.5 s);
+ *   - adds ~12 sequential round-trips for a 5_500-row pool, which
+ *     at 30-60 ms RTT is ~500 ms of overhead — negligible vs the
+ *     query cost.
+ *
+ * Sequential by design — writes contend for the same heap pages,
+ * unique-index (`match_run_id, candidate_id`), and write-buffer.
+ * Parallelizing would multiply lock contention without reducing
+ * wall-clock (see ADR-032 §2).
+ */
+const INSERT_CHUNK_SIZE = 500;
+
 export function buildRunMatchJobDeps(
   supabase: SupabaseClient,
   options: BuildRunMatchJobDepsOptions = {},
@@ -271,18 +296,29 @@ export function buildRunMatchJobDeps(
 
     insertMatchResults: async (runId: string, rows: MatchResultRow[]) => {
       if (rows.length === 0) return;
-      const { error } = await supabase.from('match_results').insert(
-        rows.map((r) => ({
-          match_run_id: runId,
-          candidate_id: r.candidate_id,
-          tenant_id: r.tenant_id,
-          total_score: r.total_score,
-          must_have_gate: r.must_have_gate,
-          rank: r.rank,
-          breakdown_json: r.breakdown_json as never,
-        })),
-      );
-      if (error) throw new Error(`insertMatchResults: ${error.message}`);
+      // ADR-032: chunk the bulk INSERT so each statement stays well
+      // under Postgres `statement_timeout` and the request body
+      // under the PostgREST ~1 MB cap. Sequential: writes contend
+      // for the same pages/locks, so concurrency does not help here.
+      // On chunk failure: throw immediately — already-inserted
+      // chunks remain, but `failMatchRun` stamps the run and the
+      // FK `ON DELETE CASCADE` lets a future GC clean orphans
+      // (same partial-failure surface as the prior bulk impl).
+      for (let i = 0; i < rows.length; i += INSERT_CHUNK_SIZE) {
+        const chunk = rows.slice(i, i + INSERT_CHUNK_SIZE);
+        const { error } = await supabase.from('match_results').insert(
+          chunk.map((r) => ({
+            match_run_id: runId,
+            candidate_id: r.candidate_id,
+            tenant_id: r.tenant_id,
+            total_score: r.total_score,
+            must_have_gate: r.must_have_gate,
+            rank: r.rank,
+            breakdown_json: r.breakdown_json as never,
+          })),
+        );
+        if (error) throw new Error(`insertMatchResults: ${error.message}`);
+      }
     },
 
     completeMatchRun: async (runId, params) => {
