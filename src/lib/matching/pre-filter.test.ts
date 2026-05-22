@@ -27,7 +27,7 @@ import { describe, expect, it, vi } from 'vitest';
 
 import type { ResolvedDecomposition } from '../rag/decomposition/resolve-requirements';
 
-import { preFilterByMustHave } from './pre-filter';
+import { collectAnyOfSkillIds, preFilterByMustHave } from './pre-filter';
 import type { PreFilterByMustHaveDeps } from './pre-filter';
 
 const REACT_ID = '00000000-0000-0000-0000-000000000001';
@@ -68,8 +68,17 @@ describe('preFilterByMustHave — F4-008 sub-B + ter', () => {
     expect(deps.fetchCandidateMustHaveCoverage).not.toHaveBeenCalled();
   });
 
-  it('requirements but no must-have → all pass through, empty excluded', async () => {
-    const deps = mkDeps({ all: ['a', 'b'] });
+  it('soft-only resolved (ADR-036) → union gate filters zero-overlap candidates', async () => {
+    // ADR-036: a JD with no resolved must-have but ≥1 resolved soft
+    // requirement still gates on overlap. Candidates with zero
+    // experience_skills hits among the resolved soft set are excluded
+    // BEFORE the ranker so we never score people with 0 overlap.
+    // The excluded pool stays empty — the rescue bucket (ADR-016) is
+    // for must-have FTS, not for soft no-overlap.
+    const deps = mkDeps({
+      all: ['a', 'b'],
+      coverage: [{ candidate_id: 'a', covered_skill_ids: [REACT_ID] }],
+    });
     const out = await preFilterByMustHave(
       jobQuery({
         requirements: [
@@ -89,9 +98,9 @@ describe('preFilterByMustHave — F4-008 sub-B + ter', () => {
       null,
       deps,
     );
-    expect(out.included).toEqual(['a', 'b']);
+    expect(out.included).toEqual(['a']);
     expect(out.excluded).toEqual([]);
-    expect(deps.fetchCandidateMustHaveCoverage).not.toHaveBeenCalled();
+    expect(deps.fetchCandidateMustHaveCoverage).toHaveBeenCalledWith([REACT_ID], null);
   });
 
   it('all must-have unresolved (skill_id=null) → all pass through, empty excluded', async () => {
@@ -229,8 +238,13 @@ describe('preFilterByMustHave — F4-008 sub-B + ter', () => {
     expect(byCandidate.get('e')?.sort()).toEqual([REACT_ID]);
     expect(out.excluded.length).toBe(4);
 
+    // ADR-036: the coverage query asks for the FULL union (must +
+    // soft) so a single round-trip evaluates both gates. SQL is a
+    // soft requirement so it joins the query list — the must-have
+    // gate semantics over the result are unchanged (gate 1 still
+    // ignores non-must-have hits).
     const call = (deps.fetchCandidateMustHaveCoverage as ReturnType<typeof vi.fn>).mock.calls[0]!;
-    expect((call[0] as string[]).sort()).toEqual([REACT_ID, NODE_ID].sort());
+    expect((call[0] as string[]).sort()).toEqual([REACT_ID, NODE_ID, SQL_ID].sort());
     expect(call[1]).toBeNull();
   });
 
@@ -518,6 +532,202 @@ describe('preFilterByMustHave — F4-008 sub-B + ter', () => {
     expect(out.included).toEqual(['a', 'b']);
     expect(out.excluded).toEqual([]);
     expect(deps.fetchCandidateMustHaveCoverage).not.toHaveBeenCalled();
+  });
+
+  // ----------------------------------------------------------
+  // ADR-036: Soft union gate. A candidate with zero overlap on
+  // the union of (must ∪ soft) resolved skill_ids is excluded —
+  // regardless of whether must-have groups exist. The excluded
+  // pool stays empty for union-only exclusions (rescue layer is
+  // for must-have FTS, ADR-016, not for soft no-overlap).
+  // ----------------------------------------------------------
+
+  it('mixed must + soft: candidate covers must but no soft overlap still passes (union ⊇ must)', async () => {
+    // React must, Node soft. Candidate `a` has React only.
+    // Gate 1 (must groups): passes. Gate 2 (union ⊇ {React, Node}):
+    // covered = {React} → has ≥1 overlap → passes.
+    const deps = mkDeps({
+      all: ['a', 'b'],
+      coverage: [{ candidate_id: 'a', covered_skill_ids: [REACT_ID] }],
+    });
+    const out = await preFilterByMustHave(
+      jobQuery({
+        requirements: [
+          {
+            skill_raw: 'React',
+            skill_id: REACT_ID,
+            resolved_at: '2025-01-01T00:00:00Z',
+            min_years: 1,
+            max_years: null,
+            must_have: true,
+            evidence_snippet: 'React',
+            category: 'technical',
+            alternative_group_id: null,
+          },
+          {
+            skill_raw: 'Node.js',
+            skill_id: NODE_ID,
+            resolved_at: '2025-01-01T00:00:00Z',
+            min_years: 1,
+            max_years: null,
+            must_have: false,
+            evidence_snippet: 'Node.js',
+            category: 'technical',
+            alternative_group_id: null,
+          },
+        ],
+      }),
+      null,
+      deps,
+    );
+    expect(out.included).toEqual(['a']);
+    // `b` has no must-have coverage AND no soft overlap → must-gate
+    // failure dominates, lands in the excluded pool with React missing.
+    expect(out.excluded).toEqual([{ candidate_id: 'b', missing_must_have_skill_ids: [REACT_ID] }]);
+    // The query asks for the FULL union, not just the must-haves —
+    // otherwise we'd lose soft coverage signal for the union gate.
+    const call = (deps.fetchCandidateMustHaveCoverage as ReturnType<typeof vi.fn>).mock.calls[0]!;
+    expect((call[0] as string[]).sort()).toEqual([REACT_ID, NODE_ID].sort());
+  });
+
+  it('all requirements unresolved (must + soft) → both gates inactive, all pass', async () => {
+    // No resolved skill_ids anywhere ⇒ union is empty ⇒ gate 2
+    // inactive ⇒ falls back to pre-ADR-036 behavior (all in).
+    const deps = mkDeps({ all: ['a', 'b'] });
+    const out = await preFilterByMustHave(
+      jobQuery({
+        requirements: [
+          {
+            skill_raw: 'Obscure',
+            skill_id: null,
+            resolved_at: null,
+            min_years: 1,
+            max_years: null,
+            must_have: true,
+            evidence_snippet: 'Obscure',
+            category: 'technical',
+            alternative_group_id: null,
+          },
+          {
+            skill_raw: 'AlsoObscure',
+            skill_id: null,
+            resolved_at: null,
+            min_years: 1,
+            max_years: null,
+            must_have: false,
+            evidence_snippet: 'AlsoObscure',
+            category: 'technical',
+            alternative_group_id: null,
+          },
+        ],
+      }),
+      null,
+      deps,
+    );
+    expect(out.included).toEqual(['a', 'b']);
+    expect(out.excluded).toEqual([]);
+    expect(deps.fetchCandidateMustHaveCoverage).not.toHaveBeenCalled();
+  });
+
+  it('soft-only with multiple soft skills: candidate with ANY one passes, zero overlap excluded', async () => {
+    // React + Node soft only. `a` has React → included.
+    // `b` has Node → included. `c` has nothing → excluded by union.
+    // Excluded pool stays empty (no must-have, nothing to rescue).
+    const deps = mkDeps({
+      all: ['a', 'b', 'c'],
+      coverage: [
+        { candidate_id: 'a', covered_skill_ids: [REACT_ID] },
+        { candidate_id: 'b', covered_skill_ids: [NODE_ID] },
+      ],
+    });
+    const out = await preFilterByMustHave(
+      jobQuery({
+        requirements: [
+          {
+            skill_raw: 'React',
+            skill_id: REACT_ID,
+            resolved_at: '2025-01-01T00:00:00Z',
+            min_years: 1,
+            max_years: null,
+            must_have: false,
+            evidence_snippet: 'React',
+            category: 'technical',
+            alternative_group_id: null,
+          },
+          {
+            skill_raw: 'Node.js',
+            skill_id: NODE_ID,
+            resolved_at: '2025-01-01T00:00:00Z',
+            min_years: 1,
+            max_years: null,
+            must_have: false,
+            evidence_snippet: 'Node.js',
+            category: 'technical',
+            alternative_group_id: null,
+          },
+        ],
+      }),
+      null,
+      deps,
+    );
+    expect(out.included.sort()).toEqual(['a', 'b']);
+    expect(out.excluded).toEqual([]);
+  });
+
+  it('collectAnyOfSkillIds: emits union of all resolved skill_ids (must + soft), dedup, stable order', () => {
+    const ids = collectAnyOfSkillIds(
+      jobQuery({
+        requirements: [
+          {
+            skill_raw: 'React',
+            skill_id: REACT_ID,
+            resolved_at: '2025-01-01T00:00:00Z',
+            min_years: 1,
+            max_years: null,
+            must_have: true,
+            evidence_snippet: 'React',
+            category: 'technical',
+            alternative_group_id: null,
+          },
+          {
+            skill_raw: 'Node.js',
+            skill_id: NODE_ID,
+            resolved_at: '2025-01-01T00:00:00Z',
+            min_years: 1,
+            max_years: null,
+            must_have: false,
+            evidence_snippet: 'Node.js',
+            category: 'technical',
+            alternative_group_id: null,
+          },
+          // dup of React with different role → still one entry
+          {
+            skill_raw: 'React.js',
+            skill_id: REACT_ID,
+            resolved_at: '2025-01-01T00:00:00Z',
+            min_years: 1,
+            max_years: null,
+            must_have: false,
+            evidence_snippet: 'React.js',
+            category: 'technical',
+            alternative_group_id: null,
+          },
+          // unresolved → ignored
+          {
+            skill_raw: 'Obscure',
+            skill_id: null,
+            resolved_at: null,
+            min_years: 1,
+            max_years: null,
+            must_have: true,
+            evidence_snippet: 'Obscure',
+            category: 'technical',
+            alternative_group_id: null,
+          },
+        ],
+      }),
+    );
+    expect(ids).toEqual([REACT_ID, NODE_ID]);
   });
 
   it('coverage row with zero covered_skill_ids → still treated as excluded with all missing', async () => {

@@ -20,7 +20,7 @@ import type {
   LoadedMatchRunForFinalize,
   TopMatchResultRow,
 } from './finalize-match-run';
-import { buildMustHaveGroups } from './pre-filter';
+import { buildMustHaveGroups, collectAnyOfSkillIds } from './pre-filter';
 import type {
   LoadedMatchRunForChunk,
   MatchRunStatus,
@@ -100,18 +100,26 @@ export function buildRunMatchJobDeps(
     // `candidates` + `experience_skills`. The JS impl in
     // `pre-filter.ts` stays as the canonical reference (and is
     // covered by unit tests there); we reuse `buildMustHaveGroups`
-    // to derive the exact same group shape and ship it to the RPC.
+    // + `collectAnyOfSkillIds` to derive the exact same group +
+    // union shape and ship them to the RPC.
+    //
+    // ADR-036 — `any_of_skill_ids` extends the pre-filter with a
+    // soft union gate: candidates with zero overlap on the union
+    // of resolved skill_ids (must + soft) are excluded before
+    // scoring. Null/empty disables the gate.
     preFilter: async (jobQuery, tenantId) => {
       const groups = buildMustHaveGroups(jobQuery);
+      const anyOf = collectAnyOfSkillIds(jobQuery);
       const totalAlts = groups.reduce((acc, g) => acc + g.skill_ids.length, 0);
       const t0 = Date.now();
       console.error(
-        `[match] preFilter: start tenant=${tenantId ?? 'null'} groups=${groups.length} alts=${totalAlts}`,
+        `[match] preFilter: start tenant=${tenantId ?? 'null'} groups=${groups.length} alts=${totalAlts} any_of=${anyOf.length}`,
       );
       const { data, error } = await supabase.rpc('match_pre_filter', {
         must_have_groups_in: groups as unknown as never,
         tenant_id_in: tenantId,
-      });
+        any_of_skill_ids_in: anyOf.length > 0 ? anyOf : null,
+      } as never);
       const elapsedMs = Date.now() - t0;
       if (error) {
         console.error(

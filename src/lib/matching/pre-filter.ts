@@ -7,7 +7,7 @@
  * coverage so the post-rank rescue bucket (ADR-016 §1) can FTS-check
  * `files.parsed_text` for must-haves the extraction LLM missed.
  *
- * Invariants (ADR-015 + ADR-021):
+ * Invariants (ADR-015 + ADR-021 + ADR-036):
  *   - Unresolved must-have (`skill_id = null`) does NOT filter.
  *   - A must-have group is defined by `alternative_group_id`:
  *       null → each requirement is its own singleton group.
@@ -15,13 +15,19 @@
  *       group (OR within, AND between).
  *   - A group is "active" when it has ≥1 resolved alternative;
  *     otherwise it drops out of the filter entirely.
- *   - No active groups → full candidate pool as `included`,
- *     `excluded` is empty (nothing to rescue).
  *   - Active groups → candidate is `included` iff they cover ≥1
  *     resolved alternative of *every* active group. The complement
  *     becomes `excluded`; `missing_must_have_skill_ids` is the flat
  *     union of resolved alternatives across the groups they failed
  *     to cover — the rescue layer FTS-checks each alternative.
+ *   - ADR-036 soft union gate: independent of must-have, if the JD
+ *     has ≥1 resolved requirement (must OR soft), the candidate
+ *     must cover ≥1 skill_id from the union of all resolved
+ *     skill_ids. Candidates with zero overlap are excluded BEFORE
+ *     scoring (never enter the ranker, never land in the rescue
+ *     pool — rescue is for must-have FTS, not soft no-overlap).
+ *   - Both gates inactive (no active groups AND empty union) → full
+ *     candidate pool passes as `included`; `excluded` is empty.
  *
  * All I/O is injected.
  */
@@ -91,64 +97,96 @@ export function buildMustHaveGroups(jobQuery: ResolvedDecomposition): MustHaveGr
   return groups;
 }
 
+/** ADR-036: flat union of `skill_id` over every resolved requirement
+ *  (must AND soft). Drives the soft union gate: a candidate must have
+ *  ≥1 `experience_skills` row hitting this list. Unresolved
+ *  requirements (`skill_id = null`) contribute nothing — same
+ *  posture as ADR-015 for must-have. Order is stable (first
+ *  appearance wins) so callers and the RPC can compare arrays. */
+export function collectAnyOfSkillIds(jobQuery: ResolvedDecomposition): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  for (const req of jobQuery.requirements) {
+    if (req.skill_id === null) continue;
+    if (seen.has(req.skill_id)) continue;
+    seen.add(req.skill_id);
+    out.push(req.skill_id);
+  }
+  return out;
+}
+
 export async function preFilterByMustHave(
   jobQuery: ResolvedDecomposition,
   tenantId: string | null,
   deps: PreFilterByMustHaveDeps,
 ): Promise<PreFilterByMustHaveResult> {
   const groups = buildMustHaveGroups(jobQuery);
+  const anyOf = collectAnyOfSkillIds(jobQuery);
 
-  if (groups.length === 0) {
+  // Both gates inactive — no resolved info to filter on. Full pool
+  // passes; the excluded pool is moot.
+  if (groups.length === 0 && anyOf.length === 0) {
     const included = await deps.fetchAllCandidateIds(tenantId);
     return { included, excluded: [] };
   }
 
-  const allResolvedSkillIds: string[] = [];
-  const seen = new Set<string>();
-  for (const g of groups) {
-    for (const s of g.skill_ids) {
-      if (!seen.has(s)) {
-        seen.add(s);
-        allResolvedSkillIds.push(s);
-      }
-    }
-  }
+  // Must-have skill set (subset of anyOf) — used to scope coverage
+  // back to per-group satisfaction. Querying coverage on the full
+  // union lets us evaluate both gates in one round-trip.
+  const mustHaveSet = new Set<string>();
+  for (const g of groups) for (const s of g.skill_ids) mustHaveSet.add(s);
+  const anyOfSet = new Set<string>(anyOf);
 
   const [allIds, coverageRows] = await Promise.all([
     deps.fetchAllCandidateIds(tenantId),
-    deps.fetchCandidateMustHaveCoverage(allResolvedSkillIds, tenantId),
+    deps.fetchCandidateMustHaveCoverage(anyOf, tenantId),
   ]);
 
-  const coverageByCandidate = new Map<string, Set<string>>();
+  // Per-candidate coverage split into the must-have subset (drives
+  // gate 1) and the full anyOf subset (drives gate 2).
+  interface Coverage {
+    mustHave: Set<string>;
+    anyOfHit: boolean;
+  }
+  const coverageByCandidate = new Map<string, Coverage>();
   for (const row of coverageRows) {
-    const covered = new Set<string>();
+    const mustHave = new Set<string>();
+    let anyOfHit = false;
     for (const skillId of row.covered_skill_ids) {
-      if (seen.has(skillId)) covered.add(skillId);
+      if (anyOfSet.has(skillId)) anyOfHit = true;
+      if (mustHaveSet.has(skillId)) mustHave.add(skillId);
     }
-    coverageByCandidate.set(row.candidate_id, covered);
+    coverageByCandidate.set(row.candidate_id, { mustHave, anyOfHit });
   }
 
   const included: string[] = [];
   const excluded: PreFilterExcludedCandidate[] = [];
   for (const candidateId of allIds) {
-    const covered = coverageByCandidate.get(candidateId) ?? new Set<string>();
+    const cov = coverageByCandidate.get(candidateId) ?? { mustHave: new Set(), anyOfHit: false };
+
+    // Gate 1 — must-have groups (ADR-015 + ADR-021).
     const missingGroups: MustHaveGroup[] = [];
     for (const group of groups) {
-      const covers = group.skill_ids.some((s) => covered.has(s));
+      const covers = group.skill_ids.some((s) => cov.mustHave.has(s));
       if (!covers) missingGroups.push(group);
     }
-    if (missingGroups.length === 0) {
-      included.push(candidateId);
+    if (missingGroups.length > 0) {
+      const missingSet = new Set<string>();
+      for (const g of missingGroups) for (const s of g.skill_ids) missingSet.add(s);
+      excluded.push({
+        candidate_id: candidateId,
+        missing_must_have_skill_ids: [...missingSet],
+      });
       continue;
     }
-    // Flat union of every resolved alternative in the failed groups.
-    // Dedup to keep the list stable for the rescue layer.
-    const missingSet = new Set<string>();
-    for (const g of missingGroups) for (const s of g.skill_ids) missingSet.add(s);
-    excluded.push({
-      candidate_id: candidateId,
-      missing_must_have_skill_ids: [...missingSet],
-    });
+
+    // Gate 2 — soft union (ADR-036). Only kicks in when anyOf is
+    // non-empty AND there's no overlap. No-overlap exclusions do
+    // NOT join the rescue pool: rescue handles must-have FTS, not
+    // soft signals.
+    if (anyOf.length > 0 && !cov.anyOfHit) continue;
+
+    included.push(candidateId);
   }
 
   return { included, excluded };

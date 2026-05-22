@@ -311,9 +311,14 @@ describe('buildRunMatchJobDeps.preFilter — ADR-033', () => {
 
     expect(rpcCalls).toHaveLength(1);
     expect(rpcCalls[0]!.name).toBe('match_pre_filter');
+    // ADR-036: `any_of_skill_ids_in` is the flat union of every
+    // resolved skill_id (must + soft). skill-A (must, resolved) +
+    // skill-Z (soft, resolved); the unresolved must row contributes
+    // nothing. Order is stable by first appearance.
     expect(rpcCalls[0]!.args).toEqual({
       must_have_groups_in: [{ skill_ids: ['skill-A'] }],
       tenant_id_in: 'tenant-xyz',
+      any_of_skill_ids_in: ['skill-A', 'skill-Z'],
     });
     expect(result.included).toEqual(['cand-1', 'cand-2']);
     expect(result.excluded).toEqual([
@@ -394,9 +399,13 @@ describe('buildRunMatchJobDeps.preFilter — ADR-033', () => {
     const result = await deps.preFilter(jobQuery, null);
 
     expect(rpcCalls).toHaveLength(1);
+    // ADR-036: zero resolved requirements → union is empty → the
+    // adapter passes `null` so the RPC's `any_of_active` branch
+    // stays off and the candidate pool is not narrowed.
     expect(rpcCalls[0]!.args).toEqual({
       must_have_groups_in: [],
       tenant_id_in: null,
+      any_of_skill_ids_in: null,
     });
     expect(result.included).toEqual(['cand-1', 'cand-2', 'cand-3']);
     expect(result.excluded).toEqual([]);
