@@ -4,8 +4,7 @@
  * Opens a `match_run` and returns the plan the FE needs to drive the
  * chunk loop:
  *
- *   loadJobQuery → createMatchRun (status='running') →
- *   preFilter → setExpectedCount (= included.length) →
+ *   loadJobQuery → createMatchRun → preFilter → setExpectedCount →
  *   return { run_id, included, excluded, total, tenant_id }
  *
  * On any failure AFTER `createMatchRun`, the run is closed via
@@ -23,6 +22,11 @@ import type { PreFilterByMustHaveResult } from './pre-filter';
 export interface StartMatchRunInput {
   jobQueryId: string;
   triggeredBy: string;
+  /**
+   * ADR-035 (RED): recruiter-edited subset of the resolved
+   * decomposition. Interface is in place; behavior lands in GREEN.
+   */
+  resolvedOverride?: ResolvedDecomposition;
 }
 
 export interface LoadedJobQuery {
@@ -46,6 +50,12 @@ export interface FailMatchRunArgs {
 export interface StartMatchRunDeps {
   loadJobQuery: (jobQueryId: string) => Promise<LoadedJobQuery | null>;
   createMatchRun: (args: CreateMatchRunArgs) => Promise<{ id: string }>;
+  /**
+   * ADR-035 (RED): seal the effective `ResolvedDecomposition` onto
+   * the `match_runs` row before any heavy work. Interface is in
+   * place; the call site lands in GREEN.
+   */
+  persistEffectiveResolved: (runId: string, resolved: ResolvedDecomposition) => Promise<void>;
   preFilter: (
     resolved: ResolvedDecomposition,
     tenantId: string | null,

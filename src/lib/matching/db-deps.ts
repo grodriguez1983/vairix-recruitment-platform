@@ -552,6 +552,16 @@ export function buildStartMatchRunDeps(
     createMatchRun: full.createMatchRun,
     preFilter: full.preFilter,
     failMatchRun: full.failMatchRun,
+    // ADR-035: snapshot del resolved efectivo (override del recruiter
+    // o copia de job_queries.resolved_json). Inmutable post-insert
+    // por el trigger `enforce_match_runs_state_machine`.
+    persistEffectiveResolved: async (runId, resolved) => {
+      const { error } = await supabase
+        .from('match_runs')
+        .update({ effective_resolved_json: resolved as never })
+        .eq('id', runId);
+      if (error) throw new Error(`persistEffectiveResolved: ${error.message}`);
+    },
     setExpectedCount: async (runId, expectedCount) => {
       const { error } = await supabase
         .from('match_runs')

@@ -17,7 +17,10 @@
  */
 import { describe, expect, it, vi } from 'vitest';
 
-import type { ResolvedDecomposition } from '../rag/decomposition/resolve-requirements';
+import type {
+  ResolvedDecomposition,
+  ResolvedRequirement,
+} from '../rag/decomposition/resolve-requirements';
 
 import { startMatchRun } from './start-match-run';
 import type { StartMatchRunDeps, StartMatchRunInput } from './start-match-run';
@@ -44,6 +47,7 @@ function mkDeps(overrides: Partial<StartMatchRunDeps> = {}): StartMatchRunDeps {
       tenant_id: null,
     })),
     createMatchRun: vi.fn(async () => ({ id: 'run-1' })),
+    persistEffectiveResolved: vi.fn(async () => {}),
     preFilter: vi.fn(
       async (): Promise<PreFilterByMustHaveResult> => ({
         included: ['c1', 'c2', 'c3'],
@@ -54,6 +58,31 @@ function mkDeps(overrides: Partial<StartMatchRunDeps> = {}): StartMatchRunDeps {
     failMatchRun: vi.fn(async () => {}),
     now: () => NOW,
     ...overrides,
+  };
+}
+
+function req(partial: Partial<ResolvedRequirement> = {}): ResolvedRequirement {
+  return {
+    skill_raw: 'python',
+    min_years: 3,
+    max_years: null,
+    must_have: true,
+    evidence_snippet: '5+ years of Python',
+    category: 'technical',
+    alternative_group_id: null,
+    skill_id: 'skill-python',
+    resolved_at: '2025-01-01T00:00:00Z',
+    ...partial,
+  };
+}
+
+function jobQueryWith(requirements: ResolvedRequirement[]): ResolvedDecomposition {
+  return {
+    requirements,
+    seniority: 'unspecified',
+    languages: [],
+    notes: null,
+    role_essentials: [],
   };
 }
 
@@ -236,5 +265,175 @@ describe('startMatchRun (ADR-034)', () => {
       'run-1',
       expect.objectContaining({ finished_at: customNow }),
     );
+  });
+
+  describe('effective resolved snapshot (ADR-035)', () => {
+    it('no override: persists loaded.resolved as the effective snapshot before preFilter', async () => {
+      const original = jobQueryWith([req()]);
+      const calls: string[] = [];
+      const deps = mkDeps({
+        loadJobQuery: vi.fn(async () => ({
+          resolved: original,
+          catalog_snapshot_at: SNAPSHOT,
+          tenant_id: null,
+        })),
+        persistEffectiveResolved: vi.fn(async (_runId, resolved) => {
+          calls.push('persist');
+          expect(resolved).toEqual(original);
+        }),
+        preFilter: vi.fn(async (resolved) => {
+          calls.push('preFilter');
+          expect(resolved).toEqual(original);
+          return { included: [], excluded: [] };
+        }),
+      });
+      await startMatchRun(VALID_INPUT, deps);
+      // Snapshot must be sealed BEFORE preFilter runs so a crash mid-run
+      // leaves an auditable record of what was about to be ranked.
+      expect(calls).toEqual(['persist', 'preFilter']);
+    });
+
+    it('with override: applies override to preFilter (not loaded.resolved)', async () => {
+      const original = jobQueryWith([
+        req({ skill_id: 'skill-python', skill_raw: 'python', min_years: 3, must_have: true }),
+        req({ skill_id: 'skill-react', skill_raw: 'react', min_years: 5, must_have: true }),
+      ]);
+      // Override: drop react, soften python's min_years, untoggle must_have.
+      const override = jobQueryWith([
+        req({ skill_id: 'skill-python', skill_raw: 'python', min_years: 1, must_have: false }),
+      ]);
+      const preFilter = vi.fn(
+        async (): Promise<PreFilterByMustHaveResult> => ({ included: [], excluded: [] }),
+      );
+      const deps = mkDeps({
+        loadJobQuery: vi.fn(async () => ({
+          resolved: original,
+          catalog_snapshot_at: SNAPSHOT,
+          tenant_id: null,
+        })),
+        preFilter,
+      });
+      await startMatchRun({ ...VALID_INPUT, resolvedOverride: override }, deps);
+      expect(preFilter).toHaveBeenCalledWith(override, null);
+    });
+
+    it('with override: persists the override (not loaded.resolved) as the snapshot', async () => {
+      const original = jobQueryWith([
+        req({ skill_id: 'skill-python', skill_raw: 'python', min_years: 3, must_have: true }),
+        req({ skill_id: 'skill-react', skill_raw: 'react', min_years: 5, must_have: true }),
+      ]);
+      const override = jobQueryWith([
+        req({ skill_id: 'skill-python', skill_raw: 'python', min_years: 1, must_have: false }),
+      ]);
+      const persistEffectiveResolved = vi.fn(async () => {});
+      const deps = mkDeps({
+        loadJobQuery: vi.fn(async () => ({
+          resolved: original,
+          catalog_snapshot_at: SNAPSHOT,
+          tenant_id: null,
+        })),
+        persistEffectiveResolved,
+      });
+      await startMatchRun({ ...VALID_INPUT, resolvedOverride: override }, deps);
+      expect(persistEffectiveResolved).toHaveBeenCalledTimes(1);
+      expect(persistEffectiveResolved).toHaveBeenCalledWith('run-1', override);
+    });
+
+    it('rejects override that introduces a skill_id not in original (no inventing requirements)', async () => {
+      const original = jobQueryWith([req({ skill_id: 'skill-python', skill_raw: 'python' })]);
+      const override = jobQueryWith([
+        req({ skill_id: 'skill-python', skill_raw: 'python' }),
+        req({ skill_id: 'skill-rust', skill_raw: 'rust' }), // not in original
+      ]);
+      const failMatchRun = vi.fn(async () => {});
+      const deps = mkDeps({
+        loadJobQuery: vi.fn(async () => ({
+          resolved: original,
+          catalog_snapshot_at: SNAPSHOT,
+          tenant_id: null,
+        })),
+        failMatchRun,
+      });
+      await expect(
+        startMatchRun({ ...VALID_INPUT, resolvedOverride: override }, deps),
+      ).rejects.toThrow(/invalid_override/i);
+      // No run is created → no need to fail it. The check runs pre-create.
+      expect(failMatchRun).not.toHaveBeenCalled();
+    });
+
+    it('rejects override that changes the skill_id of a requirement (identity is LLM-owned)', async () => {
+      const original = jobQueryWith([req({ skill_id: 'skill-python', skill_raw: 'python' })]);
+      const override = jobQueryWith([
+        req({ skill_id: 'skill-rust', skill_raw: 'python' }), // skill_raw same, skill_id swapped
+      ]);
+      const deps = mkDeps({
+        loadJobQuery: vi.fn(async () => ({
+          resolved: original,
+          catalog_snapshot_at: SNAPSHOT,
+          tenant_id: null,
+        })),
+      });
+      await expect(
+        startMatchRun({ ...VALID_INPUT, resolvedOverride: override }, deps),
+      ).rejects.toThrow(/invalid_override/i);
+    });
+
+    it('rejects override that changes seniority (out of scope for editing this pass)', async () => {
+      const original: ResolvedDecomposition = {
+        ...jobQueryWith([req()]),
+        seniority: 'senior',
+      };
+      const override: ResolvedDecomposition = {
+        ...original,
+        seniority: 'junior',
+      };
+      const deps = mkDeps({
+        loadJobQuery: vi.fn(async () => ({
+          resolved: original,
+          catalog_snapshot_at: SNAPSHOT,
+          tenant_id: null,
+        })),
+      });
+      await expect(
+        startMatchRun({ ...VALID_INPUT, resolvedOverride: override }, deps),
+      ).rejects.toThrow(/invalid_override/i);
+    });
+
+    it('accepts override that omits requirements (delete is allowed)', async () => {
+      const original = jobQueryWith([
+        req({ skill_id: 'skill-python', skill_raw: 'python' }),
+        req({ skill_id: 'skill-react', skill_raw: 'react' }),
+      ]);
+      const override = jobQueryWith([req({ skill_id: 'skill-python', skill_raw: 'python' })]);
+      const deps = mkDeps({
+        loadJobQuery: vi.fn(async () => ({
+          resolved: original,
+          catalog_snapshot_at: SNAPSHOT,
+          tenant_id: null,
+        })),
+      });
+      await expect(
+        startMatchRun({ ...VALID_INPUT, resolvedOverride: override }, deps),
+      ).resolves.toBeDefined();
+    });
+
+    it('accepts override that changes min_years and must_have on existing requirements', async () => {
+      const original = jobQueryWith([
+        req({ skill_id: 'skill-python', skill_raw: 'python', min_years: 5, must_have: true }),
+      ]);
+      const override = jobQueryWith([
+        req({ skill_id: 'skill-python', skill_raw: 'python', min_years: 0, must_have: false }),
+      ]);
+      const deps = mkDeps({
+        loadJobQuery: vi.fn(async () => ({
+          resolved: original,
+          catalog_snapshot_at: SNAPSHOT,
+          tenant_id: null,
+        })),
+      });
+      await expect(
+        startMatchRun({ ...VALID_INPUT, resolvedOverride: override }, deps),
+      ).resolves.toBeDefined();
+    });
   });
 });
