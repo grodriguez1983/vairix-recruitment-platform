@@ -24,7 +24,10 @@ import { useRouter } from 'next/navigation';
 import { useState, useTransition } from 'react';
 
 import { cn } from '@/lib/shared/cn';
-import type { ResolvedDecomposition } from '@/lib/rag/decomposition/resolve-requirements';
+import type {
+  ResolvedDecomposition,
+  ResolvedRequirement,
+} from '@/lib/rag/decomposition/resolve-requirements';
 
 interface DecomposeResponse {
   query_id: string;
@@ -76,6 +79,10 @@ export function NewMatchForm(): JSX.Element {
   const [isPending, startTransition] = useTransition();
   const [rawText, setRawText] = useState('');
   const [decomposition, setDecomposition] = useState<DecomposeResponse | null>(null);
+  // ADR-035: recruiter-edited subset of the decomposition. Initialized
+  // from `decomposition.resolved` whenever a fresh decompose completes;
+  // sent as `resolved_override` to /start when it differs.
+  const [editedResolved, setEditedResolved] = useState<ResolvedDecomposition | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [running, setRunning] = useState(false);
   const [progress, setProgress] = useState<ProgressState | null>(null);
@@ -84,6 +91,7 @@ export function NewMatchForm(): JSX.Element {
     e.preventDefault();
     setError(null);
     setDecomposition(null);
+    setEditedResolved(null);
     const text = rawText.trim();
     if (text.length === 0) {
       setError('Paste a job description first.');
@@ -105,6 +113,8 @@ export function NewMatchForm(): JSX.Element {
           return;
         }
         setDecomposition(body);
+        // Deep clone so edits don't mutate the server response.
+        setEditedResolved(JSON.parse(JSON.stringify(body.resolved)) as ResolvedDecomposition);
       } catch (err) {
         setError(err instanceof Error ? err.message : String(err));
       }
@@ -112,14 +122,18 @@ export function NewMatchForm(): JSX.Element {
   }
 
   async function onRun(): Promise<void> {
-    if (!decomposition) return;
+    if (!decomposition || !editedResolved) return;
     setError(null);
     setRunning(true);
     setProgress({ phase: 'starting', processed: 0, total: 0 });
     try {
+      // Only ship the override when it differs from the LLM's
+      // resolved set — saves bytes and keeps server logs cleaner.
+      const hasEdits = JSON.stringify(editedResolved) !== JSON.stringify(decomposition.resolved);
       // 1. /start — opens run + runs preFilter + stamps expected_count.
       const startBody = await postJson<StartResponse>('/api/matching/run/start', {
         job_query_id: decomposition.query_id,
+        ...(hasEdits ? { resolved_override: editedResolved } : {}),
       });
       const { run_id, included, excluded, total } = startBody;
       setProgress({ phase: 'processing', processed: 0, total });
@@ -201,9 +215,11 @@ export function NewMatchForm(): JSX.Element {
         </section>
       )}
 
-      {decomposition && (
+      {decomposition && editedResolved && (
         <DecompositionPanel
           data={decomposition}
+          editedResolved={editedResolved}
+          onEditedResolvedChange={setEditedResolved}
           running={running}
           progress={progress}
           onRun={onRun}
@@ -232,16 +248,38 @@ async function postJson<T>(url: string, body: unknown): Promise<T> {
 
 function DecompositionPanel({
   data,
+  editedResolved,
+  onEditedResolvedChange,
   running,
   progress,
   onRun,
 }: {
   data: DecomposeResponse;
+  editedResolved: ResolvedDecomposition;
+  onEditedResolvedChange: (next: ResolvedDecomposition) => void;
   running: boolean;
   progress: ProgressState | null;
   onRun: () => void;
 }): JSX.Element {
-  const { resolved, unresolved_skills, cached, query_id } = data;
+  const { unresolved_skills, cached, query_id } = data;
+
+  // ADR-035: edit only `requirements` for now. seniority/languages/
+  // role_essentials remain read-only and identical to the original
+  // (the service rejects overrides that touch them).
+  function updateRequirement(index: number, patch: Partial<ResolvedRequirement>): void {
+    const nextReqs = editedResolved.requirements.map((r, i) =>
+      i === index ? { ...r, ...patch } : r,
+    );
+    onEditedResolvedChange({ ...editedResolved, requirements: nextReqs });
+  }
+
+  function removeRequirement(index: number): void {
+    const nextReqs = editedResolved.requirements.filter((_, i) => i !== index);
+    onEditedResolvedChange({ ...editedResolved, requirements: nextReqs });
+  }
+
+  const dirty = JSON.stringify(editedResolved) !== JSON.stringify(data.resolved);
+
   return (
     <section className="flex flex-col gap-4 rounded-lg border border-border bg-surface p-4">
       <header className="flex items-baseline justify-between">
@@ -250,17 +288,18 @@ function DecompositionPanel({
         </h2>
         <span className="font-mono text-[10px] uppercase tracking-wider text-text-muted">
           {cached ? 'cache hit' : 'fresh'} · {query_id.slice(0, 8)}
+          {dirty && <span className="ml-2 text-warning">· edited</span>}
         </span>
       </header>
 
       <div className="grid gap-3 sm:grid-cols-2">
-        <MetaRow label="seniority" value={resolved.seniority} />
+        <MetaRow label="seniority" value={editedResolved.seniority} />
         <MetaRow
           label="languages"
           value={
-            resolved.languages.length === 0
+            editedResolved.languages.length === 0
               ? '—'
-              : resolved.languages
+              : editedResolved.languages
                   .map((l) => `${l.name} (${l.level}${l.must_have ? ', must' : ''})`)
                   .join(', ')
           }
@@ -268,45 +307,42 @@ function DecompositionPanel({
       </div>
 
       <div>
-        <p className="mb-2 font-mono text-[10px] uppercase tracking-wider text-text-muted">
-          requirements ({resolved.requirements.length})
-        </p>
-        <ul className="flex flex-col divide-y divide-border rounded-md border border-border bg-bg">
-          {resolved.requirements.map((r, i) => (
-            <li
-              key={`${r.skill_raw}-${i}`}
-              className="flex items-start justify-between gap-3 px-3 py-2"
+        <div className="mb-2 flex items-center justify-between">
+          <p className="font-mono text-[10px] uppercase tracking-wider text-text-muted">
+            requirements ({editedResolved.requirements.length}
+            {dirty ? ` / ${data.resolved.requirements.length} original` : ''})
+          </p>
+          {dirty && (
+            <button
+              type="button"
+              onClick={() =>
+                onEditedResolvedChange(
+                  JSON.parse(JSON.stringify(data.resolved)) as ResolvedDecomposition,
+                )
+              }
+              disabled={running}
+              className="font-mono text-[10px] uppercase tracking-wider text-text-muted hover:text-text-primary disabled:opacity-50"
             >
-              <div className="min-w-0 flex-1">
-                <p className="truncate text-sm text-text-primary">
-                  {r.skill_raw}{' '}
-                  <span className="font-mono text-[10px] text-text-muted">[{r.category}]</span>
-                </p>
-                <p className="mt-0.5 line-clamp-2 text-xs text-text-muted">
-                  “{r.evidence_snippet}”
-                </p>
-              </div>
-              <div className="flex shrink-0 items-center gap-2 font-mono text-[10px] uppercase tracking-wider">
-                {r.must_have && (
-                  <span className="rounded bg-danger/10 px-1.5 py-0.5 text-danger">must</span>
-                )}
-                {(r.min_years !== null || r.max_years !== null) && (
-                  <span className="rounded bg-surface px-1.5 py-0.5 text-text-muted">
-                    {r.min_years ?? '?'}–{r.max_years ?? '?'}y
-                  </span>
-                )}
-                <span
-                  className={cn(
-                    'rounded px-1.5 py-0.5',
-                    r.skill_id !== null ? 'bg-accent/10 text-accent' : 'bg-surface text-text-muted',
-                  )}
-                >
-                  {r.skill_id !== null ? 'resolved' : 'unresolved'}
-                </span>
-              </div>
-            </li>
+              reset
+            </button>
+          )}
+        </div>
+        <ul className="flex flex-col divide-y divide-border rounded-md border border-border bg-bg">
+          {editedResolved.requirements.map((r, i) => (
+            <RequirementRow
+              key={`${r.skill_id ?? r.skill_raw}-${i}`}
+              requirement={r}
+              disabled={running}
+              onChange={(patch) => updateRequirement(i, patch)}
+              onRemove={() => removeRequirement(i)}
+            />
           ))}
         </ul>
+        {editedResolved.requirements.length === 0 && (
+          <p className="mt-2 font-mono text-[10px] uppercase tracking-wider text-text-muted">
+            no requirements — match will rank against the full candidate pool.
+          </p>
+        )}
       </div>
 
       {unresolved_skills.length > 0 && (
@@ -333,6 +369,77 @@ function DecompositionPanel({
         </button>
       </div>
     </section>
+  );
+}
+
+function RequirementRow({
+  requirement,
+  disabled,
+  onChange,
+  onRemove,
+}: {
+  requirement: ResolvedRequirement;
+  disabled: boolean;
+  onChange: (patch: Partial<ResolvedRequirement>) => void;
+  onRemove: () => void;
+}): JSX.Element {
+  const r = requirement;
+  return (
+    <li className="flex items-start justify-between gap-3 px-3 py-2">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm text-text-primary">
+          {r.skill_raw}{' '}
+          <span className="font-mono text-[10px] text-text-muted">[{r.category}]</span>
+        </p>
+        <p className="mt-0.5 line-clamp-2 text-xs text-text-muted">“{r.evidence_snippet}”</p>
+      </div>
+      <div className="flex shrink-0 items-center gap-2 font-mono text-[10px] uppercase tracking-wider">
+        <label className="flex items-center gap-1 text-text-muted">
+          <input
+            type="checkbox"
+            checked={r.must_have}
+            onChange={(e) => onChange({ must_have: e.target.checked })}
+            disabled={disabled}
+            className="h-3 w-3 accent-danger"
+          />
+          must
+        </label>
+        <label className="flex items-center gap-1 text-text-muted">
+          min
+          <input
+            type="number"
+            min={0}
+            max={50}
+            value={r.min_years ?? ''}
+            placeholder="–"
+            onChange={(e) => {
+              const v = e.target.value;
+              onChange({ min_years: v === '' ? null : Math.max(0, Math.min(50, Number(v))) });
+            }}
+            disabled={disabled}
+            className="w-12 rounded border border-border bg-bg px-1 py-0.5 text-right text-text-primary disabled:opacity-50"
+          />
+          y
+        </label>
+        <span
+          className={cn(
+            'rounded px-1.5 py-0.5',
+            r.skill_id !== null ? 'bg-accent/10 text-accent' : 'bg-surface text-text-muted',
+          )}
+        >
+          {r.skill_id !== null ? 'resolved' : 'unresolved'}
+        </span>
+        <button
+          type="button"
+          onClick={onRemove}
+          disabled={disabled}
+          aria-label="remove requirement"
+          className="rounded px-1.5 py-0.5 text-text-muted hover:bg-danger/10 hover:text-danger disabled:opacity-50"
+        >
+          ×
+        </button>
+      </div>
+    </li>
   );
 }
 
