@@ -11,7 +11,7 @@
  * fixes with no semantic change go under the same version.
  */
 
-export const DECOMPOSITION_PROMPT_V1 = '2026-05-v7';
+export const DECOMPOSITION_PROMPT_V1 = '2026-05-v8';
 
 // Kept as a template literal so prettier doesn't reflow the rules
 // into a hard-to-read single line. These are the non-negotiable rules
@@ -51,6 +51,22 @@ Rules (do not break):
    WRONG (fabricated per-skill snippet — this is hallucination and
    will be rejected):
      → { skill_raw: "TypeScript", evidence_snippet: "5+ años de experiencia en TypeScript" }
+
+   ACRONYM / ALIAS CASE: when the text uses an acronym or short
+   alias for a technology ("ror" for Ruby on Rails, "k8s" for
+   Kubernetes, "pg" for PostgreSQL, "ts" for TypeScript, "rn" for
+   React Native), expand the canonical name in skill_raw (rule 4)
+   but the evidence_snippet MUST stay verbatim — copy the acronym
+   as the user typed it. Expanding the snippet to the canonical
+   form is fabrication and will be rejected by the validator.
+
+   CORRECT (acronym → canonical skill_raw, literal snippet):
+     text: "busco senior ror con cypress"
+     → { skill_raw: "Ruby on Rails", evidence_snippet: "busco senior ror con cypress" }
+     → { skill_raw: "Cypress",       evidence_snippet: "busco senior ror con cypress" }
+
+   WRONG (snippet rewritten to the canonical form — hallucination):
+     → { skill_raw: "Ruby on Rails", evidence_snippet: "senior Ruby on Rails developer" }
 
    If you cannot find a literal substring that proves the skill is
    mentioned, do not emit the requirement at all.

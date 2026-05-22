@@ -6,7 +6,7 @@
  * meaning reformulation does not silently change the decomposer's
  * semantics:
  *
- *   - `DECOMPOSITION_PROMPT_V1` is pinned to '2026-05-v7'. Changing
+ *   - `DECOMPOSITION_PROMPT_V1` is pinned to '2026-05-v8'. Changing
  *     it invalidates every `job_queries.content_hash` (ADR-014 §5),
  *     so bumping the constant should be a conscious decision.
  *   - The prompt covers the four ADR-014 §3 rules: min_years only if
@@ -23,8 +23,8 @@ import { describe, expect, it } from 'vitest';
 import { DECOMPOSITION_PROMPT_V1, DECOMPOSITION_PROMPT_V1_TEXT } from './decompose-v1';
 
 describe('decomposition prompt v1 — ADR-014 semantic invariants', () => {
-  it('pins DECOMPOSITION_PROMPT_V1 to 2026-05-v7 (minimal-JD rule 12)', () => {
-    expect(DECOMPOSITION_PROMPT_V1).toBe('2026-05-v7');
+  it('pins DECOMPOSITION_PROMPT_V1 to 2026-05-v8 (acronym/alias evidence_snippet rule)', () => {
+    expect(DECOMPOSITION_PROMPT_V1).toBe('2026-05-v8');
   });
 
   it('prompt text is non-trivial', () => {
@@ -172,6 +172,40 @@ describe('decomposition prompt v1 — ADR-014 semantic invariants', () => {
       expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(
         /also.{0,20}(in |appear).{0,30}requirements|both.{0,30}requirements/i,
       );
+    });
+  });
+
+  // Prompt v8 (2026-05): the evidence_snippet rule (rule 3) now
+  // explicitly carves out the acronym / alias case. Regression for
+  // the "busco senior ror con cypress" incident, where the LLM
+  // correctly expanded "ror" → "Ruby on Rails" for skill_raw but
+  // ALSO rewrote evidence_snippet to "Ruby on Rails", tripping the
+  // literal-substring validator (`assertLiteralSnippets` in
+  // decompose-job-query.ts).
+  describe('acronym/alias evidence_snippet rule (prompt v8)', () => {
+    it('prompt names the acronym carve-out and pins the canonical "ror" example', () => {
+      // The literal incident phrase is pinned so a reformulation
+      // cannot silently drop the example that motivated the rule.
+      expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(/acronym|alias/i);
+      expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(/\bror\b/i);
+      expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(/Ruby on Rails/);
+    });
+
+    it('prompt enumerates more than one acronym/alias to make the pattern general', () => {
+      // A single example reads as "this one acronym is special";
+      // the rule needs ≥2 to read as a class. Pin a small set so
+      // future reformulations keep the breadth of the carve-out.
+      const aliases = [/\bk8s\b/i, /\bpg\b/i, /\bts\b/i, /\brn\b/i];
+      const hits = aliases.filter((re) => re.test(DECOMPOSITION_PROMPT_V1_TEXT));
+      expect(hits.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it('prompt contrasts a CORRECT acronym snippet with a WRONG canonical-form snippet', () => {
+      // The rule lives or dies on the negative example: without
+      // it, the LLM keeps defaulting to the canonical form for
+      // both skill_raw and evidence_snippet.
+      expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(/CORRECT[\s\S]{0,400}\bror\b/);
+      expect(DECOMPOSITION_PROMPT_V1_TEXT).toMatch(/WRONG[\s\S]{0,400}Ruby on Rails/);
     });
   });
 
