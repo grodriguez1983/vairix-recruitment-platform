@@ -102,7 +102,15 @@ export async function listPendingExtractions(
       .is('deleted_at', null)
       .not('parsed_text', 'is', null)
       .is('parse_error', null)
+      // ORDER BY (created_at, id): the ETL upserts files in batches
+      // that share `created_at` down to the microsecond (observed
+      // 8370 rows over ~180 distinct timestamps in prod). PostgREST
+      // `.range()` pagination is non-deterministic on ties, so
+      // ordering by `created_at` alone silently drops rows between
+      // pages. `id` is the primary key — strict tiebreaker, stable
+      // pagination.
       .order('created_at', { ascending: true })
+      .order('id', { ascending: true })
       .range(from, from + FILES_PAGE_SIZE - 1);
     if (filesErr) throw new Error(filesErr.message);
     const page = files ?? [];

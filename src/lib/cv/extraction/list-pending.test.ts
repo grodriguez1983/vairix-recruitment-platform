@@ -424,7 +424,9 @@ describe('listPendingExtractions', () => {
                 not: () => ({
                   is: () => ({
                     order: () => ({
-                      range: () => emptyThen,
+                      order: () => ({
+                        range: () => emptyThen,
+                      }),
                     }),
                   }),
                 }),
