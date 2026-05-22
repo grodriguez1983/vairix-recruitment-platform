@@ -378,6 +378,34 @@ describe('listPendingExtractions', () => {
     expect(out).toEqual([]);
   });
 
+  // ────────────────────────────────────────────────────────────────
+  // Stable pagination: order by (created_at, id) — not created_at alone
+  // ────────────────────────────────────────────────────────────────
+  // Bug surfaced 2026-05-22: prod `files` had 8370 rows across only
+  // ~180 distinct `created_at` values (the ETL upserts in batches,
+  // every row in a batch shares created_at down to the microsecond).
+  // PostgREST `.range()` pagination over ORDER BY created_at alone
+  // is non-deterministic on ties — rows shuffle between pages,
+  // silently skipping some. Effect: 44 of 59 truly-pending files
+  // never reached the worker and `extract:cvs` reported 0 pending.
+  //
+  // Fix: add `id` as a secondary order column. Pin it here so it
+  // can't quietly disappear in a future refactor.
+
+  it('test_orders_files_by_created_at_then_id_for_stable_pagination', async () => {
+    const { db, calls } = buildFakeDb({
+      candidate_extractions: { rows: [] },
+      files: { rows: [] },
+    });
+
+    await listPendingExtractions(db, { model: 'm', promptVersion: 'v1', limit: 5 });
+
+    const orderOnFiles = calls.filters.filter((f) => f.kind === 'order' && f.args[0] === 'files');
+    const cols = orderOnFiles.map((f) => f.args[1]);
+    expect(cols).toContain('created_at');
+    expect(cols).toContain('id');
+  });
+
   it('test_existing_query_selects_content_hash_not_just_file_id', async () => {
     // Pin the contract: the helper must read content_hash from existing
     // rows (otherwise the comparison in test_re_extracts_when_text_changed
