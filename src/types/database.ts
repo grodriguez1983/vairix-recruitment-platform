@@ -1069,6 +1069,7 @@ export type Database = {
           catalog_snapshot_at: string
           created_at: string
           diagnostics: Json | null
+          effective_resolved_json: Json | null
           expected_count: number | null
           finished_at: string | null
           id: string
@@ -1085,6 +1086,7 @@ export type Database = {
           catalog_snapshot_at: string
           created_at?: string
           diagnostics?: Json | null
+          effective_resolved_json?: Json | null
           expected_count?: number | null
           finished_at?: string | null
           id?: string
@@ -1101,6 +1103,7 @@ export type Database = {
           catalog_snapshot_at?: string
           created_at?: string
           diagnostics?: Json | null
+          effective_resolved_json?: Json | null
           expected_count?: number | null
           finished_at?: string | null
           id?: string
