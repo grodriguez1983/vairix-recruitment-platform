@@ -29,11 +29,48 @@ import { z, ZodError } from 'zod';
 import { getAuthUser } from '@/lib/auth/require';
 import { buildStartMatchRunDeps } from '@/lib/matching/db-deps';
 import { startMatchRun } from '@/lib/matching/start-match-run';
+import {
+  LanguageSchema,
+  RoleEssentialGroupSchema,
+  SeniorityEnum,
+  RequirementCategoryEnum,
+} from '@/lib/rag/decomposition/types';
 import { createClient } from '@/lib/supabase/server';
+
+// ADR-035: recruiter-edited resolved decomposition. Same shape as
+// `ResolvedDecomposition` (resolve-requirements.ts) — each requirement
+// carries `skill_id` + `resolved_at` from the original resolve. The
+// SERVICE enforces the subset rule against the loaded original;
+// here we only validate the shape.
+const resolvedRequirementSchema = z.object({
+  skill_raw: z.string().min(1),
+  min_years: z.number().int().min(0).nullable(),
+  max_years: z.number().int().min(0).nullable(),
+  must_have: z.boolean(),
+  evidence_snippet: z.string().min(1),
+  category: RequirementCategoryEnum,
+  alternative_group_id: z.string().min(1).nullable(),
+  skill_id: z.string().nullable(),
+  resolved_at: z.string().nullable(),
+});
+
+const resolvedRoleEssentialGroupSchema = z.object({
+  label: RoleEssentialGroupSchema.shape.label,
+  skill_ids: z.array(z.string()),
+});
+
+const resolvedDecompositionSchema = z.object({
+  requirements: z.array(resolvedRequirementSchema),
+  seniority: SeniorityEnum,
+  languages: z.array(LanguageSchema),
+  notes: z.string().nullable(),
+  role_essentials: z.array(resolvedRoleEssentialGroupSchema),
+});
 
 export const startMatchRequestSchema = z
   .object({
     job_query_id: z.string().uuid(),
+    resolved_override: resolvedDecompositionSchema.optional(),
   })
   .strip();
 
@@ -74,7 +111,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
   console.error(`[match] POST /api/matching/run/start: start job_query_id=${parsed.job_query_id}`);
   try {
     const result = await startMatchRun(
-      { jobQueryId: parsed.job_query_id, triggeredBy: appUserId },
+      {
+        jobQueryId: parsed.job_query_id,
+        triggeredBy: appUserId,
+        resolvedOverride: parsed.resolved_override,
+      },
       deps,
     );
     console.error(
@@ -88,6 +129,10 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     );
     if (/job_query not found/i.test(message)) {
       return NextResponse.json({ error: 'job_query_not_found' }, { status: 404 });
+    }
+    if (/invalid_override/i.test(message)) {
+      // ADR-035: override violates the subset rule.
+      return NextResponse.json({ error: 'invalid_override', message }, { status: 400 });
     }
     return NextResponse.json({ error: 'start_match_run_failed', message }, { status: 500 });
   }

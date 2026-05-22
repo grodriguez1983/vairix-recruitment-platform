@@ -382,12 +382,17 @@ export function buildProcessMatchChunkDeps(
     loadRunForChunk: async (runId: string): Promise<LoadedMatchRunForChunk | null> => {
       const { data: run, error: runErr } = await supabase
         .from('match_runs')
-        .select('id, status, expected_count, processed_count, tenant_id, job_query_id')
+        .select(
+          'id, status, expected_count, processed_count, tenant_id, job_query_id, effective_resolved_json',
+        )
         .eq('id', runId)
         .maybeSingle();
       if (runErr) throw new Error(`loadRunForChunk: ${runErr.message}`);
       if (run === null) return null;
 
+      // ADR-035: prefer the run's frozen snapshot. Legacy runs
+      // (pre-ADR-035) have `effective_resolved_json = null` and fall
+      // back to `job_queries.resolved_json`.
       const { data: jq, error: jqErr } = await supabase
         .from('job_queries')
         .select('resolved_json, resolved_at')
@@ -400,13 +405,18 @@ export function buildProcessMatchChunkDeps(
         );
       }
 
+      const resolved =
+        run.effective_resolved_json !== null
+          ? (run.effective_resolved_json as unknown as ResolvedDecomposition)
+          : (jq.resolved_json as unknown as ResolvedDecomposition);
+
       return {
         status: run.status as MatchRunStatus,
         expected_count: (run.expected_count as number | null) ?? null,
         processed_count: (run.processed_count as number | null) ?? 0,
         tenant_id: (run.tenant_id as string | null) ?? null,
         job_query_id: run.job_query_id as string,
-        resolved: jq.resolved_json as unknown as ResolvedDecomposition,
+        resolved,
         catalog_snapshot_at: new Date(jq.resolved_at as string),
       };
     },
