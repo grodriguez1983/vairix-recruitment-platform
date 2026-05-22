@@ -4,9 +4,10 @@
  * Opens a `match_run` and returns the plan the FE needs to drive the
  * chunk loop:
  *
- *   loadJobQuery → [validate override] → createMatchRun →
- *   persistEffectiveResolved → preFilter → setExpectedCount →
- *   return { run_id, included, excluded, total, tenant_id }
+ *   loadJobQuery → [validate override] → createMatchRun (seals
+ *   effective_resolved in the INSERT) → preFilter →
+ *   setExpectedCount → return { run_id, included, excluded, total,
+ *   tenant_id }
  *
  * On any failure AFTER `createMatchRun`, the run is closed via
  * `failMatchRun(reason)` and the error is rethrown so the route
@@ -19,6 +20,11 @@
  * If valid, the override is what gets snapshotted and fed to
  * preFilter; downstream chunks read the snapshot, not
  * `job_queries.resolved_json`.
+ *
+ * The effective snapshot is sealed atomically as part of the INSERT
+ * (identity column on `match_runs`, immutable post-insert per
+ * `enforce_match_runs_state_machine`). A post-insert UPDATE would
+ * trip the trigger's NULL→value freeze.
  *
  * All I/O is injected (`StartMatchRunDeps`) so the route handler can
  * compose db adapters and tests can wire `vi.fn` mocks.
@@ -53,6 +59,14 @@ export interface CreateMatchRunArgs {
   tenant_id: string | null;
   triggered_by: string;
   catalog_snapshot_at: Date;
+  /**
+   * ADR-035: snapshot del `ResolvedDecomposition` efectivamente usado
+   * por este run (override del recruiter o copia de
+   * `job_queries.resolved_json`). Identity column — frozen post-insert
+   * por `enforce_match_runs_state_machine`. DEBE viajar en el INSERT;
+   * un UPDATE posterior (NULL → value) lo rechaza el trigger.
+   */
+  effective_resolved: ResolvedDecomposition;
 }
 
 export interface FailMatchRunArgs {
@@ -62,14 +76,13 @@ export interface FailMatchRunArgs {
 
 export interface StartMatchRunDeps {
   loadJobQuery: (jobQueryId: string) => Promise<LoadedJobQuery | null>;
-  createMatchRun: (args: CreateMatchRunArgs) => Promise<{ id: string }>;
   /**
-   * ADR-035: seal the effective `ResolvedDecomposition` onto the
-   * `match_runs` row immediately after creation, before any heavy
-   * work runs. This way a crash mid-preFilter still leaves an
-   * auditable snapshot of what was about to be ranked.
+   * ADR-035: creates the run AND seals `effective_resolved_json` in
+   * the same INSERT. A separate UPDATE would trip the
+   * `enforce_match_runs_state_machine` trigger (NULL → value
+   * rejected as "immutable").
    */
-  persistEffectiveResolved: (runId: string, resolved: ResolvedDecomposition) => Promise<void>;
+  createMatchRun: (args: CreateMatchRunArgs) => Promise<{ id: string }>;
   preFilter: (
     resolved: ResolvedDecomposition,
     tenantId: string | null,
@@ -107,17 +120,19 @@ export async function startMatchRun(
   }
   const effective = input.resolvedOverride ?? loaded.resolved;
 
+  // ADR-035: the snapshot is sealed atomically inside the INSERT —
+  // `effective_resolved_json` is an identity column on `match_runs`,
+  // and a post-insert UPDATE would be rejected by
+  // `enforce_match_runs_state_machine` as immutable.
   const { id: runId } = await deps.createMatchRun({
     job_query_id: input.jobQueryId,
     tenant_id: loaded.tenant_id,
     triggered_by: input.triggeredBy,
     catalog_snapshot_at: loaded.catalog_snapshot_at,
+    effective_resolved: effective,
   });
 
   try {
-    // Seal the effective resolved BEFORE any heavy work, so a crash
-    // mid-preFilter still leaves an auditable record (ADR-035).
-    await deps.persistEffectiveResolved(runId, effective);
     const preFilterResult = await deps.preFilter(effective, loaded.tenant_id);
     await deps.setExpectedCount(runId, preFilterResult.included.length);
     return {

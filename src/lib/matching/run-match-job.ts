@@ -73,6 +73,12 @@ export interface RunMatchJobDeps {
     tenant_id: string | null;
     triggered_by: string | null;
     catalog_snapshot_at: Date;
+    /**
+     * ADR-035: snapshot del `ResolvedDecomposition` sellado en la
+     * INSERT — identity column en `match_runs`. Cualquier UPDATE
+     * post-insert lo bloquea `enforce_match_runs_state_machine`.
+     */
+    effective_resolved: ResolvedDecomposition;
   }) => Promise<{ id: string }>;
   insertMatchResults: (runId: string, rows: MatchResultRow[]) => Promise<void>;
   completeMatchRun: (
@@ -207,6 +213,9 @@ export async function runMatchJob(
     tenant_id,
     triggered_by: input.triggeredBy,
     catalog_snapshot_at,
+    // ADR-035: legacy path also seals the snapshot at insert so the
+    // run is auditable and survives the immutable-column trigger.
+    effective_resolved: resolved,
   });
 
   try {

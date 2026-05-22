@@ -131,12 +131,16 @@ describe('runMatchJob — F4-008 sub-C', () => {
     const out = await runMatchJob(input(), deps);
 
     expect(deps.loadJobQuery).toHaveBeenCalledWith('jq-1');
-    expect(deps.createMatchRun).toHaveBeenCalledWith({
-      job_query_id: 'jq-1',
-      tenant_id: null,
-      triggered_by: 'user-1',
-      catalog_snapshot_at: SNAPSHOT,
-    });
+    // ADR-035: createMatchRun seals effective_resolved on the INSERT.
+    expect(deps.createMatchRun).toHaveBeenCalledWith(
+      expect.objectContaining({
+        job_query_id: 'jq-1',
+        tenant_id: null,
+        triggered_by: 'user-1',
+        catalog_snapshot_at: SNAPSHOT,
+        effective_resolved: expect.any(Object),
+      }),
+    );
     expect(deps.preFilter).toHaveBeenCalledWith(expect.any(Object), null);
     expect(deps.loadCandidates).toHaveBeenCalledWith(['c1', 'c2']);
     expect(deps.rank).toHaveBeenCalledWith({

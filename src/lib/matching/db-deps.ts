@@ -204,6 +204,11 @@ export function buildRunMatchJobDeps(
     rank: async (input) => ranker.rank(input),
 
     createMatchRun: async (params) => {
+      // ADR-035: `effective_resolved_json` is sealed atomically as
+      // part of the INSERT — identity column on `match_runs`, frozen
+      // post-insert by `enforce_match_runs_state_machine`. Splitting
+      // into INSERT + UPDATE would trip the trigger's NULL→value
+      // freeze.
       const { data, error } = await supabase
         .from('match_runs')
         .insert({
@@ -212,6 +217,7 @@ export function buildRunMatchJobDeps(
           triggered_by: params.triggered_by,
           catalog_snapshot_at: params.catalog_snapshot_at.toISOString(),
           status: 'running',
+          effective_resolved_json: params.effective_resolved as never,
         })
         .select('id')
         .single();
@@ -559,19 +565,13 @@ export function buildStartMatchRunDeps(
   const full = buildRunMatchJobDeps(supabase, options);
   return {
     loadJobQuery: full.loadJobQuery,
+    // ADR-035: `createMatchRun` ya sella `effective_resolved_json`
+    // en la INSERT (identity column, frozen post-insert por el
+    // trigger). Por eso no hay un step `persistEffectiveResolved`
+    // separado — un UPDATE NULL → value lo rechaza el trigger.
     createMatchRun: full.createMatchRun,
     preFilter: full.preFilter,
     failMatchRun: full.failMatchRun,
-    // ADR-035: snapshot del resolved efectivo (override del recruiter
-    // o copia de job_queries.resolved_json). Inmutable post-insert
-    // por el trigger `enforce_match_runs_state_machine`.
-    persistEffectiveResolved: async (runId, resolved) => {
-      const { error } = await supabase
-        .from('match_runs')
-        .update({ effective_resolved_json: resolved as never })
-        .eq('id', runId);
-      if (error) throw new Error(`persistEffectiveResolved: ${error.message}`);
-    },
     setExpectedCount: async (runId, expectedCount) => {
       const { error } = await supabase
         .from('match_runs')

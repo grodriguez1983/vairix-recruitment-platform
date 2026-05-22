@@ -1,12 +1,20 @@
 /**
- * Unit tests for `startMatchRun` (ADR-034 §1).
+ * Unit tests for `startMatchRun` (ADR-034 §1, ADR-035).
  *
  * `startMatchRun` opens a `match_run` and returns the plan the FE
  * needs to drive the chunk loop:
  *
- *   loadJobQuery → createMatchRun (status='running') →
+ *   loadJobQuery → [validate override] → createMatchRun
+ *   (status='running', effective_resolved sealed in the INSERT) →
  *   preFilter → setExpectedCount (= included.length) →
  *   return { run_id, included, excluded, total, tenant_id }
+ *
+ * ADR-035 — `effective_resolved_json` is an identity column on
+ * `match_runs` (immutable post-insert per
+ * `enforce_match_runs_state_machine`). The service therefore seals
+ * the snapshot INSIDE `createMatchRun` (single INSERT), not via a
+ * separate UPDATE. A NULL→value transition would be rejected by the
+ * trigger.
  *
  * On any failure AFTER `createMatchRun`, the run is closed via
  * `failMatchRun(reason)` and the error is rethrown so the route
@@ -47,7 +55,6 @@ function mkDeps(overrides: Partial<StartMatchRunDeps> = {}): StartMatchRunDeps {
       tenant_id: null,
     })),
     createMatchRun: vi.fn(async () => ({ id: 'run-1' })),
-    persistEffectiveResolved: vi.fn(async () => {}),
     preFilter: vi.fn(
       async (): Promise<PreFilterByMustHaveResult> => ({
         included: ['c1', 'c2', 'c3'],
@@ -112,11 +119,12 @@ describe('startMatchRun (ADR-034)', () => {
     expect(createMatchRun).not.toHaveBeenCalled();
   });
 
-  it('forwards tenant_id, triggered_by and catalog_snapshot_at into createMatchRun', async () => {
+  it('forwards tenant_id, triggered_by, catalog_snapshot_at AND effective_resolved into createMatchRun (ADR-035: sealed at insert)', async () => {
+    const original = jobQuery();
     const createMatchRun = vi.fn(async () => ({ id: 'run-1' }));
     const deps = mkDeps({
       loadJobQuery: vi.fn(async () => ({
-        resolved: jobQuery(),
+        resolved: original,
         catalog_snapshot_at: SNAPSHOT,
         tenant_id: 'tenant-xyz',
       })),
@@ -129,6 +137,7 @@ describe('startMatchRun (ADR-034)', () => {
       tenant_id: 'tenant-xyz',
       triggered_by: 'app-user-1',
       catalog_snapshot_at: SNAPSHOT,
+      effective_resolved: original,
     });
   });
 
@@ -268,29 +277,25 @@ describe('startMatchRun (ADR-034)', () => {
   });
 
   describe('effective resolved snapshot (ADR-035)', () => {
-    it('no override: persists loaded.resolved as the effective snapshot before preFilter', async () => {
+    it('no override: seals loaded.resolved on the createMatchRun INSERT (identity column)', async () => {
       const original = jobQueryWith([req()]);
-      const calls: string[] = [];
+      const createMatchRun = vi.fn(async () => ({ id: 'run-1' }));
       const deps = mkDeps({
         loadJobQuery: vi.fn(async () => ({
           resolved: original,
           catalog_snapshot_at: SNAPSHOT,
           tenant_id: null,
         })),
-        persistEffectiveResolved: vi.fn(async (_runId, resolved) => {
-          calls.push('persist');
-          expect(resolved).toEqual(original);
-        }),
+        createMatchRun,
         preFilter: vi.fn(async (resolved) => {
-          calls.push('preFilter');
           expect(resolved).toEqual(original);
           return { included: [], excluded: [] };
         }),
       });
       await startMatchRun(VALID_INPUT, deps);
-      // Snapshot must be sealed BEFORE preFilter runs so a crash mid-run
-      // leaves an auditable record of what was about to be ranked.
-      expect(calls).toEqual(['persist', 'preFilter']);
+      expect(createMatchRun).toHaveBeenCalledWith(
+        expect.objectContaining({ effective_resolved: original }),
+      );
     });
 
     it('with override: applies override to preFilter (not loaded.resolved)', async () => {
@@ -317,7 +322,7 @@ describe('startMatchRun (ADR-034)', () => {
       expect(preFilter).toHaveBeenCalledWith(override, null);
     });
 
-    it('with override: persists the override (not loaded.resolved) as the snapshot', async () => {
+    it('with override: seals the override (not loaded.resolved) on createMatchRun', async () => {
       const original = jobQueryWith([
         req({ skill_id: 'skill-python', skill_raw: 'python', min_years: 3, must_have: true }),
         req({ skill_id: 'skill-react', skill_raw: 'react', min_years: 5, must_have: true }),
@@ -325,18 +330,19 @@ describe('startMatchRun (ADR-034)', () => {
       const override = jobQueryWith([
         req({ skill_id: 'skill-python', skill_raw: 'python', min_years: 1, must_have: false }),
       ]);
-      const persistEffectiveResolved = vi.fn(async () => {});
+      const createMatchRun = vi.fn(async () => ({ id: 'run-1' }));
       const deps = mkDeps({
         loadJobQuery: vi.fn(async () => ({
           resolved: original,
           catalog_snapshot_at: SNAPSHOT,
           tenant_id: null,
         })),
-        persistEffectiveResolved,
+        createMatchRun,
       });
       await startMatchRun({ ...VALID_INPUT, resolvedOverride: override }, deps);
-      expect(persistEffectiveResolved).toHaveBeenCalledTimes(1);
-      expect(persistEffectiveResolved).toHaveBeenCalledWith('run-1', override);
+      expect(createMatchRun).toHaveBeenCalledWith(
+        expect.objectContaining({ effective_resolved: override }),
+      );
     });
 
     it('rejects override that introduces a skill_id not in original (no inventing requirements)', async () => {
