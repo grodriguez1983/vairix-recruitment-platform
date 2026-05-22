@@ -236,4 +236,82 @@ describe('match_pre_filter RPC — ADR-033 §RPC #1', () => {
     const aOccurrences = included.filter((id) => id === candA.id);
     expect(aOccurrences).toHaveLength(1);
   });
+
+  // -----------------------------------------------------------------
+  // ADR-036 — soft union gate. The third arg `any_of_skill_ids_in`
+  // narrows the visible pool to candidates with at least one
+  // `experience_skills` hit in the array. Passing null or omitting
+  // it preserves the pre-ADR-036 behavior (see tests above).
+  // -----------------------------------------------------------------
+
+  async function callRpcWithAnyOf(
+    groups: Array<{ skill_ids: string[] }>,
+    anyOf: string[] | null,
+  ): Promise<{
+    included: string[];
+    excluded: Array<{ candidate_id: string; missing_must_have_skill_ids: string[] }>;
+  }> {
+    const { data, error } = await db.rpc('match_pre_filter', {
+      must_have_groups_in: groups,
+      tenant_id_in: null,
+      any_of_skill_ids_in: anyOf,
+    });
+    if (error) throw new Error(`match_pre_filter rpc (any_of): ${error.message}`);
+    const payload = data as {
+      included?: string[];
+      excluded?: Array<{ candidate_id: string; missing_must_have_skill_ids: string[] }>;
+    };
+    const fixtureIds = new Set([candA.id, candB.id, candC.id, candD.id, candE.id]);
+    return {
+      included: (payload.included ?? []).filter((id) => fixtureIds.has(id)),
+      excluded: (payload.excluded ?? []).filter((e) => fixtureIds.has(e.candidate_id)),
+    };
+  }
+
+  it('ADR-036: soft-only union [react] excludes candidates with zero overlap (no must-have)', async () => {
+    // No must-have groups; union = [react]. Candidates with react in
+    // experience_skills pass; the rest are dropped from `included`.
+    // Excluded pool stays empty — gate 2 exclusions are NOT rescue
+    // candidates (they have no must-have to FTS-search).
+    const { included, excluded } = await callRpcWithAnyOf([], [skillReact.id]);
+    expect(new Set(included)).toEqual(new Set([candA.id, candC.id]));
+    expect(excluded).toEqual([]);
+  });
+
+  it('ADR-036: must + soft union — gate 1 dominates over gate 2 for must-failures', async () => {
+    // Must = [laravel]; soft union = [laravel, react]. candC has only
+    // react → passes gate 2 but fails gate 1 (no laravel) ⇒ excluded
+    // with missing=[laravel]. candE has nothing → fails gate 2 first,
+    // dropped from pool entirely (NOT in `excluded` — that pool is
+    // reserved for must-have gate failures only).
+    const { included, excluded } = await callRpcWithAnyOf(
+      [{ skill_ids: [skillLaravel.id] }],
+      [skillLaravel.id, skillReact.id],
+    );
+    expect(new Set(included)).toEqual(new Set([candA.id, candB.id]));
+    const excludedIds = new Set(excluded.map((e) => e.candidate_id));
+    // candE is filtered out by gate 2 BEFORE the must-have evaluation
+    // — it has zero overlap with the union so it never reaches the
+    // missing-group accounting.
+    expect(excludedIds).toEqual(new Set([candC.id]));
+    expect(excluded.find((e) => e.candidate_id === candC.id)!.missing_must_have_skill_ids).toEqual([
+      skillLaravel.id,
+    ]);
+  });
+
+  it('ADR-036: explicit null any_of_skill_ids_in is identical to omitting it', async () => {
+    const omitted = await callRpc([{ skill_ids: [skillLaravel.id] }]);
+    const nulled = await callRpcWithAnyOf([{ skill_ids: [skillLaravel.id] }], null);
+    expect(new Set(nulled.included)).toEqual(new Set(omitted.included));
+    expect(new Set(nulled.excluded.map((e) => e.candidate_id))).toEqual(
+      new Set(omitted.excluded.map((e) => e.candidate_id)),
+    );
+  });
+
+  it('ADR-036: empty any_of_skill_ids_in array disables gate 2 (treated as null)', async () => {
+    // Empty array passes the `array_length is null` check in the SQL —
+    // contract: any_of_active iff non-null AND non-empty.
+    const { included } = await callRpcWithAnyOf([], []);
+    expect(new Set(included)).toEqual(new Set([candA.id, candB.id, candC.id, candD.id, candE.id]));
+  });
 });
